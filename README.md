@@ -41,6 +41,7 @@ See the [measured behavior](https://dagr.prnt.design/docs/incremental-layout).
 | `@prnt/dagr-react` | `<DagrCanvas>` component and hooks | The canvas, the `useDagr` hook over the incremental engine, `<Html>` over the overlay, the layout-to-scene conversion, and `animate`, which glides an edit to its new layout off the delta, implemented; click selection, hover and camera flights shipped in 0.1.3; GPU picking follows the renderer proof |
 | `@prnt/dagr-vdsl` | Visual DSL toolkit: node spec adapter, typed ports, drag-to-connect | The node spec adapter, its registry, port type tokens and connection validation implemented; drag-to-connect is parked behind the renderer work |
 | `@prnt/dagr-explorer` | React graph explorer: views, search, connection tracing, groups and a details drawer over a pannable DOM and SVG surface, on React 18 and 19 | Complete and browser-validated in Chromium and WebKit; the SVG base is smooth to about 4,000 nodes, and a native base is planned. Install it with `npm install @prnt/dagr-explorer` |
+| `@prnt/dagr-chart` | Animated React bar and line charts with GPU or SVG rendering, dual axes and Tailwind theme bindings | Private workspace package; [API and styling guide](packages/chart/README.md) |
 
 `@prnt/dagr` offers `@prnt/dagr/graph`, `@prnt/dagr/layout`,
 `@prnt/dagr/render`, `@prnt/dagr/render/core`, `@prnt/dagr/react`,

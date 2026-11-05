@@ -53,6 +53,30 @@ export function lastRenderer(): FakeRenderer {
   return last;
 }
 
+/**
+ * The checks the real `setNodes` makes, so a frame the renderer would refuse
+ * fails here too and every scenario doubles as an invariant test.
+ */
+function requireNodes(nodes: readonly SceneNode[]): void {
+  const seen = new Set<string>();
+  for (const node of nodes) {
+    const { width, height } = node.size;
+    const fail = (why: string): never => {
+      throw new RangeError(`node ${node.id} ${why}`);
+    };
+    if (seen.has(node.id)) fail('shares its id with another');
+    seen.add(node.id);
+    if (!(width > 0) || !(height > 0) || !Number.isFinite(width + height)) fail('has no positive size');
+    if (!Number.isFinite(node.center.x + node.center.y)) fail('has a centre that is not finite');
+    if (!(node.glowWorld >= 0)) fail('has a negative glow');
+    if (node.shape === 'circle' && width !== height) fail('is a circle that is not square');
+    const radius = node.cornerRadius ?? 0;
+    if (node.shape === 'roundedRect' && (radius < 0 || radius > Math.min(width, height) / 2)) {
+      fail('has a corner radius over half its smaller side');
+    }
+  }
+}
+
 export function createRenderer(options: RendererOptions): Promise<Renderer> {
   if (built.failure !== null) {
     const failure = built.failure;
@@ -68,15 +92,30 @@ export function createRenderer(options: RendererOptions): Promise<Renderer> {
     edgeStyle: null,
     intensityOf: () => 1,
     setNodes(nodes) {
+      requireNodes(nodes);
       fake.nodes = nodes;
     },
     setEdges(_groupId, edges) {
+      for (const edge of edges) {
+        if (!edge.points.every((point) => Number.isFinite(point.x) && Number.isFinite(point.y))) {
+          throw new RangeError(`edge ${edge.id} has a point that is not finite`);
+        }
+      }
       fake.edges = edges;
     },
     setEdgeStyle(_groupId, style) {
+      if (!(style.halfWidthPixels >= 0.5) || !(style.alpha >= 0) || style.alpha > 1) {
+        throw new RangeError(`edge style ${JSON.stringify(style)} is out of range`);
+      }
       fake.edgeStyle = style;
     },
     setEdgeIntensity(_groupId, intensityOf) {
+      for (const edge of fake.edges) {
+        const intensity = intensityOf(edge.id);
+        if (!(intensity >= 0) || intensity > 1) {
+          throw new RangeError(`intensity of edge ${edge.id} has to be in [0, 1], got ${String(intensity)}`);
+        }
+      }
       fake.intensityOf = intensityOf;
     },
     resize: vi.fn(),

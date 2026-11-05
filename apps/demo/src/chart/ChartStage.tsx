@@ -1,9 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { JSX } from 'react';
 import { DagrChart } from '@prnt/dagr-chart';
-import type { ChartSeries } from '@prnt/dagr-chart';
+import type { ChartSeries, ChartBackend } from '@prnt/dagr-chart';
 import { usePrefersReducedMotion } from '@dagr/living-stage';
-import type { RendererBackend } from '@prnt/dagr-render';
 import { generateData } from './data.js';
 import type { ChartData } from './data.js';
 
@@ -54,8 +53,9 @@ function hex(color: number): string {
   return `#${color.toString(16).padStart(6, '0')}`;
 }
 
-function describeBackend(backend: RendererBackend | null): string {
+function describeBackend(backend: ChartBackend | null): string {
   if (backend === null) return 'acquiring a device';
+  if (backend === 'svg') return 'SVG';
   return backend === 'webgpu' ? 'WebGPU' : backend === 'webgl2' ? 'WebGL2 fallback' : 'unknown backend';
 }
 
@@ -75,16 +75,19 @@ function useAutoplay(on: boolean, step: () => void): void {
 
 export function ChartStage(): JSX.Element {
   const reduced = usePrefersReducedMotion();
+  const [rendering, setRendering] = useState<'gpu' | 'svg'>('gpu');
   const [mode, setMode] = useState<Mode>('bars');
   const [seed, setSeed] = useState(FIRST_SEED);
   const [playing, setPlaying] = useState(false);
-  const [backend, setBackend] = useState<RendererBackend | null>(null);
+  const [backend, setBackend] = useState<ChartBackend | null>(null);
 
   const data = useMemo(() => generateData(seed), [seed]);
   const series = useMemo(() => seriesFor(data, mode), [data, mode]);
   const legend = series.filter((entry) => !entry.id.endsWith(':line') || mode === 'lines');
 
-  useAutoplay(playing && !reduced, () => {
+  // Reduced motion pauses the play button as well as the timer.
+  const autoplaying = playing && !reduced;
+  useAutoplay(autoplaying, () => {
     setSeed((value) => value + 1);
   });
 
@@ -96,10 +99,17 @@ export function ChartStage(): JSX.Element {
           series={series}
           label="Orders and returns by month"
           onBackend={setBackend}
+          rendering={rendering}
         />
       </div>
 
       <div className="chart__controls">
+        <div className="chart__group" role="group" aria-label="Rendering">
+          {(['gpu', 'svg'] as const).map((value) => (
+            <button key={value} type="button" className="chart__button" aria-pressed={rendering === value}
+              onClick={() => { setBackend(null); setRendering(value); }}>{value.toUpperCase()}</button>
+          ))}
+        </div>
         <div className="chart__group" role="group" aria-label="Chart kind">
           {MODES.map(({ id, label }) => (
             <button
@@ -127,13 +137,13 @@ export function ChartStage(): JSX.Element {
         <button
           type="button"
           className="chart__button"
-          aria-pressed={playing}
+          aria-pressed={autoplaying}
           disabled={reduced}
           onClick={() => {
             setPlaying((value) => !value);
           }}
         >
-          {playing ? 'pause' : 'play'}
+          {autoplaying ? 'pause' : 'play'}
         </button>
         <span className="chart__badge">{describeBackend(backend)}</span>
         <ul className="chart__legend" aria-label="Series">

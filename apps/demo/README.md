@@ -2,7 +2,7 @@
 
 The local renderer playground. It opens on the living graph, a build pipeline
 edited while you watch. The chart view (`#view=chart`) shows
-`@prnt/dagr-chart`: `chart/` here is only its data and controls. The campaign is an archived experiment, available only
+`@prnt/dagr-chart`. The campaign is an archived experiment, available only
 through the explicit `#view=campaign` URL for development and historical capture.
 It is no longer offered in the visible demo switch.
 
@@ -29,14 +29,14 @@ how the stage reads `#node=` and `#zoom=` out of the same hash.
 
 ## What is left here, and what moved
 
-Everything on either canvas is a package, `@dagr/campaign-stage` and
-`@dagr/living-stage`, because the docs site mounts the same two components and
-two copies would drift. This app is the page around them.
+The stages live in `@dagr/campaign-stage`, `@dagr/living-stage` and
+`@prnt/dagr-chart`. This app supplies their data, controls and surrounding page.
+The chart controls select GPU or SVG rendering.
 
 | File | What it owns |
 | --- | --- |
 | `App.tsx` | the header, the demo switch, the facts panels, and the worker this app builds |
-| `main.tsx` | the StrictMode mount, and the three stylesheets in order |
+| `main.tsx` | the StrictMode mount, and the stylesheets in order |
 | `layout-worker.ts` | the worker end of `@prnt/dagr-layout`'s protocol |
 | `styles.css` | the page: its palette, the facts panel, the stage's frame |
 | `chart/` | the chart view, `#view=chart`: seeded data and the controls around `<DagrChart>` from `@prnt/dagr-chart` |

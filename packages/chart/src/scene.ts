@@ -20,8 +20,10 @@ import type {
   SpringState,
   Vec2,
 } from '@prnt/dagr-render';
+import { createSvgRenderer } from './svg-renderer.js';
+import type { ChartClassNames } from './styling.js';
 import { GRID_SLOTS } from './layout.js';
-import type { ChartLayout } from './layout.js';
+import type { ChartLayout, Gridline } from './layout.js';
 import type { ChartSize, ChartTheme } from './types.js';
 
 const LINE_GROUP = 'lines';
@@ -87,11 +89,14 @@ export interface ChartScene {
   /** The id of the mark under a pointer, in CSS pixels from the canvas's top-left. */
   pick(point: Vec2): Promise<string | null>;
   resize(size: ChartSize): void;
+  refresh(): void;
   dispose(): void;
 }
 
 export interface ChartSceneOptions {
-  readonly canvas: HTMLCanvasElement;
+  readonly canvas?: HTMLCanvasElement;
+  readonly svg?: SVGSVGElement;
+  readonly getClasses?: () => ChartClassNames;
   readonly theme: ChartTheme;
   readonly signal?: AbortSignal | undefined;
   readonly backend?: BackendPreference | undefined;
@@ -114,14 +119,22 @@ function step(moved: Channel, dtSeconds: number): boolean {
   return true;
 }
 
+/** Whether every channel is exactly on its target, as a settled one is left. */
+function resting(channels: readonly Channel[]): boolean {
+  return channels.every((moved) => moved.state.position === moved.target && moved.state.velocity === 0);
+}
+
 function pixelRatio(): number {
   return typeof devicePixelRatio === 'number' ? devicePixelRatio : 1;
 }
 
 export async function createChartScene(options: ChartSceneOptions): Promise<ChartScene> {
   const { theme } = options;
-  const renderer = await createRenderer({
-    canvas: options.canvas,
+  if (options.svg === undefined && options.canvas === undefined) throw new Error("a chart needs a drawing surface");
+  const renderer = options.svg !== undefined
+    ? createSvgRenderer(options.svg, theme.background, options.getClasses ?? (() => ({})))
+    : await createRenderer({
+    canvas: options.canvas!,
     clearColor: theme.background,
     sceneStyle: { outlineColor: theme.background, glowAlpha: 0.55, outlinePixels: 1 },
     edgeGroups: [{ id: LINE_GROUP, style: { halfWidthPixels: LINE_HALF_WIDTH_PIXELS }, curve: 'smooth' }],
@@ -133,6 +146,7 @@ export async function createChartScene(options: ChartSceneOptions): Promise<Char
   const bars = new Map<string, Bar>();
   const lines = new Map<string, Line>();
   let layout: ChartLayout | null = null;
+  let gridlines: readonly Gridline[] = [];
   let hovered: string | null = null;
 
   const frame = (dtSeconds: number): boolean => {
@@ -159,10 +173,14 @@ export async function createChartScene(options: ChartSceneOptions): Promise<Char
     };
 
     const nodes: SceneNode[] = [];
-    const { plot, gridlines } = layout;
+    const { plot } = layout;
     // Always GRID_SLOTS of them, keyed by position: blend order within a shape
     // family is slot order, so a line created after the bars would be drawn
-    // over them. Spare slots sit on the first line.
+    // over them. Spare slots sit on the first line. A layout with nothing to
+    // measure keeps the last grid until its marks have left, for the same
+    // reason: a grid dropped and recreated under exiting bars lands above them.
+    if (layout.gridlines.length > 0) gridlines = layout.gridlines;
+    else if (bars.size === 0 && lines.size === 0) gridlines = [];
     const first = gridlines[0];
     for (let index = 0; first !== undefined && index < GRID_SLOTS; index += 1) {
       const line = gridlines[index] ?? first;
@@ -232,6 +250,12 @@ export async function createChartScene(options: ChartSceneOptions): Promise<Char
       intensities.set(edgeId, Math.min(1, Math.max(0, line.intensity.state.position / FULL)));
     }
 
+    // The final exit can settle in this frame, after the grid was queued.
+    if (layout.gridlines.length === 0 && bars.size === 0 && lines.size === 0) {
+      gridlines = [];
+      nodes.length = 0;
+    }
+
     renderer.setNodes(nodes);
     renderer.setEdges(LINE_GROUP, edges);
     renderer.setEdgeIntensity(LINE_GROUP, (edgeId) => intensities.get(edgeId) ?? 1);
@@ -264,11 +288,14 @@ export async function createChartScene(options: ChartSceneOptions): Promise<Char
           });
           continue;
         }
+        // A bar already on its way is retargeted at once: a fresh delay would
+        // hold it still in mid-flight.
+        const wasResting = resting([bar.x, bar.base, bar.height, bar.width]);
         bar.x.target = target.x;
         bar.base.target = target.base;
         bar.height.target = target.height;
         bar.width.target = target.width;
-        bar.delay = delayOf(target.index);
+        bar.delay = wasResting && !resting([bar.x, bar.base, bar.height, bar.width]) ? delayOf(target.index) : 0;
         bar.color = target.color;
         bar.exiting = false;
       }
@@ -314,10 +341,11 @@ export async function createChartScene(options: ChartSceneOptions): Promise<Char
             });
             continue;
           }
+          const wasResting = resting([point.x, point.y, point.radius]);
           point.x.target = to.x;
           point.y.target = to.y;
           point.radius.target = to.radius;
-          point.delay = delayOf(to.index);
+          point.delay = wasResting && !resting([point.x, point.y, point.radius]) ? delayOf(to.index) : 0;
           points.set(to.id, point);
         }
         line.points = points;
@@ -349,6 +377,7 @@ export async function createChartScene(options: ChartSceneOptions): Promise<Char
       renderer.camera.setCenter({ x: size.width / 2, y: size.height / 2 });
       loop.wake();
     },
+    refresh: () => loop.wake(),
     dispose() {
       loop.dispose();
       renderer.dispose();

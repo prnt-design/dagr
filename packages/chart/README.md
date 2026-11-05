@@ -1,12 +1,13 @@
 # @prnt/dagr-chart
 
 Animated bar and line charts for React, drawn by
-[Dagr](https://dagr.prnt.design)'s WebGPU renderer. D3 does the math
+[Dagr](https://dagr.prnt.design)'s WebGPU renderer or SVG. D3 does the math
 (`d3-scale`, `d3-array`), `@prnt/dagr-render` draws the marks as instanced
 shapes and ribbons, and every change glides on the renderer's springs.
 
-Not published yet: the package is private to this workspace until its
-packaging checks land. Inside the workspace, depend on it as `workspace:*`.
+Not published yet: the package is private to this workspace until it joins
+the packaging checks and the umbrella package. Inside the workspace, depend on
+it as `workspace:*`.
 
 ## The chart
 
@@ -46,15 +47,19 @@ The chart fills the element it is given and has no height of its own.
   series. An axis that carries a bar includes zero. An axis of lines alone
   fits its data, which keeps a large, slowly moving total readable beside
   small daily bars. Negative values hang below the zero line.
-- **A tooltip** for the bar or marker under the pointer, picked on the GPU.
+- **A tooltip** for the bar or marker under the pointer, picked on the GPU
+  or against the SVG mark geometry. During a glide, its value and anchor use
+  the target layout rather than following the interpolated frame.
 
 ## Motion
 
 Marks are matched across renders by series `id` and category index. A mark in
 both renders glides from where it is, a new one grows in, and one that left
-shrinks out before it is dropped, so changing a series from bars to a line is
-one transition and not a cut. A resize does not animate. Neither does
-anything when `animate` is `false` or the reader prefers reduced motion.
+shrinks out before it is dropped. Changing a series from bars to a line is
+therefore two overlapping motions: the bars sink while the line rises. Data is compared by content, so an inline `series={[...]}` that says
+the same thing as the last render changes nothing. A resize does not animate.
+Neither does anything when `animate` is `false` or the reader prefers reduced
+motion.
 
 ## Props
 
@@ -67,8 +72,12 @@ anything when `animate` is `false` or the reader prefers reduced motion.
 | `formatValue` | Formats tick labels, the tooltip and the data table. Default: D3's tick format, and the plain number. |
 | `theme` | `{ background, grid, baseline }` as `0xRRGGBB`. Changing one rebuilds the renderer. |
 | `backend` | `'auto'` (default), `'webgpu'` or `'webgl2'`, as `createRenderer` takes it. |
-| `onBackend` | Called once per renderer with the backend it came up on. |
+| `rendering` | `'gpu'` (default) or `'svg'`. SVG acquires no GPU context. |
+| `onBackend` | Called once per renderer with `'webgpu'`, `'webgl2'`, `'unknown'` or `'svg'`. |
 | `className` | Added to the root beside `dagr-chart`. |
+| `classNames` | Classes for DOM parts and SVG marks, listed below. |
+| `style` | Root inline styles, including typed CSS custom properties. |
+| `cssColors` | Map background, grid, baseline and series ids to CSS variable names. |
 | `scheduler` | Where frames come from, for a host that already runs a frame loop. Keep it stable. |
 
 Invalid data throws a `RangeError` from render: two series sharing an id, a
@@ -77,12 +86,96 @@ series without one value per category, or a value that is not finite.
 `layoutChart(data, size)` is the pure half, exported for a caller who wants
 the same positions without the canvas.
 
-## Styling
+## Styling and Tailwind
 
-The marks are drawn in the series colours and the `theme`. The text is DOM,
-styled by `styles.css`, which is optional. Its colours are custom properties
-on `.dagr-chart`: `--dagr-chart-text`, `--dagr-chart-tooltip-text`,
-`--dagr-chart-tooltip-surface` and `--dagr-chart-font`.
+There is no Tailwind runtime dependency. Pass utilities with `className` for
+its root, and `classNames` for `canvas` (either drawing surface), `axes`,
+`tick`, `leftTick`, `rightTick`, `category`, `tooltip`, `tooltipLabel`,
+`tooltipValue`, `failure` and `table`. SVG also exposes `bar`, `point`, `line`
+and `gridline`. Classes append to stable `dagr-chart__*` names. SVG marks carry
+`data-mark-id` and nodes carry `data-hovered="true"` while hovered.
+
+Import `styles.css` for positioning and the hidden table. Its defaults live in
+`@layer components`, so Tailwind's utilities override them regardless of import
+order. Unlayered application CSS also overrides them. Keep structural positioning
+and the table's visually hidden treatment if replacing these defaults.
+
+Use `style` for root styles or custom properties. Text defaults read
+`--dagr-chart-text`, `--dagr-chart-tooltip-text`, `--dagr-chart-tooltip-surface`
+and `--dagr-chart-font`; these can be inherited from an application wrapper.
+
+### Sharing Tailwind colours with the GPU
+
+GPU pixels cannot read utility classes. `cssColors` binds them to CSS variables
+on the root or its ancestors. Tailwind 4 exposes its palette as `--color-*`
+variables, including OKLCH colours. The chart converts opaque colours to sRGB.
+The arbitrary-property utilities in the example also tell Tailwind to retain
+the palette tokens they reference; alternatively define tokens in `@theme static`.
+Missing, unsupported, invalid or translucent values retain the numeric `theme`
+or series `color` fallback. The same bindings work in SVG mode.
+
+```tsx
+import { DagrChart } from '@prnt/dagr-chart';
+import '@prnt/dagr-chart/styles.css';
+
+<DagrChart
+  label="Monthly orders"
+  categories={['Jan', 'Feb', 'Mar']}
+  series={[{ id: 'orders', label: 'Orders', values: [17, 32, 38], color: 0x6366f1 }]}
+  className="rounded-xl [--chart-bg:var(--color-white)] dark:[--chart-bg:var(--color-slate-950)] [--chart-grid:var(--color-slate-200)] [--chart-baseline:var(--color-slate-400)] [--chart-orders:var(--color-indigo-500)]"
+  style={{ height: 360 }}
+  classNames={{
+    tick: 'font-sans text-xs text-slate-500 dark:text-slate-400',
+    category: 'font-sans text-xs',
+    tooltip: 'rounded-lg bg-white text-slate-950 shadow-lg dark:bg-slate-900 dark:text-white',
+  }}
+  cssColors={{
+    background: '--chart-bg',
+    grid: '--chart-grid',
+    baseline: '--chart-baseline',
+    series: { orders: '--chart-orders' },
+  }}
+/>
+```
+
+Colours refresh on ancestor or root `class`, `style` and `data-theme` changes,
+OS colour-scheme changes and window resize. This covers class-based dark mode,
+data-theme switches and responsive palette tokens without polling. Arbitrary
+stylesheet edits or continuously animated CSS colours are not observed. Use
+React numeric props for frame-by-frame colour control. In Tailwind 3, expose
+your palette as CSS variables in application CSS and bind those variable names
+through the same API. Keep utility strings literal in your application source
+so Tailwind can discover them; no package source scanning is required.
+
+### SVG
+
+Set `rendering="svg"` for ordinary DOM marks, with the same layout, spring
+transitions, reduced motion, tooltip and data table. No WebGPU or WebGL context
+is acquired. This is useful for smaller charts and environments without GPU
+support. Choose the mode explicitly; a GPU failure reports an error rather than
+silently switching rendering modes.
+
+```tsx
+<DagrChart
+  rendering="svg"
+  label="Monthly orders"
+  categories={['Jan', 'Feb', 'Mar']}
+  series={[{ id: 'orders', label: 'Orders', values: [17, 32, 38], color: 0x6366f1 }]}
+  style={{ height: 360 }}
+  classNames={{
+    bar: 'fill-indigo-500 dark:fill-indigo-400 data-[hovered=true]:fill-indigo-300',
+    point: 'fill-violet-500',
+    line: 'stroke-violet-500',
+  }}
+/>
+```
+
+SVG colours use presentation attributes, so fill and stroke utilities take
+precedence. Use `cssColors` when the tooltip border should also follow those
+colours. SVG lines use cubic splines and a CSS shadow for hover, so their pixels
+need not match the GPU's ribbons and glow exactly. The SVG contains the marks;
+axis labels and tooltips remain DOM siblings, so it is not a standalone chart
+export. SVG shares the half-pixel bar threshold with GPU rendering.
 
 ## Accessibility
 
@@ -90,14 +183,18 @@ The canvas is hidden from assistive technology. The root is a group named by
 `label`, and it holds a visually hidden table with the same numbers, one row
 per category and one column per series, formatted by `formatValue`. Keep
 `styles.css`, or hide `.dagr-chart__table` yourself, or the table is visible.
+The tooltip is pointer and touch only: there is no keyboard path to a single
+mark yet, and the table is what carries every value.
 
 ## Limits
 
 - React 19. `three` (0.180 or newer) is a peer, because the chart uses the
   renderer's GPU entry.
-- One chart is one canvas and one GPU context. A page of many small charts
-  wants SVG.
+- GPU mode uses one canvas and one GPU context per chart. For many small
+  charts, select SVG.
 - Category x-axis only: no time, log or continuous x scale, no stacked bars,
   no areas, no legend.
-- The win over an SVG chart is motion and mark count. For a few dozen static
-  marks, an SVG chart library is the simpler choice.
+- A bar shorter than half a pixel is not drawn, so a value tiny against its
+  axis has no mark and no tooltip. The data table still carries it.
+- GPU mode suits large mark counts; SVG suits smaller charts and direct CSS
+  styling. Both use the same animation model.

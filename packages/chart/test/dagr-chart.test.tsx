@@ -10,6 +10,7 @@ vi.mock('@prnt/dagr-render', async (importOriginal) => ({
 }));
 
 import { DagrChart } from '../src/DagrChart.js';
+import type { JSX } from 'react';
 import type { DagrChartProps } from '../src/DagrChart.js';
 import { layoutChart } from '../src/layout.js';
 import type { ChartSeries } from '../src/types.js';
@@ -66,7 +67,7 @@ describe('what it renders before a frame', () => {
     await show();
     expect(document.querySelector('[role="group"]')?.getAttribute('aria-label')).toBe('Orders by month');
     expect(document.querySelector('caption')?.textContent).toBe('Orders by month');
-    expect(text('thead th')).toEqual(['Orders', 'Total']);
+    expect(text('thead th')).toEqual(['Category', 'Orders', 'Total']);
     expect(text('tbody tr').map((row) => row)).toEqual(['Jan10100', 'Feb20120', 'Mar30150']);
     expect(document.querySelector('canvas')?.getAttribute('aria-hidden')).toBe('true');
   });
@@ -204,6 +205,58 @@ describe('once it has a size', () => {
   });
 });
 
+describe('what counts as a change', () => {
+  it('is the data, not the arrays it arrives in', async () => {
+    const mounted = await show({ animate: false });
+    await resizeTo(SIZE.width, SIZE.height);
+    frames.runUntilIdle();
+    const drawn = lastRenderer().render.mock.calls.length;
+    await mounted.rerender(
+      <DagrChart
+        categories={[...CATEGORIES]}
+        series={SERIES.map((series) => ({ ...series, values: [...series.values] }))}
+        label="Orders by month"
+        scheduler={frames.scheduler}
+        animate={false}
+      />,
+    );
+    expect(frames.pending()).toBe(false);
+    expect(lastRenderer().render.mock.calls).toHaveLength(drawn);
+  });
+
+  it('is not a resize to the size it already has', async () => {
+    await show({ animate: false });
+    await resizeTo(SIZE.width, SIZE.height);
+    frames.runUntilIdle();
+    await resizeTo(SIZE.width + 0.3, SIZE.height);
+    expect(frames.pending()).toBe(false);
+  });
+});
+
+describe('a lost GPU context', () => {
+  const lose = (): Promise<void> =>
+    flush(() => {
+      lastRenderer().options.onContextLost?.({ backend: 'webgpu', reason: 'device reset' });
+    });
+
+  it('rebuilds the renderer', async () => {
+    await show();
+    await lose();
+    expect(built.renderers).toHaveLength(2);
+    expect(built.renderers[0]?.dispose).toHaveBeenCalledOnce();
+    expect(document.querySelector('[role="alert"]')).toBeNull();
+  });
+
+  it('stops rebuilding, and says so, when it keeps happening', async () => {
+    await show();
+    for (let loss = 0; loss < 4; loss += 1) await lose();
+    expect(built.renderers).toHaveLength(4);
+    expect(document.querySelector('[role="alert"]')?.textContent).toBe(
+      'the GPU webgpu context was lost 4 times in ten seconds: device reset',
+    );
+  });
+});
+
 describe('hover', () => {
   async function shown(): Promise<void> {
     await show({ animate: false });
@@ -251,31 +304,81 @@ describe('hover', () => {
     expect(document.querySelector('.dagr-chart__tooltip')).toBeNull();
   });
 
-  it('clears when the pointer leaves, and when the data changes', async () => {
+  it('clears when the pointer leaves, but not when a finger lifts', async () => {
     await shown();
     lastRenderer().pickNode.mockResolvedValue('bar:orders:1');
     await flush(() => {
       move('pointermove');
     });
     await flush(() => {
+      document
+        .querySelector('canvas')
+        ?.dispatchEvent(Object.assign(new MouseEvent('pointerout', { bubbles: true }), { pointerType: 'touch' }));
+    });
+    expect(document.querySelector('.dagr-chart__tooltip')).not.toBeNull();
+    await flush(() => {
       move('pointerout');
     });
     expect(document.querySelector('.dagr-chart__tooltip')).toBeNull();
+  });
 
+  it('follows its mark through new data, and goes when the mark does', async () => {
+    await shown();
+    lastRenderer().pickNode.mockResolvedValueOnce('bar:orders:1');
     await flush(() => {
       move('pointermove');
     });
-    expect(document.querySelector('.dagr-chart__tooltip')).not.toBeNull();
-    await tree?.rerender(
+    const again = (series: ChartSeries[]): JSX.Element => (
       <DagrChart
         categories={CATEGORIES}
-        series={[ORDERS]}
+        series={series}
         label="Orders by month"
         scheduler={frames.scheduler}
         animate={false}
-      />,
+      />
     );
+    await tree?.rerender(again([{ ...ORDERS, values: [10, 25, 30] }, TOTAL]));
+    expect(document.querySelector('.dagr-chart__tooltip-value')?.textContent).toBe('25');
+    await tree?.rerender(again([TOTAL]));
     expect(document.querySelector('.dagr-chart__tooltip')).toBeNull();
+  });
+
+  it('sits below a mark that reaches the top of the plot', async () => {
+    await shown();
+    lastRenderer().pickNode.mockResolvedValueOnce('bar:orders:0');
+    await flush(() => {
+      move('pointermove');
+    });
+    expect(document.querySelector('.dagr-chart__tooltip')?.className).toBe('dagr-chart__tooltip');
+    lastRenderer().pickNode.mockResolvedValueOnce('bar:orders:2');
+    await flush(() => {
+      move('pointermove');
+    });
+    expect(document.querySelector('.dagr-chart__tooltip')?.className).toContain('dagr-chart__tooltip--below');
+  });
+
+  it('ignores a pick that finishes after the pointer leaves', async () => {
+    await shown();
+    let finish: (id: string) => void = () => undefined;
+    lastRenderer().pickNode.mockReturnValueOnce(new Promise((resolve) => { finish = resolve; }));
+    await flush(() => { move('pointermove'); });
+    await flush(() => { move('pointerout'); });
+    await flush(() => { finish('bar:orders:1'); });
+    expect(document.querySelector('.dagr-chart__tooltip')).toBeNull();
+  });
+
+  it('ignores a pick from a renderer that has been replaced', async () => {
+    await shown();
+    let finish: (id: string) => void = () => undefined;
+    const old = lastRenderer();
+    old.pickNode.mockReturnValueOnce(new Promise((resolve) => { finish = resolve; }));
+    await flush(() => { move('pointermove'); });
+    await flush(() => { old.options.onContextLost?.({ backend: 'webgpu', reason: 'reset' }); });
+    await flush(() => { finish('bar:orders:1'); });
+    expect(document.querySelector('.dagr-chart__tooltip')).toBeNull();
+    lastRenderer().pickNode.mockResolvedValueOnce('bar:orders:0');
+    await flush(() => { move('pointermove'); });
+    expect(document.querySelector('.dagr-chart__tooltip-label')?.textContent).toBe('Jan Orders');
   });
 
   it('survives a pick that rejects, and picks the move that arrived meanwhile', async () => {
@@ -299,5 +402,63 @@ describe('hover', () => {
     });
     expect(lastRenderer().pickNode).toHaveBeenLastCalledWith({ x: 7, y: 8 });
     expect(document.querySelector('.dagr-chart__tooltip-label')?.textContent).toBe('Jan Orders');
+  });
+});
+
+
+describe('SVG rendering and styling', () => {
+  it('draws bars, points and lines without constructing a GPU renderer', async () => {
+    const onBackend = vi.fn();
+    await show({ rendering: 'svg', animate: false, onBackend, className: 'rounded-xl',
+      style: { '--dagr-chart-text': '#123456', borderRadius: 12 },
+      classNames: { bar: 'fill-blue-500', line: 'stroke-violet-500', tick: 'text-xs', tooltip: 'bg-white' } });
+    await resizeTo(SIZE.width, SIZE.height);
+    frames.runUntilIdle();
+    expect(built.renderers).toHaveLength(0);
+    expect(onBackend).toHaveBeenCalledWith('svg');
+    expect(document.querySelectorAll('svg rect.dagr-chart__bar')).toHaveLength(3);
+    expect(document.querySelectorAll('svg circle')).toHaveLength(3);
+    expect(document.querySelector('svg path')?.getAttribute('d')).toContain(' C');
+    expect(document.querySelector('svg rect.dagr-chart__bar')?.classList.contains('fill-blue-500')).toBe(true);
+    expect(document.querySelector('svg path')?.classList.contains('stroke-violet-500')).toBe(true);
+    expect(document.querySelector('.dagr-chart__tick')?.classList.contains('text-xs')).toBe(true);
+    expect((document.querySelector('.dagr-chart') as HTMLElement).style.getPropertyValue('--dagr-chart-text')).toBe('#123456');
+    const bar = layoutChart({ categories: CATEGORIES, series: SERIES }, SIZE).bars[1]!;
+    await flush(() => {
+      document.querySelector('svg')?.dispatchEvent(new MouseEvent('pointermove', { bubbles: true,
+        clientX: bar.x, clientY: SIZE.height - bar.base - bar.height / 2 }));
+    });
+    expect(document.querySelector('.dagr-chart__tooltip-value')?.textContent).toBe('20');
+    expect(document.querySelector('.dagr-chart__tooltip')?.classList.contains('bg-white')).toBe(true);
+  });
+
+  it('animates SVG marks and disposes them when switching to the GPU', async () => {
+    const mounted = await show({ rendering: 'svg' });
+    await resizeTo(SIZE.width, SIZE.height);
+    frames.tick();
+    expect(document.querySelectorAll('svg .dagr-chart__bar')).toHaveLength(0);
+    frames.runUntilIdle();
+    expect(document.querySelectorAll('svg .dagr-chart__bar')).toHaveLength(3);
+    const svg = document.querySelector('svg')!;
+    await mounted.rerender(<DagrChart categories={CATEGORIES} series={SERIES} label="Orders" scheduler={frames.scheduler} />);
+    expect(svg.children).toHaveLength(0);
+    expect(document.querySelector('svg')).toBeNull();
+    expect(built.renderers).toHaveLength(1);
+    await mounted.rerender(<DagrChart categories={CATEGORIES} series={SERIES} label="Orders" scheduler={frames.scheduler} rendering="svg" />);
+    frames.runUntilIdle();
+    expect(lastRenderer().dispose).toHaveBeenCalledOnce();
+    expect(document.querySelectorAll('svg .dagr-chart__bar')).toHaveLength(3);
+  });
+
+  it('updates SVG classes without recreating marks or restarting animation', async () => {
+    const mounted = await show({ rendering: 'svg', animate: false });
+    await resizeTo(SIZE.width, SIZE.height);
+    frames.runUntilIdle();
+    const bar = document.querySelector('.dagr-chart__bar');
+    await mounted.rerender(<DagrChart categories={CATEGORIES} series={SERIES} label="Orders" scheduler={frames.scheduler}
+      rendering="svg" animate={false} classNames={{ bar: 'fill-red-500' }} />);
+    frames.runUntilIdle();
+    expect(document.querySelector('.dagr-chart__bar')).toBe(bar);
+    expect(bar?.classList.contains('fill-red-500')).toBe(true);
   });
 });

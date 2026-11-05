@@ -132,6 +132,31 @@ describe('a later layout', () => {
     expect(drawnIds('bar:s:')).toHaveLength(4);
   });
 
+  it('brings back a bar that returns before it has finished leaving', () => {
+    const both = chart(bars('s', [40, 40, 40, 40]), bars('t', [40, 40, 40, 40]));
+    scene.retarget(both, SNAP);
+    frames.runUntilIdle();
+    scene.retarget(chart(bars('s', [40, 40, 40, 40])), GLIDE);
+    frames.tick();
+    frames.tick();
+    scene.retarget(both, GLIDE);
+    frames.runUntilIdle();
+    expect(drawnIds('bar:t:')).toHaveLength(4);
+    expect(node('bar:t:0')?.size.height).toBeCloseTo(both.bars.find((bar) => bar.id === 'bar:t:0')?.height ?? NaN);
+  });
+
+  it('does not hold a bar still when it is retargeted in mid-flight', () => {
+    const cascade = { snap: false, stagger: true };
+    scene.retarget(chart(bars('s', [40, 40, 40, 80])), SNAP);
+    frames.runUntilIdle();
+    scene.retarget(chart(bars('s', [10, 10, 10, 80])), cascade);
+    for (let tick = 0; tick < 8; tick += 1) frames.tick();
+    const before = node('bar:s:2')?.size.height;
+    scene.retarget(chart(bars('s', [30, 30, 30, 80])), cascade);
+    frames.tick();
+    expect(node('bar:s:2')?.size.height).not.toBe(before);
+  });
+
   it('drops a bar that left at once when snapped', () => {
     scene.retarget(chart(bars('s', [40, 40, 40, 40]), bars('t', [40, 40, 40, 40])), SNAP);
     frames.runUntilIdle();
@@ -170,6 +195,27 @@ describe('gridlines', () => {
     frames.tick();
     expect(node('grid:0')?.fillColor).toBe(DEFAULT_THEME.baseline);
     expect(node('grid:1')?.fillColor).toBe(DEFAULT_THEME.grid);
+  });
+
+  it('stay under bars that are leaving, and under ones that come back', () => {
+    const gridIds = Array.from({ length: GRID_SLOTS }, (_, index) => `grid:${String(index)}`);
+    const firstIds = (): string[] => renderer.nodes.slice(0, GRID_SLOTS).map((drawn) => drawn.id);
+    scene.retarget(chart(bars('s', [10, 20, 30, 40])), SNAP);
+    frames.runUntilIdle();
+
+    scene.retarget(chart(), GLIDE);
+    frames.tick();
+    frames.tick();
+    expect(drawnIds('bar:').length).toBeGreaterThan(0);
+    expect(firstIds()).toEqual(gridIds);
+
+    scene.retarget(chart(bars('s', [10, 20, 30, 40])), GLIDE);
+    frames.tick();
+    expect(firstIds()).toEqual(gridIds);
+
+    scene.retarget(chart(), GLIDE);
+    frames.runUntilIdle();
+    expect(renderer.nodes).toEqual([]);
   });
 
   it('are absent when there is nothing to measure', () => {

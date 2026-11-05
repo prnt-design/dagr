@@ -72,7 +72,7 @@ export interface ChartLayout {
   readonly lines: readonly LineTarget[];
   readonly leftTicks: readonly Tick[];
   readonly rightTicks: readonly Tick[];
-  /** From the left axis, or the right when nothing is on the left. */
+  /** From the left axis, or the right when only the right one carries bars or has any series. */
   readonly gridlines: readonly Gridline[];
   /** The centre of each category's slot. */
   readonly categoryX: readonly number[];
@@ -98,7 +98,10 @@ const LABEL_SLOT = 36;
 const axisOf = (series: ChartSeries): ChartAxis => series.axis ?? 'left';
 const isBar = (series: ChartSeries): boolean => (series.mark ?? 'bar') === 'bar';
 
-function requireData(data: ChartData): void {
+function requireInput(data: ChartData, size: ChartSize): void {
+  if (!Number.isFinite(size.width) || !Number.isFinite(size.height)) {
+    throw new RangeError(`the chart's size has to be finite, got ${String(size.width)} by ${String(size.height)}`);
+  }
   const seen = new Set<string>();
   for (const series of data.series) {
     if (seen.has(series.id)) throw new RangeError(`two series share the id ${series.id}`);
@@ -142,10 +145,10 @@ function ticksOf(scale: ScaleLinear<number, number> | null): Tick[] {
 
 /**
  * @throws {RangeError} when two series share an id, a series does not have one
- *   value per category, or a value is not finite.
+ *   value per category, or a value or the size is not finite.
  */
 export function layoutChart(data: ChartData, size: ChartSize): ChartLayout {
-  requireData(data);
+  requireInput(data, size);
   const onLeft = data.series.filter((series) => axisOf(series) === 'left');
   const onRight = data.series.filter((series) => axisOf(series) === 'right');
   const left = onLeft.length > 0 ? MARGIN.withAxis : MARGIN.withoutAxis;
@@ -168,6 +171,9 @@ export function layoutChart(data: ChartData, size: ChartSize): ChartLayout {
 
   const barSeries = data.series.filter(isBar);
   const barWidth = Math.max(2, (groupWidth - BAR_GAP * (barSeries.length - 1)) / Math.max(1, barSeries.length));
+  // What the bars take up, which is wider than the group once the width is
+  // floored, so a crowded group still straddles its category.
+  const barsWidth = barSeries.length * barWidth + (barSeries.length - 1) * BAR_GAP;
 
   const bars: BarTarget[] = [];
   const lines: LineTarget[] = [];
@@ -183,7 +189,7 @@ export function layoutChart(data: ChartData, size: ChartSize): ChartLayout {
           id: `bar:${series.id}:${String(index)}`,
           seriesId: series.id,
           index,
-          x: centre - groupWidth / 2 + slot * (barWidth + BAR_GAP) + barWidth / 2,
+          x: centre - barsWidth / 2 + slot * (barWidth + BAR_GAP) + barWidth / 2,
           width: barWidth,
           base,
           height: scale(value) - base,
@@ -211,6 +217,9 @@ export function layoutChart(data: ChartData, size: ChartSize): ChartLayout {
 
   const leftTicks = ticksOf(scales.left);
   const rightTicks = ticksOf(scales.right);
+  // The grid follows the left axis, unless only the right one carries bars:
+  // their zero line is the one that has to be drawn.
+  const gridFromRight = onLeft.length === 0 || (!onLeft.some(isBar) && onRight.some(isBar));
   return {
     size,
     plot,
@@ -218,7 +227,7 @@ export function layoutChart(data: ChartData, size: ChartSize): ChartLayout {
     lines,
     leftTicks,
     rightTicks,
-    gridlines: (leftTicks.length > 0 ? leftTicks : rightTicks).map((tick) => ({
+    gridlines: (gridFromRight ? rightTicks : leftTicks).map((tick) => ({
       y: tick.y,
       baseline: tick.value === 0,
     })),

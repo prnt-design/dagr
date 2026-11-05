@@ -61,6 +61,26 @@ describe('bars', () => {
     expect(((s?.x ?? 0) + (t?.x ?? 0)) / 2).toBeCloseTo(layout.categoryX[0] ?? NaN);
   });
 
+  it('hang from the top of the plot when every value is negative', () => {
+    const layout = layoutChart({ categories: ['a', 'b'], series: [series('s', [-10, -20])] }, SIZE);
+    expect(layout.bars[0]?.base).toBeCloseTo(layout.plot.top);
+    expect(layout.bars.every((bar) => bar.height < 0)).toBe(true);
+  });
+
+  it('stay centred on the category when their width is floored', () => {
+    const categories = Array.from({ length: 30 }, (_, index) => String(index));
+    const values = categories.map(() => 1);
+    const layout = layoutChart(
+      { categories, series: [series('s', values), series('t', values), series('u', values)] },
+      { width: 200, height: 300 },
+    );
+    const group = layout.bars.filter((bar) => bar.index === 0);
+    expect(group.every((bar) => bar.width === 2)).toBe(true);
+    expect((Math.min(...group.map((bar) => bar.x)) + Math.max(...group.map((bar) => bar.x))) / 2).toBeCloseTo(
+      layout.categoryX[0] ?? NaN,
+    );
+  });
+
   it('are not narrowed by a line series beside them', () => {
     const alone = layoutChart({ categories: CATEGORIES, series: [series('s', [1, 2, 3, 4])] }, SIZE);
     const withLine = layoutChart(
@@ -139,6 +159,18 @@ describe('axes', () => {
     expect(layout.gridlines.map((line) => line.y)).toEqual(layout.rightTicks.map((tick) => tick.y));
   });
 
+  it('draws the zero line of right-hand bars under left-hand lines', () => {
+    const layout = layoutChart(
+      {
+        categories: CATEGORIES,
+        series: [series('t', [1000, 1010, 1020, 1030], { mark: 'line' }), series('s', [1, 2, 3, 4], { axis: 'right' })],
+      },
+      SIZE,
+    );
+    expect(layout.gridlines.map((line) => line.y)).toEqual(layout.rightTicks.map((tick) => tick.y));
+    expect(layout.gridlines[0]).toEqual({ y: layout.bars[0]?.base, baseline: true });
+  });
+
   it('never carries more gridlines than the scene has slots for', () => {
     const layout = layoutChart({ categories: CATEGORIES, series: [series('s', [1, 2, 3, 97])] }, SIZE);
     expect(layout.gridlines.length).toBeLessThanOrEqual(GRID_SLOTS);
@@ -159,6 +191,24 @@ describe('an empty or invalid chart', () => {
   it('lays out no marks and no gridlines for no series', () => {
     const layout = layoutChart({ categories: CATEGORIES, series: [] }, SIZE);
     expect(layout).toMatchObject({ bars: [], lines: [], leftTicks: [], rightTicks: [], gridlines: [] });
+  });
+
+  it('lays out no marks for no categories', () => {
+    const layout = layoutChart({ categories: [], series: [series('s', [])] }, SIZE);
+    expect(layout).toMatchObject({ bars: [], categoryX: [] });
+    expect(layout.lines).toEqual([]);
+  });
+
+  it('centres a single category in the plot', () => {
+    const layout = layoutChart({ categories: ['a'], series: [series('s', [3])] }, SIZE);
+    expect(layout.categoryX).toEqual([(layout.plot.left + layout.plot.right) / 2]);
+    expect(layout.bars[0]?.x).toBeCloseTo(layout.categoryX[0] ?? NaN);
+  });
+
+  it('refuses a size that is not finite', () => {
+    expect(() => layoutChart({ categories: CATEGORIES, series: [] }, { width: NaN, height: 300 })).toThrow(
+      /size has to be finite, got NaN by 300/,
+    );
   });
 
   it('refuses two series with one id', () => {

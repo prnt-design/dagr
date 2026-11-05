@@ -13,9 +13,10 @@ import { ChartStage } from './chart/ChartStage.js';
  * nodes; the living stage proves that an edit moves only the part of the
  * drawing it touches, which is the claim the project competes on and which
  * scale cannot show; the chart shows `@prnt/dagr-chart`, bars and lines on
- * the same renderer. None subsumes another, so none was deleted. They are behind a switch
- * rather than stacked because each mounts a canvas, and two live canvases is
- * two GPU device contexts for a page that can only be looking at one of them.
+ * the same renderer. None subsumes another, so none was deleted. They are
+ * behind a switch rather than stacked because each mounts a canvas, and two
+ * live canvases is two GPU device contexts for a page that can only be looking
+ * at one of them.
  *
  * The switch is one `useState` and no router. A route each would be the right
  * answer for a site a visitor navigates; this is a local playground, and the
@@ -90,7 +91,7 @@ function LivingView(): JSX.Element {
   );
 }
 
-/** The chart experiment: the graph renderer asked to draw bars and a line. */
+/** The chart view: `<DagrChart>`, with controls that change what it is given. */
 function ChartView(): JSX.Element {
   return (
     <>
@@ -102,9 +103,9 @@ function ChartView(): JSX.Element {
         <h2 className="facts__title">what is on the canvas</h2>
         <p className="facts__lead">
           Twelve months of data in <code>&lt;DagrChart&gt;</code> from{' '}
-          <code>@prnt/dagr-chart</code>: each bar and marker is an instanced SDF node drawn by{' '}
+          <code>@prnt/dagr-chart</code>: GPU mode draws bars and markers as instanced SDF nodes with{' '}
           <code>@prnt/dagr-render</code>, each line is one smooth ribbon, the scales and ticks are
-          D3&apos;s, and the axis text is DOM positioned from the same numbers. Hover a mark for
+          D3&apos;s. SVG mode draws DOM marks from the same layout and spring frames. Hover a mark for
           its value.
         </p>
         <p className="facts__lead">
@@ -112,7 +113,7 @@ function ChartView(): JSX.Element {
           id, so one in both sets glides from where it is, a new one grows in and one that left
           shrinks out, all on the renderer&apos;s critically damped springs. <em>daily + total</em>{' '}
           puts a running total on a second axis. WebGPU where the browser has it, WebGL2 where it
-          does not; the label beside the legend says which.
+          does not, or select SVG without a GPU context. The label beside the legend says which.
         </p>
       </section>
     </>

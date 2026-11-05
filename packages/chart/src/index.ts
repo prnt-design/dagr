@@ -9,7 +9,7 @@
  */
 
 export { DagrChart } from './DagrChart.js';
-export type { DagrChartProps } from './DagrChart.js';
+export type { DagrChartProps, ChartBackend } from './DagrChart.js';
 export { GRID_SLOTS, layoutChart } from './layout.js';
 export type {
   BarTarget,
@@ -22,3 +22,5 @@ export type {
 } from './layout.js';
 export { DEFAULT_THEME } from './types.js';
 export type { ChartAxis, ChartData, ChartMark, ChartSeries, ChartSize, ChartTheme } from './types.js';
+
+export type { ChartClassNames, ChartCssColors, ChartStyle } from './styling.js';
