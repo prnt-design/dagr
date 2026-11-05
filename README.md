@@ -112,6 +112,7 @@ pnpm bench           # run every package's benchmarks
 pnpm bench:check     # compare that run to bench/baseline.json
 pnpm bench:baseline  # record that run as the new baseline
 pnpm bench:ci        # measure up to three times, and pass when two runs agree
+pnpm bench:gate      # bench:ci, when the branch's diff can move a gated benchmark
 ```
 
 The agent runs `pnpm bench:ci` locally before opening a pull request, and does

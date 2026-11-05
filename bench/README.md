@@ -513,20 +513,27 @@ the qualification belongs.
 
 `pnpm bench:gate` reads the branch's diff against its merge base with
 `origin/main`, uncommitted and untracked files included, and runs `bench:ci`
-only when a changed path is in scope:
+only when a changed path is something a gated entry runs:
 
 - a package a gated baseline entry names, or a workspace package it depends
   on, outside that package's `test/`. Read from `bench/baseline.json` and the
   manifests, so a package whose benchmarks join the baseline comes into scope
   without an edit;
-- any package's `bench/` files, because `pnpm bench` runs them all;
 - `bench/` itself, outside `bench/browser/`;
 - the root `package.json`, `pnpm-lock.yaml`, `pnpm-workspace.yaml`,
-  `tsconfig.base.json` and the Node version files.
+  `tsconfig.base.json`, `.npmrc`, `.pnpmfile.cjs`, the Node version files and
+  anything under `patches/`.
 
 Markdown is never in scope. Otherwise it prints why it skipped and exits zero.
 It fails closed: a diff git cannot read, or a baseline that does not parse,
 runs the gate.
+
+One case sits between the two. `pnpm bench` runs every package with a `bench`
+script, and some have no gated entry yet. A diff that reaches one of those
+without reaching a gated package cannot move a gated number, but it can make
+that package's benchmarks throw, which would fail the gate for every branch
+after it. So `bench:gate` runs that package's benchmarks once and fails only
+if they do not run. Their timings are read by nothing.
 
 The reason is the cost of a false failure on this machine, counted rather
 than argued. Across PRs #150 to #219, 23 recorded a failing gate, and 15 of
@@ -1005,7 +1012,8 @@ see the paragraph on that capture above.
 `src/control.ts`, `src/corpus.ts` and `src/register.ts` are TypeScript, compiled
 by vitest, and reached through `@dagr/bench` by a `paths` entry and a vitest
 alias in each consuming package. `src/gate.mjs`, `src/collect.mjs`,
-`src/baseline.mjs` and `bin/bench-check.mjs` are plain `.mjs` with JSDoc types,
+`src/baseline.mjs`, `src/scope.mjs`, `bin/bench-check.mjs` and
+`bin/bench-gate.mjs` are plain `.mjs` with JSDoc types,
 because they run under bare `node`, in a job that has deliberately not built
 anything yet; `checkJs` keeps them under the same strict compiler as everything
 else. `src/names.mjs` holds the two names both halves need.
