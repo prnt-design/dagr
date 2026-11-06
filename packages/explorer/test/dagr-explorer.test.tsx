@@ -573,6 +573,20 @@ describe('DagrExplorer: map or outline', () => {
     expect((scroller?.lastElementChild as HTMLElement | null)?.style.height).toBe('50%');
   });
 
+  it('puts the outline back where it was scrolled after the map', async () => {
+    await ready({ defaultMode: 'outline' });
+    const scroller = part('outline').parentElement;
+    if (scroller === null) throw new Error('no scroller');
+    scroller.scrollTop = 120;
+    scroller.dispatchEvent(new Event('scroll'));
+    await flush(() => mode('map').click());
+    // What a browser does to a box that display: none removes; jsdom keeps the value.
+    scroller.scrollTop = 0;
+    scroller.dispatchEvent(new Event('scroll'));
+    await flush(() => mode('outline').click());
+    expect(scroller.scrollTop).toBe(120);
+  });
+
   it('under control, reports a choice and shows only the owner\'s mode', async () => {
     const onModeChange = vi.fn();
     await ready({ mode: 'map', onModeChange });

@@ -14,7 +14,8 @@
  * they carry across a switch. The map stays mounted while the outline shows,
  * hidden, so it is out of the tab order and keeps its camera, which a zero
  * size leaves where it was (see `use-explorer-camera.ts`). The outline mounts
- * the first time it is chosen and is kept after, hidden, for its tab stop. The toolbar is hidden with the map, and the drawer goes with
+ * the first time it is chosen and is kept after, hidden, for its tab stop and
+ * its scroll offset. The toolbar is hidden with the map, and the drawer goes with
  * whichever presentation shows; over the outline it leaves scroll room below
  * the last item. Focus on a switch stays where it is, unless it was in the
  * presentation that left: then it moves to the same node in the other one if
@@ -102,13 +103,28 @@ function ModeButtons(props: {
   );
 }
 
-/** The outline's scroll area. An open drawer leaves the items room to scroll clear of it when docked over the lower half. */
+/**
+ * The outline's scroll area. An open drawer leaves the items room to scroll clear of it when docked over the lower half.
+ * A browser drops the offset of a box `display: none` removes, so the area keeps its own and puts it back when shown.
+ */
 function OutlineScroll<N extends ExplorerNode>(props: {
   readonly nodeAriaLabel: ExplorerOutlineProps<N>['nodeAriaLabel'];
+  readonly shown: boolean;
 }): ReactElement {
   const { detailsOpen } = useExplorer();
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const offset = useRef(0);
+  useIsomorphicLayoutEffect(() => {
+    if (props.shown && scrollRef.current !== null) scrollRef.current.scrollTop = offset.current;
+  }, [props.shown]);
   return (
-    <div style={{ height: '100%', overflowY: 'auto', scrollPaddingBottom: detailsOpen ? '50%' : undefined }}>
+    <div
+      ref={scrollRef}
+      onScroll={(event) => {
+        if (props.shown) offset.current = event.currentTarget.scrollTop;
+      }}
+      style={{ height: '100%', overflowY: 'auto', scrollPaddingBottom: detailsOpen ? '50%' : undefined }}
+    >
       <ExplorerOutline<N> nodeAriaLabel={props.nodeAriaLabel} />
       {detailsOpen ? <div aria-hidden="true" style={{ height: '50%' }} /> : null}
     </div>
@@ -195,7 +211,7 @@ export function DagrExplorer<N extends ExplorerNode = ExplorerNode, E extends Ex
       </div>
       {outlineKept ? (
         <div ref={outlineRef} hidden={mode !== 'outline'} style={mode === 'outline' ? READER : HIDDEN}>
-          <OutlineScroll<N> nodeAriaLabel={nodeAriaLabel} />
+          <OutlineScroll<N> nodeAriaLabel={nodeAriaLabel} shown={mode === 'outline'} />
           {mode === 'outline' ? details : null}
         </div>
       ) : null}
