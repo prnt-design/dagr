@@ -141,7 +141,7 @@ describe('DagrExplorer', () => {
     expect(layers.length).toBeGreaterThan(0);
   });
 
-  it('names outline items with the same nodeAriaLabel as the map', async () => {
+  it('forwards nodeAriaLabel to the outline', async () => {
     tree = await mount(
       <DagrExplorer label="Map" views={[overview]} defaultMode="outline" nodeAriaLabel={(node) => `kind ${node.kind}`} />,
     );

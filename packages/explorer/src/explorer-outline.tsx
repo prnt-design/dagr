@@ -16,9 +16,7 @@
  * node the query or trace dims keeps its place and is marked `data-dimmed`,
  * so the reader's position does not move as they type.
  *
- * Items are named by `nodeAriaLabel`, the viewport's prop of that name, so
- * one function names a node in both presentations. Default: the map's default
- * node name, the label then `labels.inGroup(group)` for each group.
+ * Items are named by `nodeAriaLabel`, as the viewport names its nodes.
  */
 
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -76,8 +74,8 @@ export function ExplorerOutline<N extends ExplorerNode = ExplorerNode>(props: Ex
 
   // The part's type parameter is a claim about the root's data. See context.ts.
   const nodes = activeView?.nodes as readonly N[] | undefined;
-  const groups = activeView?.groups;
-  const groupsOf = useMemo(() => groupsByNode(groups), [groups]);
+  const viewGroups = activeView?.groups;
+  const groupsOf = useMemo(() => groupsByNode(viewGroups), [viewGroups]);
   const stop = useMemo(() => {
     if (nodes === undefined || nodes.length === 0) return null;
     if (selectedId !== null) return selectedId;
