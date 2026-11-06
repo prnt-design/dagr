@@ -67,15 +67,21 @@ describe('bars', () => {
     expect(layout.bars.every((bar) => bar.height < 0)).toBe(true);
   });
 
-  it('stay centred on the category when their width is floored', () => {
-    const categories = Array.from({ length: 30 }, (_, index) => String(index));
+  it('stay centred without crossing neighboring dense category bands', () => {
+    const categories = Array.from({ length: 60 }, (_, index) => String(index));
     const values = categories.map(() => 1);
     const layout = layoutChart(
       { categories, series: [series('s', values), series('t', values), series('u', values)] },
-      { width: 200, height: 300 },
+      { width: 320, height: 300 },
     );
+    for (let index = 0; index < categories.length - 1; index += 1) {
+      const current = layout.bars.filter((bar) => bar.index === index);
+      const next = layout.bars.filter((bar) => bar.index === index + 1);
+      expect(Math.max(...current.map((bar) => bar.x + bar.width / 2)))
+        .toBeLessThan(Math.min(...next.map((bar) => bar.x - bar.width / 2)));
+    }
     const group = layout.bars.filter((bar) => bar.index === 0);
-    expect(group.every((bar) => bar.width === 2)).toBe(true);
+    expect(group.every((bar) => bar.width > 0 && bar.width < 2)).toBe(true);
     expect((Math.min(...group.map((bar) => bar.x)) + Math.max(...group.map((bar) => bar.x))) / 2).toBeCloseTo(
       layout.categoryX[0] ?? NaN,
     );

@@ -172,7 +172,8 @@ silently switching rendering modes.
 
 SVG colours use presentation attributes, so fill and stroke utilities take
 precedence. Use `cssColors` when the tooltip border should also follow those
-colours. SVG lines use cubic splines and a CSS shadow for hover, so their pixels
+colours. Lines use linear segments in both modes, so they do not invent extrema between
+observations. SVG uses a CSS shadow for hover, so its pixels
 need not match the GPU's ribbons and glow exactly. The SVG contains the marks;
 axis labels and tooltips remain DOM siblings, so it is not a standalone chart
 export. SVG shares the half-pixel bar threshold with GPU rendering.
@@ -198,3 +199,29 @@ mark yet, and the table is what carries every value.
   axis has no mark and no tooltip. The data table still carries it.
 - GPU mode suits large mark counts; SVG suits smaller charts and direct CSS
   styling. Both use the same animation model.
+
+## Narrow charts and correctness
+
+Category labels use measured DOM widths, an 8px gap, and deterministic thinning.
+The first and last categories are retained together when they fit, then interior
+labels fill the available space in order. Labels wider than the container are
+ellipsized. Font loads, resize and label size changes trigger measurement.
+Full category names remain in tooltips and the data table, including skipped
+labels. The pure layout's `labelEvery` is a legacy count-based hint for custom
+renderers, not the component's measured visibility policy.
+
+Grouped bars shrink their gaps and widths to stay inside each category band.
+Very dense bars can be subpixel and hard to pick individually. Filter, aggregate
+or provide a wider container for detailed inspection; the table retains all
+observations. Linear interpolation is the safe default in SVG and GPU, replacing
+the previous mandatory smoothing. There is no smoothing option in this release.
+
+Tooltips measure their wrapped content, prefer above the mark, flip below when
+needed, and clamp to the chart's actual content bounds with an 8px inset.
+Content larger than the chart is capped and clipped; the table retains the full
+text and values. Give charts enough height for readable content.
+
+Follow-up work is staged separately: split SVG/layout import boundaries from GPU
+dependencies; add per-axis domains, units and formatting; add keyboard inspection
+and controlled active data; define missing-value gaps and stable observation keys.
+Stacking and additional chart families follow those contracts.
