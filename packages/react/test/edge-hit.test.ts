@@ -63,6 +63,15 @@ describe('createEdgeHitIndex', () => {
     }
     const index = createEdgeHitIndex([edge('ordinary', 0, 0, 1, 0)]);
     expect(index.hit({ x: 1e20, y: 0 }, 1)).toBeNull();
+    const extremes = createEdgeHitIndex([
+      edge('low', -1.7e308, -1.7e308, -1.7e308, -1.7e308),
+      edge('ordinary', 0, 0, 1, 0),
+      edge('high', 1.7e308, 1.7e308, 1.7e308, 1.7e308),
+    ]);
+    expect(extremes.hit({ x: -1.7e308, y: -1.7e308 }, 1)).toBe('low');
+    expect(extremes.hit({ x: 0.5, y: 0 }, 1)).toBe('ordinary');
+    expect(extremes.hit({ x: 1.7e308, y: 1.7e308 }, 1)).toBe('high');
+    expect(extremes.hit({ x: 1e300, y: 0 }, 1)).toBeNull();
   });
 
   it('follows every segment of a bent route', () => {

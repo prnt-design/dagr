@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- `createEdgeHitIndex` builds four to six times faster at 10,000 nodes in Node, and nearly in proportion to its segments: the same grid cells and answers, kept in flat typed arrays over the segments' bounds instead of a `Map` of arrays.
 - A `DagrCanvas` `fit()` or `focusNode` flight still under way when `inset`, the visual viewport or the canvas size changes works its target out again in the new frame, from where the camera is, and lands when it would have. It used to land where the old frame put it.
 - `DagrCanvas` observes the visual viewport and frames in what it leaves, such as the part of the page a software keyboard covers without resizing it: the larger of `inset` and `visualViewportInset` on each side. A change keeps the camera and re-clamps it. Page pinch-zoom takes nothing off. Tested in jsdom and headless Chromium emulation (`bench/browser/visible-frame-check.mjs`), not yet on an iOS or Android device or with a software keyboard.
 - Add `inset` to `DagrCanvas`: CSS pixels off each side that something drawn over the canvas covers. The first fit, `fit()`, `focusNode` and the camera limits frame what is left. Changing it keeps the camera and re-clamps it.
