@@ -16,7 +16,7 @@
  * node the query or trace dims keeps its place and is marked `data-dimmed`,
  * so the reader's position does not move as they type.
  *
- * Items are named by `nodeAriaLabel`, as the viewport names its nodes.
+ * Items are named as the viewport names its nodes.
  */
 
 import { useEffect, useMemo, useRef, useState } from 'react';
