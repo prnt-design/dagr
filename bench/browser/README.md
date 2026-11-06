@@ -825,7 +825,54 @@ build alternating on a shared host:
 
 Both builds gave the same answer to each of 80,000 queries per row (20,000
 points at each of tolerances 1, 4, 40 and 400 world units). This is not a
-browser number: the rows above predate it, and the device has not run it yet.
+browser number: the 2026-10-31 rows above predate it. The next run is.
+
+**The cheaper build on the device, 2026-11-06 UTC.** The same command, on the
+same desktop: the NVIDIA GeForce RTX 4090 now on driver 32.0.16.2114, Windows
+build 26300, Chrome 157.0.8103.38 headed on the Windows side, attached from
+WSL2, no flags beyond the helper's, built from main at 8b10e58. The adapter
+was `nvidia` `lovelace`, `isFallbackAdapter: false`, both from
+`requestAdapter()` and behind every device the page created, and
+`renderer.backend` was `webgpu` on every row. The display now runs at 60 Hz,
+so the control's tick was 16.7 ms against 18 ms on 2026-10-31: missed ticks
+compare within each date's pairs, not across the two dates. Load average 0.2
+to 0.9, the whole run in one exclusive compute window. Three pairs at DPR 1
+and two at DPR 2, alternating without and with `--edge-hit`:
+
+| DPR | Edges | Past one tick, without | Past one tick, with `--edge-hit` | `edgeHitIndex` | `edgeHit` |
+| --- | --- | --- | --- | --- | --- |
+| 1 | straight | 0%, 0%, 0% | 0%, 0%, 0% | 1.8 / 2.0 / 2.8 to 5.2 | 0.0 / 0.0 to 0.1 / 0.1 |
+| 1 | smooth | 6.0%, 13.0%, 12.7% | 43.7%, 50.7%, 43.3% | 4.9 / 5.6 to 5.9 / 9.8 to 15.0 | 0.0 / 0.1 / 0.1 to 3.2 |
+| 2 | straight | 0%, 0% | 0%, 0% | 1.8 / 1.9 to 2.0 / 2.8 to 4.8 | 0.0 / 0.1 / 0.1 |
+| 2 | smooth | 10.0%, 7.0% | 41.7%, 43.3% | 4.8 to 4.9 / 5.7 / 8.6 to 8.8 | 0.0 / 0.1 / 0.1 |
+
+Still frames missed no ticks, and a still query took 0.0 ms at the median and
+at most 0.2. The untimed first build took 5.5 to 6.4 ms for straight edges and
+3.3 to 4.2 for smooth. 41% to 47% of queries landed on an edge. Smooth
+`setEdges` took 8.9 to 9.5 ms at the median without and 9.4 to 10.5 with. The
+page logged three's `position` warning as before, and no page error.
+
+- **The rebuild is now about what the segment count predicts.** Three
+  segments per edge took 2.7 times as long as one, 4.8 to 4.9 ms against 1.8,
+  where on 2026-10-31 it took six to seven times as long. That matches the
+  Node numbers (4.5 to 4.8 ms).
+- **Rebuilt every frame at three segments, it still does not fit a 60 Hz
+  frame that already spends about 9.5 ms in `setEdges`.** About 44% of ticks
+  were missed against about 10% without it. At one segment per edge it fits.
+
+**Decision: edges stay on the CPU index; no GPU pick id per edge group.** A
+query is free, and the build is now a few milliseconds, paid only on a frame
+where a pointer needs a fresh index: a click lands on one frame, and hover
+reuses an index up to 100 ms old, so at most about one frame in six while
+edges glide, and none at rest. The every-frame rows above are the worst case,
+not what `DagrCanvas` does. A GPU id would not remove the cost that remains
+either: the pick pass reads one device pixel, while a mouse's edge tolerance
+reaches 4 CSS pixels past the ribbon's edge, so a GPU edge pick would
+need wider pick geometry or a neighbourhood read, and it would answer 0 to 2
+frames late, as node picks do. Revisit this if a measured hover or click
+workload on `DagrCanvas`'s own routes misses ticks, or for graphs well past
+10,000 nodes. Not measured: hover's one rebuild in six frames, `DagrCanvas`'s
+routes, the AMD integrated graphics, and WebGL2.
 
 ## Frame profile on WebGPU (M4.10a)
 
