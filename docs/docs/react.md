@@ -584,7 +584,7 @@ never picked later, since the camera may have moved by then, so re-query the
 resting pointer from `onPicked`. The pick is exact to the device pixel under the
 pointer and has none of the CPU index's touch tolerance. `DagrCanvas` wires
 this provider in behind `hitTesting="gpu"` (next section). At 10,000 nodes a
-pick took about 0.1 to 0.2 ms of CPU on one device (see
+pick took about 0.1 to 0.2 ms of CPU on one device, on WebGPU (see
 `bench/browser/README.md`, "What a pick costs a frame").
 
 ## Navigation, node events and camera control
