@@ -5893,7 +5893,7 @@ of M3 would leave the second runner idle for a milestone.
   in Node can confirm that. A flip got backwards is a pick that is perfect in
   the middle of the canvas and names the wrong node everywhere else, which is
   the failure shape most likely to be shipped.
-- [ ] **M4.8b** (`@dagr/render`, `apps/demo`) GPU picking, the pass: an ID
+- [x] **M4.8b** (`@dagr/render`, `apps/demo`) GPU picking, the pass: an ID
   buffer pass rendering per-instance IDs to an offscreen target, with a
   single-pixel readback giving O(1) hover, select and drag hit testing
   regardless of node count. Demo scene with hover highlight.

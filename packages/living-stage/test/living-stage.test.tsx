@@ -194,15 +194,16 @@ describe('<LivingStage>', () => {
 
   it('lightens the edge under the mouse, until it leaves', async () => {
     await mountStage();
-    const edge = lastCanvas().graph.edges()[0];
-    expect(edge).toBeDefined();
-    if (edge === undefined) return;
+    const [edge, other] = lastCanvas().graph.edges();
+    expect(other).toBeDefined();
+    if (edge === undefined || other === undefined) return;
     expect(lastCanvas().edgeColor?.(edge.id)).toBeUndefined();
 
     await flush(() => {
       lastCanvas().onEdgeHover?.(edge.id);
     });
     expect(lastCanvas().edgeColor?.(edge.id)).toBe(hoverColor(DEFAULT_EDGE_COLOR));
+    expect(lastCanvas().edgeColor?.(other.id)).toBeUndefined();
 
     await flush(() => {
       lastCanvas().onEdgeHover?.(null);

@@ -384,8 +384,9 @@ branches never enter public docs, source, npm artifacts, or job fixtures.
   "What an edge hit costs a frame"). Since 2026-11-06 UTC the living graph
   demo lightens the edge under the mouse halfway to white, the node hover's
   rule, through `onEdgeHover` and an `edgeColor` callback. On the RTX 4090 in
-  Chrome 157, headless, with the canvas on `webgpu` and every device's adapter
-  `nvidia` `lovelace`, not a fallback, an uncommitted script paused the demo,
+  Chrome 157, headless, with the canvas on `webgpu` and the adapter behind
+  every device the page created `nvidia` `lovelace`, not a fallback, an
+  uncommitted script paused the demo,
   rested Playwright's mouse on an edge pixel of the built `apps/demo` at DPR
   1, and 234 pixels turned to the lighter edge colour, none before and none
   once the mouse left. DPR 2 and WebGL2 were not run.
