@@ -1,6 +1,6 @@
 /**
  * What the living graph looks like: a colour per stage, a halo on whatever
- * the last edit touched, and a lighter fill on the node under the mouse.
+ * the last edit touched, and a lighter fill on the node or edge under the mouse.
  *
  * THE HALO IS THE OTHER HALF OF THE READOUT. "6 moved, 29 stayed put" is a
  * claim; six lit nodes beside twenty-nine unlit ones is the evidence for it, on
@@ -18,7 +18,8 @@
  * without reading anything.
  */
 
-import type { NodeAppearance, NodeAppearanceOf } from '@prnt/dagr-react';
+import { DEFAULT_EDGE_COLOR } from '@prnt/dagr-react';
+import type { EdgeColorOf, NodeAppearance, NodeAppearanceOf } from '@prnt/dagr-react';
 import { STAGES } from './living-graph.js';
 import type { Stage } from './living-graph.js';
 
@@ -136,6 +137,17 @@ export function livingAppearance(
       glowWorld: lit ? HIGHLIGHT_GLOW : 0,
     };
   };
+}
+
+/**
+ * The edge colour callback for a drawing with `hovered` under the pointer:
+ * that edge lightened the way a hovered node is, every other edge the default.
+ *
+ * Memoise it for the same reason as {@link livingAppearance}.
+ */
+export function livingEdgeColor(hovered: string | null): EdgeColorOf {
+  const lit = hoverColor(DEFAULT_EDGE_COLOR);
+  return (id: string): number | undefined => (id === hovered ? lit : undefined);
 }
 
 /** Every stage, for a caller building a legend. */

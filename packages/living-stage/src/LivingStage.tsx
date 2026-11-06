@@ -47,6 +47,7 @@ import {
   CLEAR_COLOR,
   STAGE_LEGEND,
   livingAppearance,
+  livingEdgeColor,
   touchedBy,
 } from './appearance.js';
 import {
@@ -216,6 +217,7 @@ export function LivingStage(props: LivingStageProps): ReactElement {
   const [readout, setReadout] = useState<Readout | null>(null);
   const [touched, setTouched] = useState<ReadonlySet<string>>(NOTHING_TOUCHED);
   const [hovered, setHovered] = useState<string | null>(null);
+  const [hoveredEdge, setHoveredEdge] = useState<string | null>(null);
   const [playing, setPlaying] = useState(autoplay);
   const [failure, setFailure] = useState<unknown>(null);
 
@@ -339,6 +341,7 @@ export function LivingStage(props: LivingStageProps): ReactElement {
     () => livingAppearance(touched, stageOfId, hovered),
     [touched, stageOfId, hovered],
   );
+  const edgeColor = useMemo(() => livingEdgeColor(hoveredEdge), [hoveredEdge]);
 
   const verbs: readonly { kind: EditKind; enabled: boolean }[] = useMemo(
     () =>
@@ -367,12 +370,14 @@ export function LivingStage(props: LivingStageProps): ReactElement {
               graph={graph}
               config={LIVING_LAYOUT_CONFIG}
               nodeAppearance={nodeAppearance}
+              edgeColor={edgeColor}
               clearColor={CLEAR_COLOR}
               animate={reducedMotion ? undefined : FEEL}
               onLayout={onLayout}
               onError={setFailure}
               hitTesting="gpu"
               onNodeHover={setHovered}
+              onEdgeHover={setHoveredEdge}
               style={{ width: '100%', height: '100%' }}
             >
               {props.canvasChildren ?? <RefitButton />}

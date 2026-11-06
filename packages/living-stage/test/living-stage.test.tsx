@@ -9,7 +9,7 @@ import type { LayoutDelta, LayoutResult } from '@prnt/dagr-layout';
 // The module `vi.mock` below is replacing, as a type. A `typeof import(...)`
 // inline would be the obvious spelling and the repo's lint rule forbids it.
 import type * as DagrReact from '@prnt/dagr-react';
-import { toWorldBounds } from '@prnt/dagr-react';
+import { DEFAULT_EDGE_COLOR, toWorldBounds } from '@prnt/dagr-react';
 
 // Only `DagrCanvas` is faked; see `fake-canvas.ts`. Everything else the
 // component imports from `@prnt/dagr-react` is the real export.
@@ -190,6 +190,24 @@ describe('<LivingStage>', () => {
       lastCanvas().onNodeHover?.(null);
     });
     expect(lastCanvas().nodeAppearance?.(hovered.id)?.fillColor).toBe(stageColor(stage));
+  });
+
+  it('lightens the edge under the mouse, until it leaves', async () => {
+    await mountStage();
+    const edge = lastCanvas().graph.edges()[0];
+    expect(edge).toBeDefined();
+    if (edge === undefined) return;
+    expect(lastCanvas().edgeColor?.(edge.id)).toBeUndefined();
+
+    await flush(() => {
+      lastCanvas().onEdgeHover?.(edge.id);
+    });
+    expect(lastCanvas().edgeColor?.(edge.id)).toBe(hoverColor(DEFAULT_EDGE_COLOR));
+
+    await flush(() => {
+      lastCanvas().onEdgeHover?.(null);
+    });
+    expect(lastCanvas().edgeColor?.(edge.id)).toBeUndefined();
   });
 
   it('plays a whole lap on its own, so a visitor who never clicks still sees the feature', async () => {

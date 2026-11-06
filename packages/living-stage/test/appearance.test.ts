@@ -1,11 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { createLayout } from '@prnt/dagr-layout';
+import { DEFAULT_EDGE_COLOR } from '@prnt/dagr-react';
 import {
   CLEAR_COLOR,
   HIGHLIGHT_COLOR,
   HIGHLIGHT_GLOW,
   hoverColor,
   livingAppearance,
+  livingEdgeColor,
   stageColor,
   touchedBy,
 } from '../src/appearance.js';
@@ -95,6 +97,13 @@ describe('what the drawing looks like', () => {
     expect(appearance('parse-0')?.fillColor).toBe(hoverColor(stageColor('parse')));
     expect(appearance('parse-0')?.glowWorld).toBe(HIGHLIGHT_GLOW);
     expect(appearance('parse-1')?.fillColor).toBe(stageColor('parse'));
+  });
+
+  it('lightens only the hovered edge and leaves the rest on the default', () => {
+    const edgeColor = livingEdgeColor('e1');
+    expect(edgeColor('e1')).toBe(hoverColor(DEFAULT_EDGE_COLOR));
+    expect(edgeColor('e2')).toBeUndefined();
+    expect(livingEdgeColor(null)('e1')).toBeUndefined();
   });
 
   it('takes a colour halfway to white', () => {
