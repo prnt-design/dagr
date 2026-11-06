@@ -43,6 +43,8 @@ const STEP: Readonly<Record<string, (at: number, last: number) => number>> = {
   End: (_, last) => last,
 };
 
+const ITEM_STYLE: CSSProperties = { minHeight: 44 };
+
 interface OutlineItemProps<N extends ExplorerNode> {
   readonly node: N;
   readonly groups: readonly ExplorerGroup[];
@@ -55,7 +57,7 @@ interface OutlineItemProps<N extends ExplorerNode> {
   readonly onChoose: (id: string, trigger: HTMLElement) => void;
 }
 
-/** Memoized, so a focus or selection move re-renders the items it changes, not the whole list. */
+/** Memoized: every prop is stable unless what it draws changes. */
 const OutlineItem = memo(function OutlineItem<N extends ExplorerNode>(props: OutlineItemProps<N>): ReactElement {
   const { node, groups, inGroup, nodeAriaLabel, selected, dimmed, tabStop, onFocusItem, onChoose } = props;
   return (
@@ -77,8 +79,6 @@ const OutlineItem = memo(function OutlineItem<N extends ExplorerNode>(props: Out
     </li>
   );
 }) as <N extends ExplorerNode>(props: OutlineItemProps<N>) => ReactElement;
-
-const ITEM_STYLE: CSSProperties = { minHeight: 44 };
 
 export function ExplorerOutline<N extends ExplorerNode = ExplorerNode>(props: ExplorerOutlineProps<N>): ReactElement {
   const { nodeAriaLabel, className, style } = props;
