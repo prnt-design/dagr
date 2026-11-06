@@ -14,7 +14,8 @@
  * they carry across a switch. The map stays mounted while the outline shows,
  * hidden, so it is out of the tab order and keeps its camera, which a zero
  * size leaves where it was (see `use-explorer-camera.ts`). The outline mounts
- * the first time it is chosen and is kept after, hidden, for its tab stop and scroll offset. The toolbar is hidden with the map, and the drawer goes with
+ * the first time it is chosen and is kept after, hidden, for its tab stop and
+ * its scroll offset. The toolbar is hidden with the map, and the drawer goes with
  * whichever presentation shows; over the outline it leaves scroll room below
  * the last item. Focus on a switch stays where it is, unless it was in the
  * presentation that left: then it moves to the same node in the other one if

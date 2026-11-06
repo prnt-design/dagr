@@ -582,6 +582,7 @@ describe('DagrExplorer: map or outline', () => {
     await flush(() => mode('map').click());
     // What a browser does to a box that display: none removes; jsdom keeps the value.
     scroller.scrollTop = 0;
+    scroller.dispatchEvent(new Event('scroll'));
     await flush(() => mode('outline').click());
     expect(scroller.scrollTop).toBe(120);
   });
