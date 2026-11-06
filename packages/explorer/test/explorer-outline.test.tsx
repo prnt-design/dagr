@@ -322,4 +322,16 @@ describe('ExplorerOutline', () => {
       'store Delta',
     ]);
   });
+
+  it('re-renders only the items a focus or selection move changes', async () => {
+    const named: string[] = [];
+    await ready({}, { nodeAriaLabel: (node) => (named.push(node.id), node.label) });
+    item('a').focus();
+    named.length = 0;
+    await key(item('a'), 'ArrowDown');
+    expect(named.sort()).toEqual(['a', 'b']);
+    named.length = 0;
+    await flush(() => state().select('d'));
+    expect(named.sort()).toEqual(['b', 'd']);
+  });
 });
