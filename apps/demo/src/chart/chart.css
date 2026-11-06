@@ -70,6 +70,7 @@
 
 .chart__legend {
   display: flex;
+  flex-wrap: wrap;
   gap: 1rem;
   margin: 0;
   padding: 0;
@@ -88,6 +89,25 @@
   width: 0.7rem;
   height: 0.7rem;
   border-radius: 2px;
+  flex: none;
+  background: currentColor;
+}
+
+.chart__swatch--line {
+  position: relative;
+  width: 1.1rem;
+  height: 2px;
+}
+
+.chart__swatch--line::after {
+  content: "";
+  position: absolute;
+  width: 5px;
+  height: 5px;
+  left: calc(50% - 2.5px);
+  top: calc(50% - 2.5px);
+  border-radius: 50%;
+  background: currentColor;
 }
 
 .chart__reduced {

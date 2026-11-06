@@ -48,6 +48,10 @@ beforeEach(async () => {
   renderer = lastRenderer();
 });
 
+it('requests lines above the bars, preserving the renderer default for graph edges', () => {
+  expect(renderer.options.edgeGroups?.[0]?.layer).toBe('above-nodes');
+});
+
 describe('the renderer it builds', () => {
   it('clears to the theme background and declares one smooth edge group', () => {
     expect(renderer.options.clearColor).toBe(DEFAULT_THEME.background);
