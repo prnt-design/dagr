@@ -63,6 +63,15 @@ describe('createEdgeHitIndex', () => {
     }
     const index = createEdgeHitIndex([edge('ordinary', 0, 0, 1, 0)]);
     expect(index.hit({ x: 1e20, y: 0 }, 1)).toBeNull();
+    const extremes = createEdgeHitIndex([
+      edge('low', -1.7e308, -1.7e308, -1.7e308, -1.7e308),
+      edge('ordinary', 0, 0, 1, 0),
+      edge('high', 1.7e308, 1.7e308, 1.7e308, 1.7e308),
+    ]);
+    expect(extremes.hit({ x: -1.7e308, y: -1.7e308 }, 1)).toBe('low');
+    expect(extremes.hit({ x: 0.5, y: 0 }, 1)).toBe('ordinary');
+    expect(extremes.hit({ x: 1.7e308, y: 1.7e308 }, 1)).toBe('high');
+    expect(extremes.hit({ x: 1e300, y: 0 }, 1)).toBeNull();
   });
 
   it('follows every segment of a bent route', () => {
@@ -149,6 +158,14 @@ describe('createEdgeHitIndex', () => {
       }
       expect(hits).toBeGreaterThanOrEqual(fewestHits);
     }
+    // One edge far off coarsens the grid's cells rather than filling the space between.
+    const sparse = [...edges, edge('far', 20_000, 20_000, 20_001, 20_000)];
+    const coarse = createEdgeHitIndex(sparse);
+    for (let q = 0; q < 2000; q++) {
+      const p = { x: next() * 4000 - 2000, y: next() * 4000 - 2000 };
+      expect(coarse.hit(p, 4)).toBe(scan(sparse, p, 4));
+    }
+    expect(coarse.hit({ x: 20_000.5, y: 20_001 }, 2)).toBe('far');
   });
 
   it('finds edges on a 10,000-node scene', () => {

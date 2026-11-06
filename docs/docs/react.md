@@ -872,8 +872,9 @@ data and not the only way to reach it.
   (M4.8b), priced on one device at about 0.1 to 0.2 ms of CPU per pick. Edge
   hits on `DagrCanvas` are CPU only. At 10,000 nodes a query takes 0.2 ms
   or less, but rebuilding the index while edges glide took 2 ms at one
-  segment per edge and 12 to 14 ms at three, on one device (see
-  `bench/browser/README.md`, "What an edge hit costs a frame").
+  segment per edge and 12 to 14 ms at three, on one device. The build has
+  since become 3.7 to 6 times cheaper in Node, and has not been re-run on
+  a device (see `bench/browser/README.md`, "What an edge hit costs a frame").
 - **A React tier helper.** Tiers are DOM elements. Rendering React into them is
   possible by hand and not wrapped.
 - **Tile-at-a-time layout.** The campaign demo's worker layout is specific to
