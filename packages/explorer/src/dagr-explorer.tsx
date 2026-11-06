@@ -28,6 +28,7 @@ import type { ExplorerBase } from './base.js';
 import { ExplorerDetails } from './explorer-details.js';
 import type { ExplorerDetailsProps } from './explorer-details.js';
 import { ExplorerOutline } from './explorer-outline.js';
+import type { ExplorerOutlineProps } from './explorer-outline.js';
 import { ExplorerSearch } from './explorer-search.js';
 import { ExplorerToolbar } from './explorer-toolbar.js';
 import { ExplorerTraceToggle } from './explorer-trace-toggle.js';
@@ -45,7 +46,7 @@ import type { ExplorerTiers } from './visible-set.js';
 interface DagrExplorerParts<N extends ExplorerNode, E extends ExplorerEdge> {
   /** `ExplorerViewport`'s `renderNode`. */
   readonly renderNode?: ExplorerViewportProps<N>['renderNode'];
-  /** `ExplorerViewport`'s `nodeAriaLabel`. The outline keeps the default name. */
+  /** `ExplorerViewport`'s and `ExplorerOutline`'s `nodeAriaLabel`. */
   readonly nodeAriaLabel?: ExplorerViewportProps<N>['nodeAriaLabel'];
   readonly tiers?: ExplorerTiers | undefined;
   readonly maxOverlayNodes?: number | undefined;
@@ -102,11 +103,13 @@ function ModeButtons(props: {
 }
 
 /** The outline's scroll area. An open drawer leaves the items room to scroll clear of it when docked over the lower half. */
-function OutlineScroll(): ReactElement {
+function OutlineScroll<N extends ExplorerNode>(props: {
+  readonly nodeAriaLabel: ExplorerOutlineProps<N>['nodeAriaLabel'];
+}): ReactElement {
   const { detailsOpen } = useExplorer();
   return (
     <div style={{ height: '100%', overflowY: 'auto', scrollPaddingBottom: detailsOpen ? '50%' : undefined }}>
-      <ExplorerOutline />
+      <ExplorerOutline<N> nodeAriaLabel={props.nodeAriaLabel} />
       {detailsOpen ? <div aria-hidden="true" style={{ height: '50%' }} /> : null}
     </div>
   );
@@ -192,7 +195,7 @@ export function DagrExplorer<N extends ExplorerNode = ExplorerNode, E extends Ex
       </div>
       {outlineKept ? (
         <div ref={outlineRef} hidden={mode !== 'outline'} style={mode === 'outline' ? READER : HIDDEN}>
-          <OutlineScroll />
+          <OutlineScroll<N> nodeAriaLabel={nodeAriaLabel} />
           {mode === 'outline' ? details : null}
         </div>
       ) : null}

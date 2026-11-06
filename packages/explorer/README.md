@@ -120,7 +120,7 @@ export function Architecture() {
 | `ExplorerTraceToggle` | trace on and off |
 | `ExplorerViewport` | the graph: pan and zoom, the SVG base, node elements for nodes large enough to read. Takes `renderNode`, `nodeAriaLabel`, `tiers`, `maxOverlayNodes`, `base`, `inset`, `contentPadding`. Its children, such as `ExplorerDetails`, share a positioned stage with the graph, and the graph's hint comes after the stage, where an overlay cannot cover it |
 | `ExplorerDetails` | the drawer: an overlay with a close button and a scrolling body. Children `({ node, connections, inspect, follow })` replace the body, and `renderConnection(edge, otherNode, direction)` draws one connection in the default body, given `'to'`, `'from'` or `'self'` |
-| `ExplorerOutline` | the active view's nodes as a list of buttons in data order, on the same selection, query, trace and drawer as the graph. One tab stop; the up and down arrows, `Home` and `End` move between items. Not virtualized |
+| `ExplorerOutline` | the active view's nodes as a list of buttons in data order, on the same selection, query, trace and drawer as the graph. One tab stop; the up and down arrows, `Home` and `End` move between items. Takes `nodeAriaLabel`, as the viewport does. Not virtualized |
 | `ExplorerToolbar` | zoom out, the zoom readout, zoom in, fit, and zoom to the selected node. Zoom out, zoom in, fit and the drawer's close button are icons, named and titled by their labels |
 
 Every part takes `className` and `style`, and your `style` wins over the
