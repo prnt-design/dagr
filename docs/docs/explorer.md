@@ -406,9 +406,9 @@ selected node's item, else the last one focused, else the first. The up and
 down arrows, `Home` and `End` move between items, and `Enter` or `Space`
 inspects one and pans a graph beside it to bring the node into view. A node
 the query or trace dims stays in place, marked `data-dimmed`. Items are
-named as the map names its nodes by default: the label, then
-`labels.inGroup` for each group. A viewport's `nodeAriaLabel` does not reach
-them.
+named as the map names its nodes: by the outline's own `nodeAriaLabel`, which
+takes the viewport's arguments (`DagrExplorer` passes its one to both), else
+the label, then `labels.inGroup` for each group.
 
 ## Server rendering
 

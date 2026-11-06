@@ -16,20 +16,22 @@
  * node the query or trace dims keeps its place and is marked `data-dimmed`,
  * so the reader's position does not move as they type.
  *
- * Items carry the map's default node name: the label, then
- * `labels.inGroup(group)` for each group. A viewport's `nodeAriaLabel` does
- * not reach them.
+ * Items are named as the viewport names its nodes.
  */
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties, KeyboardEvent, ReactElement } from 'react';
 import { useExplorerContext } from './context.js';
 import { defaultNodeName, groupsByNode } from './node-name.js';
-import type { ExplorerGroup } from './types.js';
+import type { ExplorerGroup, ExplorerNode } from './types.js';
 
 const NO_GROUPS: readonly ExplorerGroup[] = [];
 
-export interface ExplorerOutlineProps {
+export interface ExplorerOutlineProps<N extends ExplorerNode = ExplorerNode> {
+  /** An item's accessible name. Default: its label, then `labels.inGroup(group)` for each group. */
+  readonly nodeAriaLabel?:
+    | ((node: N, context: { readonly groups: readonly ExplorerGroup[] }) => string)
+    | undefined;
   readonly className?: string | undefined;
   readonly style?: CSSProperties | undefined;
 }
@@ -41,8 +43,8 @@ const STEP: Readonly<Record<string, (at: number, last: number) => number>> = {
   End: (_, last) => last,
 };
 
-export function ExplorerOutline(props: ExplorerOutlineProps): ReactElement {
-  const { className, style } = props;
+export function ExplorerOutline<N extends ExplorerNode = ExplorerNode>(props: ExplorerOutlineProps<N>): ReactElement {
+  const { nodeAriaLabel, className, style } = props;
   const { state } = useExplorerContext('ExplorerOutline');
   const { labels, views, activeView, selectedId, detailsOpen, dimmed, inspect, reveal } = state;
   const listRef = useRef<HTMLUListElement>(null);
@@ -70,9 +72,10 @@ export function ExplorerOutline(props: ExplorerOutlineProps): ReactElement {
     return () => cancelAnimationFrame(frame);
   }, [revealRequest, reveal]);
 
-  const nodes = activeView?.nodes;
-  const groups = activeView?.groups;
-  const groupsOf = useMemo(() => groupsByNode(groups), [groups]);
+  // The part's type parameter is a claim about the root's data. See context.ts.
+  const nodes = activeView?.nodes as readonly N[] | undefined;
+  const viewGroups = activeView?.groups;
+  const groupsOf = useMemo(() => groupsByNode(viewGroups), [viewGroups]);
   const stop = useMemo(() => {
     if (nodes === undefined || nodes.length === 0) return null;
     if (selectedId !== null) return selectedId;
@@ -82,28 +85,33 @@ export function ExplorerOutline(props: ExplorerOutlineProps): ReactElement {
 
   const items = useMemo(
     () =>
-      nodes?.map((node) => (
-        <li key={node.id}>
-          <button
-            type="button"
-            data-node-id={node.id}
-            data-selected={node.id === selectedId ? 'true' : undefined}
-            data-dimmed={dimmed.has(node.id) ? 'true' : undefined}
-            aria-current={node.id === selectedId ? 'true' : undefined}
-            aria-label={defaultNodeName(node, groupsOf.get(node.id) ?? NO_GROUPS, labels.inGroup)}
-            tabIndex={node.id === stop ? 0 : -1}
-            style={{ minHeight: 44 }}
-            onFocus={() => setFocused(node.id)}
-            onClick={(event) => {
-              inspect(node.id, event.currentTarget);
-              setRevealRequest({ id: node.id });
-            }}
-          >
-            {node.label}
-          </button>
-        </li>
-      )),
-    [nodes, groupsOf, labels.inGroup, selectedId, dimmed, stop, inspect],
+      nodes?.map((node) => {
+        const groups = groupsOf.get(node.id) ?? NO_GROUPS;
+        return (
+          <li key={node.id}>
+            <button
+              type="button"
+              data-node-id={node.id}
+              data-selected={node.id === selectedId ? 'true' : undefined}
+              data-dimmed={dimmed.has(node.id) ? 'true' : undefined}
+              aria-current={node.id === selectedId ? 'true' : undefined}
+              aria-label={
+                nodeAriaLabel === undefined ? defaultNodeName(node, groups, labels.inGroup) : nodeAriaLabel(node, { groups })
+              }
+              tabIndex={node.id === stop ? 0 : -1}
+              style={{ minHeight: 44 }}
+              onFocus={() => setFocused(node.id)}
+              onClick={(event) => {
+                inspect(node.id, event.currentTarget);
+                setRevealRequest({ id: node.id });
+              }}
+            >
+              {node.label}
+            </button>
+          </li>
+        );
+      }),
+    [nodes, groupsOf, labels.inGroup, nodeAriaLabel, selectedId, dimmed, stop, inspect],
   );
 
   if (nodes === undefined || nodes.length === 0) {

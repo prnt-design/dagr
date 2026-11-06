@@ -21,7 +21,9 @@
   One tab stop, moved with the up and down arrows, `Home` and `End`. A new
   label, `outline`, names the list, and the stylesheet styles it.
   Items are named as the map names its nodes by default, with the groups
-  each node is in.
+  each node is in. `ExplorerOutline` takes `nodeAriaLabel`, as
+  `ExplorerViewport` does, and `DagrExplorer` passes its `nodeAriaLabel` to
+  both, so a host's names reach the outline items.
 - The camera frames what the visual viewport leaves, observing its resize
   and scroll. Fit, focus and reveal avoid an area the visual viewport no
   longer shows, such as one a software keyboard covers without resizing the

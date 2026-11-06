@@ -141,6 +141,16 @@ describe('DagrExplorer', () => {
     expect(layers.length).toBeGreaterThan(0);
   });
 
+  it('forwards nodeAriaLabel to the outline', async () => {
+    tree = await mount(
+      <DagrExplorer label="Map" views={[overview]} defaultMode="outline" nodeAriaLabel={(node) => `kind ${node.kind}`} />,
+    );
+    await resizeTo(800, 480);
+    await runFramesUntilIdle();
+    const names = [...part('outline').querySelectorAll('li > button')].map((button) => button.getAttribute('aria-label'));
+    expect(names).toEqual(['kind service', 'kind store', 'kind queue', 'kind store']);
+  });
+
   it('forwards inset and contentPadding', async () => {
     tree = await mount(<DagrExplorer label="Map" views={[overview]} inset={{ right: 360 }} contentPadding={0.3} />);
     await resizeTo(800, 480);

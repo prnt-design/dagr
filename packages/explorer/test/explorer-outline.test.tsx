@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ExplorerState } from '../src/context.js';
 import { ExplorerDetails } from '../src/explorer-details.js';
 import { ExplorerOutline } from '../src/explorer-outline.js';
+import type { ExplorerOutlineProps } from '../src/explorer-outline.js';
 import { ExplorerSearch } from '../src/explorer-search.js';
 import { ExplorerViewport } from '../src/explorer-viewport.js';
 import { ExplorerRoot } from '../src/root.js';
@@ -40,12 +41,15 @@ function state(): ExplorerState<Item, ExplorerEdge> {
 }
 
 /** The outline beside the map, the way a host shows both. */
-function explorer(props: Partial<ExplorerRootProps<Item, ExplorerEdge>> = {}): ReactNode {
+function explorer(
+  props: Partial<ExplorerRootProps<Item, ExplorerEdge>> = {},
+  outline: ExplorerOutlineProps<Item> = {},
+): ReactNode {
   const all = { label: 'Map', views: [overview, detail], ...props } as ExplorerRootProps<Item, ExplorerEdge>;
   return (
     <ExplorerRoot<Item, ExplorerEdge> {...all}>
       <ExplorerSearch />
-      <ExplorerOutline className="list" style={{ margin: 4 }} />
+      <ExplorerOutline<Item> className="list" style={{ margin: 4 }} {...outline} />
       <ExplorerViewport>
         <ExplorerDetails />
       </ExplorerViewport>
@@ -54,8 +58,11 @@ function explorer(props: Partial<ExplorerRootProps<Item, ExplorerEdge>> = {}): R
   );
 }
 
-async function ready(props: Partial<ExplorerRootProps<Item, ExplorerEdge>> = {}): Promise<void> {
-  tree = await mount(explorer(props));
+async function ready(
+  props: Partial<ExplorerRootProps<Item, ExplorerEdge>> = {},
+  outline: ExplorerOutlineProps<Item> = {},
+): Promise<void> {
+  tree = await mount(explorer(props, outline));
   await resizeTo(800, 480);
   await runFramesUntilIdle();
 }
@@ -301,5 +308,18 @@ describe('ExplorerOutline', () => {
   it('names groups through labels.inGroup', async () => {
     await ready({ labels: { inGroup: (group) => `part of ${group}` } });
     expect(item('b').getAttribute('aria-label')).toBe('Beta, part of Platform team');
+  });
+
+  it('names each item with nodeAriaLabel, given its groups', async () => {
+    await ready(
+      {},
+      { nodeAriaLabel: (node, { groups }) => [`${node.kind} ${node.label}`, ...groups.map((group) => group.label)].join(', ') },
+    );
+    expect(items().map((button) => button.getAttribute('aria-label'))).toEqual([
+      'service Alpha, Platform team',
+      'store Beta, Platform team',
+      'queue Gamma',
+      'store Delta',
+    ]);
   });
 });
