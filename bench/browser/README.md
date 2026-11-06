@@ -825,7 +825,7 @@ build alternating on a shared host:
 
 Both builds gave the same answer to each of 80,000 queries per row (20,000
 points at each of tolerances 1, 4, 40 and 400 world units). This is not a
-browser number: the 2026-10-31 rows above predate it. The next run is.
+browser number: the 2026-10-31 rows above predate it. The browser run follows.
 
 **The cheaper build on the device, 2026-11-06 UTC.** The same command, on the
 same desktop: the NVIDIA GeForce RTX 4090 now on driver 32.0.16.2114, Windows
@@ -850,7 +850,8 @@ Still frames missed no ticks, and a still query took 0.0 ms at the median and
 at most 0.2. The untimed first build took 5.5 to 6.4 ms for straight edges and
 3.3 to 4.2 for smooth. 41% to 47% of queries landed on an edge. Smooth
 `setEdges` took 8.9 to 9.5 ms at the median without and 9.4 to 10.5 with. The
-page logged three's `position` warning as before, and no page error.
+page logged three.js's `Vertex attribute "position" not found on geometry`
+warning as before, and no page error.
 
 - **The rebuild is now about what the segment count predicts.** Three
   segments per edge took 2.7 times as long as one, 4.8 to 4.9 ms against 1.8,

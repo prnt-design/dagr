@@ -873,9 +873,11 @@ data and not the only way to reach it.
   hits on `DagrCanvas` are CPU only. At 10,000 nodes a query takes 0.2 ms
   or less, but rebuilding the index while edges glide took 2 ms at one
   segment per edge and 12 to 14 ms at three, on one device. A cheaper build
-  since takes 1.8 ms and 4.8 to 4.9 ms on the same device, paid on a click's
-  frame and at most one hover frame in six while edges glide, so edges stay
-  on the CPU (see `bench/browser/README.md`, "What an edge hit costs a frame").
+  since takes 1.8 ms at one segment per edge and 4.8 to 4.9 ms at three on
+  the same device. Paid every frame at three it still misses ticks, but
+  `DagrCanvas` pays it only on a click's frame and at most one hover frame in
+  six while edges glide, so edges stay on the CPU (see
+  `bench/browser/README.md`, "What an edge hit costs a frame").
 - **A React tier helper.** Tiers are DOM elements. Rendering React into them is
   possible by hand and not wrapped.
 - **Tile-at-a-time layout.** The campaign demo's worker layout is specific to
