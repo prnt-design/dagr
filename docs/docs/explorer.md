@@ -143,7 +143,8 @@ A reader chooses between the map and an outline of the same nodes with the
 Map and Outline buttons, at any width. Pass `defaultMode="outline"` to start
 on the outline, or `mode` with `onModeChange` to control it. Selection,
 search, trace and the open drawer carry across a switch, and the map keeps
-its pan and zoom while hidden, following a node chosen in the outline. Focus in the presentation that leaves moves
+its pan and zoom while hidden, following a node chosen in the outline. The
+outline keeps its scroll position while the map shows. Focus in the presentation that leaves moves
 to the same node in the other.
 
 ## The parts and your own layout
