@@ -370,10 +370,10 @@ branches never enter public docs, source, npm artifacts, or job fixtures.
   to 27.7 before. Re-run on the device 2026-11-06 UTC (RTX 4090, driver
   32.0.16.2114, Chrome 157 headed, `webgpu`, not a fallback adapter, checked
   behind every device the page created, a 60 Hz display, so a 16.7 ms tick
-  against 18 ms before and missed ticks that compare only within one date's
-  runs): rebuilding every frame took 1.8 ms at the
+  against 18 ms before; missed ticks compare only within one date's runs):
+  rebuilding every frame took 1.8 ms at the
   median over straight edges with no missed ticks, and 4.8 to 4.9 ms over
-  smooth ones, against 12.0 to 14.1 before, still missing 41.7% to 50.7% of
+  smooth ones, against 12.0 to 14.1 before, missing 41.7% to 50.7% of
   ticks against 6.0% to 13.0% without it, in frames whose `setEdges` takes
   about 9.5 ms. So edges stay on the CPU index and get no GPU pick id: a
   query is free, only a click's frame and at most one hover frame in six pay

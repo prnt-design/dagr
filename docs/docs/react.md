@@ -874,7 +874,7 @@ data and not the only way to reach it.
   or less, but rebuilding the index while edges glide took 2 ms at one
   segment per edge and 12 to 14 ms at three, on one device. A cheaper build
   since takes 1.8 ms at one segment per edge and 4.8 to 4.9 ms at three on
-  the same device. Paid every frame at three it still misses ticks, but
+  the same device. Paid every frame at three, it still misses ticks, but
   `DagrCanvas` pays it only on a click's frame and at most one hover frame in
   six while edges glide, so edges stay on the CPU (see
   `bench/browser/README.md`, "What an edge hit costs a frame").
