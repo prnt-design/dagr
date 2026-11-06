@@ -583,8 +583,9 @@ At most one pick is in flight; a query arriving meanwhile is answered stale and
 never picked later, since the camera may have moved by then, so re-query the
 resting pointer from `onPicked`. The pick is exact to the device pixel under the
 pointer and has none of the CPU index's touch tolerance. `DagrCanvas` wires
-this provider in behind `hitTesting="gpu"` (next section); what it costs on a
-device is the next M4.8b step.
+this provider in behind `hitTesting="gpu"` (next section). At 10,000 nodes a
+pick took about 0.1 to 0.2 ms of CPU on one device, on WebGPU (see
+`bench/browser/README.md`, "What a pick costs a frame").
 
 ## Navigation, node events and camera control
 
@@ -710,7 +711,8 @@ back, one at a time, until the drawing rests. Hover primes the picks, so
 index, touch with its fingertip tolerance, since a tap, or a pen that does not
 report hover, has nothing picked before it. A renderer rebuilt after a lost
 context starts with no picks rather than answering from the lost one's. The
-default stays `'cpu'` until M4.8b prices the pass on a device.
+default stays `'cpu'` because of the ignored presses and clicks, not the pass's
+cost.
 
 **Camera control.** `apiRef` (and `useDagrCanvas()` inside the canvas) gives the
 methods below. It is `apiRef` rather than `ref` on purpose: `ref` on a React

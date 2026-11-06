@@ -116,7 +116,7 @@ const api = useRef<DagrCanvasApi>(null);
 `nodeTiers` are the renderer's `RichNodeTier`s: below the first gate a node is
 only its instanced GPU shape, and only nodes in view mount DOM, pooled across a
 pan. Elements are tagged `data-dagr-node-id`; Enter or Space on a focused one
-calls `onNodeClick`; focus is restored to a node's element when the overlay recycles it. Hits cover node silhouettes only (no edges or ports), and
+calls `onNodeClick`; focus is restored to a node's element when the overlay recycles it. Hits cover node silhouettes and, with an edge handler, edge centrelines (no ports), and
 `navigation` is off by default. When neither WebGPU nor WebGL 2 exists, probe
 with `detectBackendSupport()` from `@prnt/dagr-render` and render a fallback;
 `onError` covers a device that dies late. Full details: the
