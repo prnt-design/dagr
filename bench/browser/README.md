@@ -802,14 +802,16 @@ the RTX 4090 only, so it does not compare with the AMD rows above, and the
 WebGL2 fallback is not measured. Whether edges need a GPU pick id, or a
 cheaper CPU rebuild, is the next decision, not this one.
 
-**The cheaper rebuild, 2026-11-06, in Node only.** The extra cost was the
+**A cheaper build, 2026-11-06 UTC, in Node only.** The extra cost was the
 grid's storage, not its cell count. The cell is the median segment extent, so
 three segments per edge shrink it to about a third, and the grid's `Map` grew
 from about 12,000 buckets to 71,000, each its own array, while each segment
-still landed in about 3.4 cells. The index now keeps the same cells and
-answers in flat typed arrays over the segments' bounds: segments in one
+still landed in about 3.4 cells. The index now keeps its grid in flat typed
+arrays over the segments' bounds: segments in one
 `Float64Array`, and each cell's members counted, then filled, in one
-`Int32Array`. Node 22.22.1 in WSL2 on an AMD Ryzen 9 9900X, the frame
+`Int32Array`. The cells are the same unless the grid would exceed about four
+cells a segment, when they coarsen; on this graph they never did, though the
+four-segment row used 98% of that limit. Node 22.22.1 in WSL2 on an AMD Ryzen 9 9900X, the frame
 profile's 10,000-node graph and 13,169 edges with each end jittered, and a
 bend for each extra segment, 60 builds after 30 warm-up, two runs of each
 build alternating on a shared host:
@@ -821,8 +823,9 @@ build alternating on a shared host:
 | 3 | 26.7, 27.7 | 4.8, 4.5 |
 | 4 | 37.1, 36.4 | 6.1, 6.1 |
 
-Both answered the same queries alike. This is not a browser number: the rows
-above predate it, and the device has not run it yet.
+Both builds gave the same answer to each of 80,000 queries per row (20,000
+points at each of tolerances 1, 4, 40 and 400 world units). This is not a
+browser number: the rows above predate it, and the device has not run it yet.
 
 ## Frame profile on WebGPU (M4.10a)
 

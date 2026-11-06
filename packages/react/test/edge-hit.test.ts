@@ -158,6 +158,14 @@ describe('createEdgeHitIndex', () => {
       }
       expect(hits).toBeGreaterThanOrEqual(fewestHits);
     }
+    // One edge far off coarsens the grid's cells rather than filling the space between.
+    const sparse = [...edges, edge('far', 20_000, 20_000, 20_001, 20_000)];
+    const coarse = createEdgeHitIndex(sparse);
+    for (let q = 0; q < 2000; q++) {
+      const p = { x: next() * 4000 - 2000, y: next() * 4000 - 2000 };
+      expect(coarse.hit(p, 4)).toBe(scan(sparse, p, 4));
+    }
+    expect(coarse.hit({ x: 20_000.5, y: 20_001 }, 2)).toBe('far');
   });
 
   it('finds edges on a 10,000-node scene', () => {

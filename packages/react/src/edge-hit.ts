@@ -96,10 +96,12 @@ export function createEdgeHitIndex(
       const extent = Math.max(Math.abs(dx), Math.abs(dy));
       extents[count] = extent;
       longest = Math.max(longest, extent);
-      minX = Math.min(minX, a.x, b.x);
-      minY = Math.min(minY, a.y, b.y);
-      maxX = Math.max(maxX, a.x, b.x);
-      maxY = Math.max(maxY, a.y, b.y);
+      // The far end as the cell spans compute it, which can differ from b by
+      // an ulp, so every span lies inside the grid.
+      minX = Math.min(minX, a.x, a.x + dx);
+      minY = Math.min(minY, a.y, a.y + dy);
+      maxX = Math.max(maxX, a.x, a.x + dx);
+      maxY = Math.max(maxY, a.y, a.y + dy);
       count++;
       kept = true;
     }
