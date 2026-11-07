@@ -34,12 +34,12 @@
  *
  * **What is deliberately NOT here**, each waiting on the task that decides it:
  *
- * - GPU picking. `useGraphInteraction` owns gestures and controlled selection
+ * - No port hits. `useGraphInteraction` owns gestures and controlled selection
  *   over a caller-supplied hit provider, and `<DagrCanvas>` supplies one
- *   (M5.2b, CPU, exact node silhouettes). M4.8b GPU picks reach the same
+ *   (M5.2b, CPU, exact node silhouettes). M4.8b GPU node picks reach the same
  *   contract through `createPickedNodeHitProvider`, which `<DagrCanvas>` uses
- *   only behind `hitTesting="gpu"`, priced on one device. Edge and port
- *   hits are not here.
+ *   only behind `hitTesting="gpu"`. Edge hits are CPU only by design, through
+ *   `createEdgeHitIndex` and `onEdgeHover`/`onEdgeClick`. Ports are M6.3a.
  * - No worker. See `use-dagr.ts`: the `Worker` has to be the caller's, and
  *   M3.9b owns the worker-side session that makes a per-edit round trip worth
  *   taking.

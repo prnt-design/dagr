@@ -100,10 +100,13 @@ validation, and the explorer are implemented. The work now proves the WebGPU
 renderer. The same scene drawn through WebGPU and WebGL2 was byte-identical in
 a hand-run check (Apple M4, Chrome 155, two-shape probe scene, zoom 1, DPR 1);
 edge ribbons, other zooms and DPRs, and other GPUs are not yet covered. A
-published performance profile and a measured large-graph animation target
-come next, then GPU picking. Drag-to-connect and subgraph editing are parked
-until then. The homepage's architecture inspector is application UI, not an
-assertion that those editor APIs are complete.
+performance profile is published, and GPU node picking ships behind an opt-in
+`hitTesting="gpu"` on `DagrCanvas`, with edge hits on the CPU. The large-graph
+target, 10,000 nodes animating at 60 fps, is still open: it held with a tenth
+of the nodes moving on two devices, and with every node moving along smooth
+edges it still misses ticks. Drag-to-connect and subgraph editing stay parked
+behind the renderer work. The homepage's architecture inspector is application
+UI, not an assertion that those editor APIs are complete.
 
 Dagr is in the 0.x release series. Check the
 [roadmap](https://github.com/prnt-design/dagr/blob/main/ROADMAP.md) for current work.
