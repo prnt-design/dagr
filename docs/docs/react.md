@@ -869,7 +869,7 @@ data and not the only way to reach it.
 
 ## What is not here yet
 
-- **Port hits, and GPU edge picks.** Exact CPU node hits ship with `DagrCanvas`.
+- **Port hits (edges stay on the CPU).** Exact CPU node hits ship with `DagrCanvas`.
   Ports are M6.3a. GPU node picks are opt-in through `hitTesting="gpu"`
   (M4.8b), priced on one device at about 0.1 to 0.2 ms of CPU per pick. Edge
   hits on `DagrCanvas` are CPU only. At 10,000 nodes a query takes 0.2 ms
