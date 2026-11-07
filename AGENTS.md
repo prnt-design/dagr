@@ -17,12 +17,12 @@ pnpm typecheck
 pnpm test
 pnpm lint
 pnpm build
-pnpm bench:ci
+pnpm bench:gate
 ```
 
-`bench:ci` runs the benchmark gate against `bench/baseline.json`; see
-`bench/README.md`. See "How work reaches main" below for when each of these
-must pass.
+`bench:gate` selects performance checks from the diff against `origin/main`.
+A printed skip is a pass; never skip it by hand. `bench:ci` remains the full
+benchmark suite. See `bench/README.md` and "How work reaches main" below.
 
 ## What agents may do unattended
 
@@ -37,8 +37,9 @@ Every change reaches `main` through a pull request. No agent pushes to `main`
 directly.
 
 1. Run the full local gate from the repo root:
-   `pnpm typecheck && pnpm test && pnpm lint && pnpm build && pnpm bench:ci`.
-   All five must pass. Lint and build are in this list because CI runs them,
+   `pnpm typecheck && pnpm test && pnpm lint && pnpm build && pnpm bench:gate`.
+   All five must pass, including a skip explicitly printed by `bench:gate`.
+   Lint and build are in this list because CI runs them,
    so skipping them locally is a way to turn main red. The bench gate runs
    here rather than on CI because the committed baseline is machine-matched;
    see `bench/README.md`.

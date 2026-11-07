@@ -116,7 +116,7 @@ pnpm bench:ci        # measure up to three times, and pass when two runs agree
 pnpm bench:gate      # bench:ci, when the branch's diff can move a gated benchmark
 ```
 
-The agent runs `pnpm bench:ci` locally before opening a pull request, and does
+The agent runs `pnpm bench:gate` locally before opening a pull request, and does
 not merge on a regression outside the tolerance. CI does not run it: the
 committed baseline is machine-matched, and CI's runner is a different machine,
 so the gate lives here instead (see [bench/README.md](./bench/README.md)). A

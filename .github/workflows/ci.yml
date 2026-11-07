@@ -33,12 +33,10 @@ jobs:
 
       - run: pnpm build
 
-      # The benchmark gate deliberately does not run here. `bench/baseline.json`
-      # is captured on the maintainer's machine (darwin, arm64, Apple M4) and CI
-      # runs x64 Ubuntu. The harness normalizes against a control workload,
-      # which holds for a runner that is uniformly slower but not across
-      # architectures, where the benchmarked work and the control degrade by
-      # different factors. Gating here reported eleven regressions between +23%
-      # and +76% on a commit that changed one docs page. The gate is enforced
-      # instead by the agent before it opens a pull request, on a machine that
-      # matches the baseline. See bench/README.md.
+      # Machine-matched performance measurements deliberately stay local.
+      # The agent runs pnpm bench:gate before opening a PR. It selects the
+      # required measurement or smoke check from the diff, or prints a skip.
+      # A measured baseline comparison requires the machine identity recorded
+      # in bench/baseline.json; GitHub's runner is not that machine. Control
+      # normalization does not make different memory/CPU profiles equivalent.
+      # See AGENTS.md and bench/README.md for the local acceptance workflow.

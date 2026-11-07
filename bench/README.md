@@ -11,8 +11,10 @@ pnpm bench:ci         # measure up to three times, and pass when two runs agree
 pnpm bench:gate       # bench:ci, when the branch's diff can move a gated benchmark
 ```
 
-The agent runs `pnpm bench:ci` before it opens a pull request, and does not
-merge on a regression. CI does not run it.
+The agent runs `pnpm bench:gate` before it opens a pull request. A skip
+printed by that command is a pass; agents never skip it by hand. When the
+diff reaches gated code it runs `bench:ci`, whose regression verdict still
+blocks a merge. CI does not run machine-matched performance measurements.
 
 The gate lives here rather than on CI because the baseline is machine-matched.
 `bench/baseline.json` records the machine it was captured on, and a comparison
