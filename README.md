@@ -109,9 +109,9 @@ changes remain subject to the human-gated package release process.
 One scheduled daily owner delivers the highest-priority eligible increment,
 resuming existing PRs across tracks before new work and preserving live owners.
 Report-format PR delivery is included; new report implementation retains its
-separate track. Renderer and recovery jobs are available on demand. The weekly
-process audit is configured for pilot validation and will research agentic development, OSS and data visualization and
-proposes bounded evaluations; it does not automatically change the roadmap.
+separate track. Renderer and recovery jobs are available on demand. The weekly audit reviews the development process, researches agentic development,
+OSS and data visualization, and proposes bounded evaluations. It does not
+automatically change the roadmap.
 All changes follow the reviews, local gates and CI requirements in [AGENTS.md](AGENTS.md).
 
 ## Development
