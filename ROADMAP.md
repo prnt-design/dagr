@@ -17,16 +17,40 @@ implementation PR links its Dispatch task and evidence. After verified merge,
 attach the merged PR to that task, mark it done, and link the existing or newly
 created successor task in the completed task and handoff. Refresh this file
 only when scope, priority, outcome or the active milestone task changes. An
-unfinished slice does not become a new competing checklist here. Report tasks
-keep their separate scheduler and dependencies.
+unfinished slice does not become a new competing checklist here. New report
+implementation keeps its dedicated scheduling and dependencies; existing PR
+delivery follows the daily-owner model below.
 The working record and historical decisions live in
 [specs/roadmap-notes.md](specs/roadmap-notes.md) under the same milestone IDs.
+
+## Direction and delivery update (2026-11-07 maintainer request)
+
+Dagr is becoming a general data visualization toolkit, retaining graph/layout
+stability and animated rendering as strengths. Graph owns identity and patches;
+layout owns geometry; renderer owns drawing and motion; React binds them;
+Explorer adds graph reading/navigation; VDSL adapts consumer-defined node and
+connection types. The private chart package supports bar and line charts with
+GPU or SVG rendering. It remains outside the published umbrella until a
+separately authorized release. No additional visualization families are promised.
+
+One scheduled daily owner resumes eligible existing PRs across tracks before
+new feature work, including existing R1 report-format delivery. New R-track
+implementation keeps its dedicated scheduling and dependencies. Renderer and
+review/delivery recovery jobs are unscheduled specialists available on demand.
+Never preempt a live owner or retry an unchanged blocked head without a concrete
+changed condition. Required gates and merge safeguards remain in AGENTS.md.
+
+Weekly process research covers agentic development, OSS and data visualization,
+checking prior experiments and proposing bounded evaluations. Research does not
+automatically create implementation tasks or reprioritize this roadmap. The
+mobile, skill and consumer-readiness sequence below, measured renderer limits,
+completed milestones and deliberately deferred work remain in force.
 
 ## Priority refresh (2026-10-29 maintainer request)
 
 The next product work is mobile usability, portable skill distribution, then
 external-consumer library readiness. This ordering supersedes the scheduling
-language below, while retaining the renderer identity and measured limits.
+language below, while retaining the graph/renderer strengths and measured limits.
 Released correctness/install regressions still preempt feature work. Dispatch
 owns execution criteria and blockers; the following is the milestone order,
 not a second implementation queue.
@@ -64,6 +88,9 @@ that compound layout, audio or an additional rendering backend is required.
 
 ## Status (2026-10-17 UTC)
 
+This historical baseline is broadened by the 2026-11-07 direction above.
+The release and renderer evidence below includes subsequent updates.
+
 On 2026-10-17 the maintainer chose dagr's lead identity: the GPU renderer for
 big directed graphs that animate as they change. The renderer queue below proves
 the WebGPU renderer first within that track. A [daily report track](#daily-report-track) of this
@@ -82,8 +109,9 @@ focus.
 Shared click-versus-pan and controlled selection now ship from the React package
 through a caller-supplied, displayed-revision hit provider, and `DagrCanvas`
 now supplies exact CPU node hits (M5.2b, released in 0.1.3) with opt-in navigation,
-camera flights and zoom-tiered node rendering. Edge and port hits are not
-shipped. Edge styles still change geometry without obstacle avoidance. Visual
+camera flights and zoom-tiered node rendering. CPU edge hits are implemented in
+current source but unreleased since 0.1.4; port hits remain planned. Edge styles
+still change geometry without obstacle avoidance. Visual
 groups are annotations, not compound layout or enforced boundaries. GPU
 picking is `Renderer.pickNode` (unreleased), which `DagrCanvas` uses only
 behind an opt-in `hitTesting="gpu"`, priced on one device (AMD RDNA 2,
