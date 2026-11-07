@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Use linear interpolation consistently in SVG and GPU charts to avoid invented
+  extrema. Measure category labels and tooltip content for collision avoidance
+  and containment. Shrink dense bar gaps and widths within category bands.
+
 - New package, private until it joins the packaging checks and the umbrella.
   `DagrChart` draws bar and line series over a category axis with
   `@prnt/dagr-render`: one or two y-axes scaled by `d3-scale`, marks matched

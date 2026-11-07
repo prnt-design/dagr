@@ -76,7 +76,7 @@ export interface ChartLayout {
   readonly gridlines: readonly Gridline[];
   /** The centre of each category's slot. */
   readonly categoryX: readonly number[];
-  /** Label every nth category, so a narrow canvas does not run them together. */
+  /** Legacy count-based hint for custom consumers. DagrChart measures DOM labels instead. */
   readonly labelEvery: number;
 }
 
@@ -170,10 +170,12 @@ export function layoutChart(data: ChartData, size: ChartSize): ChartLayout {
   const categoryX = data.categories.map((_, index) => (band(index) ?? plot.left) + groupWidth / 2);
 
   const barSeries = data.series.filter(isBar);
-  const barWidth = Math.max(2, (groupWidth - BAR_GAP * (barSeries.length - 1)) / Math.max(1, barSeries.length));
-  // What the bars take up, which is wider than the group once the width is
-  // floored, so a crowded group still straddles its category.
-  const barsWidth = barSeries.length * barWidth + (barSeries.length - 1) * BAR_GAP;
+  // Gaps shrink with the slot. Subpixel bars preserve group boundaries even
+  // when there is less than one CSS pixel available per observation.
+  const count = Math.max(1, barSeries.length);
+  const gap = Math.min(BAR_GAP, groupWidth / (2 * count));
+  const barWidth = (groupWidth - gap * (count - 1)) / count;
+  const barsWidth = groupWidth;
 
   const bars: BarTarget[] = [];
   const lines: LineTarget[] = [];
@@ -189,7 +191,7 @@ export function layoutChart(data: ChartData, size: ChartSize): ChartLayout {
           id: `bar:${series.id}:${String(index)}`,
           seriesId: series.id,
           index,
-          x: centre - barsWidth / 2 + slot * (barWidth + BAR_GAP) + barWidth / 2,
+          x: centre - barsWidth / 2 + slot * (barWidth + gap) + barWidth / 2,
           width: barWidth,
           base,
           height: scale(value) - base,

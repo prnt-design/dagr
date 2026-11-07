@@ -44,6 +44,9 @@
 
 .dagr-chart__category {
   transform: translateX(-50%);
+  max-width: calc(100% - 16px);
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .dagr-chart__tooltip {
@@ -63,12 +66,8 @@
   flex-wrap: wrap;
   overflow-wrap: anywhere;
   pointer-events: none;
-  transform: translate(-50%, calc(-100% - 10px));
-}
-
-/* A mark near the top edge has no room above it. */
-.dagr-chart__tooltip--below {
-  transform: translate(-50%, 10px);
+  max-height: calc(100% - 16px);
+  overflow: hidden;
 }
 
 .dagr-chart__tooltip-label {

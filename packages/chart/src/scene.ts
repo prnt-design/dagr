@@ -1,6 +1,6 @@
 /**
  * The chart on the GPU: bars and markers are instanced SDF nodes, each line is
- * a smooth ribbon, and every number that changes gets there on a critically
+ * a linear ribbon, and every number that changes gets there on a critically
  * damped spring.
  *
  * Marks are keyed by id across layouts, which is the whole of the animation
@@ -137,7 +137,7 @@ export async function createChartScene(options: ChartSceneOptions): Promise<Char
     canvas: options.canvas!,
     clearColor: theme.background,
     sceneStyle: { outlineColor: theme.background, glowAlpha: 0.55, outlinePixels: 1 },
-    edgeGroups: [{ id: LINE_GROUP, style: { halfWidthPixels: LINE_HALF_WIDTH_PIXELS }, curve: 'smooth' }],
+    edgeGroups: [{ id: LINE_GROUP, style: { halfWidthPixels: LINE_HALF_WIDTH_PIXELS }, curve: 'polyline' }],
     ...(options.signal === undefined ? {} : { signal: options.signal }),
     ...(options.backend === undefined ? {} : { backend: options.backend }),
     ...(options.onContextLost === undefined ? {} : { onContextLost: options.onContextLost }),

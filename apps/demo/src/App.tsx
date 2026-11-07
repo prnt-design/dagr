@@ -104,7 +104,7 @@ function ChartView(): JSX.Element {
         <p className="facts__lead">
           Twelve months of data in <code>&lt;DagrChart&gt;</code> from{' '}
           <code>@prnt/dagr-chart</code>: GPU mode draws bars and markers as instanced SDF nodes with{' '}
-          <code>@prnt/dagr-render</code>, each line is one smooth ribbon, the scales and ticks are
+          <code>@prnt/dagr-render</code>, each line is one linear ribbon, the scales and ticks are
           D3&apos;s. SVG mode draws DOM marks from the same layout and spring frames. Hover a mark for
           its value.
         </p>

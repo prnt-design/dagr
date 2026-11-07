@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { JSX, PointerEvent as ReactPointerEvent } from 'react';
 import type { BackendPreference, FrameScheduler, RendererBackend } from '@prnt/dagr-render';
+import { tooltipPosition, visibleCategories } from './dom-layout.js';
 import { layoutChart } from './layout.js';
 import { createChartScene } from './scene.js';
 import type { ChartScene } from './scene.js';
@@ -51,9 +52,6 @@ interface Tip {
 /** More losses than this inside the window is a device that will not stay up. */
 const MAX_LOSSES = 3;
 const LOSS_WINDOW_MS = 10_000;
-/** The room a tooltip needs above its mark, and to either side of its centre. */
-const TOOLTIP_ROOM = 44;
-const TOOLTIP_EDGE = 64;
 
 function hex(color: number): string {
   return `#${color.toString(16).padStart(6, '0')}`;
@@ -71,6 +69,8 @@ export function DagrChart(props: DagrChartProps): JSX.Element {
 
   const rootRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const tooltipRef = useRef<HTMLDivElement>(null);
+  const axesRef = useRef<HTMLDivElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);
   const css = useCssColors(rootRef, props.cssColors);
   const theme = props.theme ?? DEFAULT_THEME;
@@ -227,6 +227,46 @@ export function DagrChart(props: DagrChartProps): JSX.Element {
     setHoverId(null);
   }, [hoverId, tips]);
 
+  // Measure real fonts and wrapped content before paint, including host class
+  // overrides. Observers also cover font loads and CSS-driven size changes.
+  useLayoutEffect(() => {
+    const root = rootRef.current;
+    if (root === null) return;
+    const labels = [...(axesRef.current?.querySelectorAll<HTMLElement>('.dagr-chart__category') ?? [])];
+    const measure = (): void => {
+      const width = root.clientWidth;
+      const height = root.clientHeight;
+      const widths = labels.map((element) => element.getBoundingClientRect().width);
+      const boxes = labels.map((element, index) => {
+        const labelWidth = widths[index]!;
+        const centre = Math.max(labelWidth / 2, Math.min(layout.categoryX[index] ?? 0, width - labelWidth / 2));
+        element.style.left = `${String(centre)}px`;
+        return { left: centre - labelWidth / 2, right: centre + labelWidth / 2 };
+      });
+      const visible = new Set(visibleCategories(boxes));
+      labels.forEach((element, index) => { element.style.visibility = visible.has(index) ? 'visible' : 'hidden'; });
+      const element = tooltipRef.current;
+      if (element !== null && tip !== undefined) {
+        const bounds = element.getBoundingClientRect();
+        const position = tooltipPosition(tip, bounds, { width, height });
+        element.style.left = `${String(position.left)}px`;
+        element.style.top = `${String(position.top)}px`;
+        element.classList.toggle('dagr-chart__tooltip--below', position.below);
+        element.style.visibility = 'visible';
+      }
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(root);
+    labels.forEach((element) => { observer.observe(element); });
+    if (tooltipRef.current !== null) observer.observe(tooltipRef.current);
+    document.fonts?.addEventListener('loadingdone', measure);
+    return () => {
+      observer.disconnect();
+      document.fonts?.removeEventListener('loadingdone', measure);
+    };
+  });
+
   const pickAt = (current: ChartScene, point: { x: number; y: number }): void => {
     picking.current = true;
     const generation = hoverGeneration.current;
@@ -295,7 +335,7 @@ export function DagrChart(props: DagrChartProps): JSX.Element {
           onPointerMove={onPointerMove} onPointerDown={onPointerMove} onPointerLeave={onPointerLeave} />
       )}
       {ready && (
-        <div className={classes('dagr-chart__axes', slots.axes)} aria-hidden="true">
+        <div ref={axesRef} className={classes('dagr-chart__axes', slots.axes)} aria-hidden="true">
           {layout.leftTicks.map((tick) => (
             <span
               key={`left:${String(tick.value)}`}
@@ -314,33 +354,23 @@ export function DagrChart(props: DagrChartProps): JSX.Element {
               {formatValue?.(tick.value) ?? tick.label}
             </span>
           ))}
-          {layout.categoryX.map(
-            (x, index) =>
-              index % layout.labelEvery === 0 && (
-                <span
-                  key={index}
-                  className={classes('dagr-chart__category', slots.category)}
-                  style={{ left: x, top: flip(layout.plot.bottom) + 8 }}
-                >
-                  {categories[index]}
-                </span>
-              ),
-          )}
+          {layout.categoryX.map((x, index) => (
+            <span
+              key={index}
+              className={classes('dagr-chart__category', slots.category)}
+              style={{ left: x, top: flip(layout.plot.bottom) + 8, visibility: 'hidden' }}
+            >
+              {categories[index]}
+            </span>
+          ))}
         </div>
       )}
       {tip !== undefined && (
         <div
-          className={
-            classes(tip.top < TOOLTIP_ROOM ? 'dagr-chart__tooltip dagr-chart__tooltip--below' : 'dagr-chart__tooltip', slots.tooltip)
-          }
+          ref={tooltipRef}
+          className={classes('dagr-chart__tooltip', slots.tooltip)}
           aria-hidden="true"
-          style={{
-            left: size.width < TOOLTIP_EDGE * 2
-              ? size.width / 2
-              : Math.min(Math.max(tip.x, TOOLTIP_EDGE), size.width - TOOLTIP_EDGE),
-            top: tip.top,
-            '--dagr-chart-series-color': hex(tip.color),
-          } as ChartStyle}
+          style={{ visibility: 'hidden', '--dagr-chart-series-color': hex(tip.color) } as ChartStyle}
         >
           <span className={classes('dagr-chart__tooltip-label', slots.tooltipLabel)}>{tip.label}</span>
           <span className={classes('dagr-chart__tooltip-value', slots.tooltipValue)}>{format(tip.value)}</span>

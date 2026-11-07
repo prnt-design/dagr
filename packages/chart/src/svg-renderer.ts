@@ -76,17 +76,9 @@ export function createSvgRenderer(svg: SVGSVGElement, background: number, getCla
       }
       for (const edge of edges) {
         kept.add(edge.id);
-        // A Catmull-Rom spline through every category centre.
-        const points = edge.points;
-        let d = '';
-        for (let i = 0; i < points.length; i += 1) {
-          const p = points[i]!;
-          if (i === 0) { d = `M${String(p.x)},${String(height - p.y)}`; continue; }
-          const a = points[i - 1]!;
-          const before = points[Math.max(0, i - 2)]!;
-          const after = points[Math.min(points.length - 1, i + 1)]!;
-          d += ` C${String(a.x + (p.x - before.x) / 6)},${String(height - a.y - (p.y - before.y) / 6)} ${String(p.x - (after.x - a.x) / 6)},${String(height - p.y + (after.y - a.y) / 6)} ${String(p.x)},${String(height - p.y)}`;
-        }
+        // Linear segments share the GPU polyline semantics and cannot invent extrema.
+        const d = edge.points.map((p, i) =>
+          `${i === 0 ? 'M' : 'L'}${String(p.x)},${String(height - p.y)}`).join(' ');
         put(edge.id, 'path', { 'data-mark-id': edge.id, class: classes('dagr-chart__line', names.line), d,
           fill: 'none', stroke: hex(edge.color), 'stroke-width': '3.2', opacity: String(intensityOf(edge.id) * style.alpha) });
       }

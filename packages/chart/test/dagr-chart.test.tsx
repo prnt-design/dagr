@@ -343,18 +343,22 @@ describe('hover', () => {
     expect(document.querySelector('.dagr-chart__tooltip')).toBeNull();
   });
 
-  it('sits below a mark that reaches the top of the plot', async () => {
-    await shown();
-    lastRenderer().pickNode.mockResolvedValueOnce('bar:orders:0');
-    await flush(() => {
-      move('pointermove');
+  it('positions wrapped tooltip content using its measured bounds', async () => {
+    const bounds = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
+      return { width: this.classList.contains('dagr-chart__tooltip') ? 128 : 0, height: 74 } as DOMRect;
     });
-    expect(document.querySelector('.dagr-chart__tooltip')?.className).toBe('dagr-chart__tooltip');
-    lastRenderer().pickNode.mockResolvedValueOnce('bar:orders:2');
-    await flush(() => {
-      move('pointermove');
-    });
-    expect(document.querySelector('.dagr-chart__tooltip')?.className).toContain('dagr-chart__tooltip--below');
+    const width = vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockReturnValue(320);
+    const height = vi.spyOn(HTMLElement.prototype, 'clientHeight', 'get').mockReturnValue(280);
+    try {
+      await shown();
+      lastRenderer().pickNode.mockResolvedValueOnce('bar:orders:2');
+      await flush(() => { move('pointermove'); });
+      const tip = document.querySelector<HTMLElement>('.dagr-chart__tooltip')!;
+      expect(tip.classList.contains('dagr-chart__tooltip--below')).toBe(true);
+      expect(parseFloat(tip.style.top)).toBeGreaterThanOrEqual(8);
+      expect(parseFloat(tip.style.top) + 74).toBeLessThanOrEqual(272);
+      expect(parseFloat(tip.style.left) + 128).toBeLessThanOrEqual(312);
+    } finally { bounds.mockRestore(); width.mockRestore(); height.mockRestore(); }
   });
 
   it('ignores a pick that finishes after the pointer leaves', async () => {
@@ -407,6 +411,18 @@ describe('hover', () => {
 
 
 describe('SVG rendering and styling', () => {
+  it('draws a plateau with linear segments confined to the observed extrema', async () => {
+    await show({ rendering: 'svg', animate: false, categories: ['A', 'B', 'C', 'D'],
+      series: [{ id: 'plateau', label: 'Plateau', mark: 'line', color: 0x123456, values: [0, 1, 1, 0] }] });
+    await resizeTo(320, 280);
+    frames.runUntilIdle();
+    const path = document.querySelector('svg path')!.getAttribute('d')!;
+    expect(path.match(/[ML]/g)).toHaveLength(4);
+    expect(path).not.toMatch(/[CQ]/);
+    const ys = [...path.matchAll(/[ML][^,]+,([\d.]+)/g)].map((match) => Number(match[1]));
+    expect(ys).toEqual([244, 24, 24, 244]);
+  });
+
   it('draws bars, points and lines without constructing a GPU renderer', async () => {
     const onBackend = vi.fn();
     await show({ rendering: 'svg', animate: false, onBackend, className: 'rounded-xl',
@@ -418,7 +434,7 @@ describe('SVG rendering and styling', () => {
     expect(onBackend).toHaveBeenCalledWith('svg');
     expect(document.querySelectorAll('svg rect.dagr-chart__bar')).toHaveLength(3);
     expect(document.querySelectorAll('svg circle')).toHaveLength(3);
-    expect(document.querySelector('svg path')?.getAttribute('d')).toContain(' C');
+    expect(document.querySelector('svg path')?.getAttribute('d')).toContain(' L');
     expect(document.querySelector('svg rect.dagr-chart__bar')?.classList.contains('fill-blue-500')).toBe(true);
     expect(document.querySelector('svg path')?.classList.contains('stroke-violet-500')).toBe(true);
     expect(document.querySelector('.dagr-chart__tick')?.classList.contains('text-xs')).toBe(true);

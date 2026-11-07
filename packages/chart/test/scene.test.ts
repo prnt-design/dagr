@@ -49,9 +49,9 @@ beforeEach(async () => {
 });
 
 describe('the renderer it builds', () => {
-  it('clears to the theme background and declares one smooth edge group', () => {
+  it('clears to the theme background and declares one linear edge group', () => {
     expect(renderer.options.clearColor).toBe(DEFAULT_THEME.background);
-    expect(renderer.options.edgeGroups).toEqual([expect.objectContaining({ curve: 'smooth' })]);
+    expect(renderer.options.edgeGroups).toEqual([expect.objectContaining({ curve: 'polyline' })]);
   });
 
   it('pins the camera at zoom 1 over the canvas on resize', () => {
