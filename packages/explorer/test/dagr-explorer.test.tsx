@@ -563,6 +563,30 @@ describe('DagrExplorer: map or outline', () => {
     expect(document.activeElement).toBe(outlineItem('a'));
   });
 
+  it('keeps the drawer scrolled and its control focused when the host switches', async () => {
+    let shown: 'map' | 'outline' = 'map';
+    const render = () => <DagrExplorer label="Map" views={[overview]} apiRef={apiRef} mode={shown} />;
+    tree = await mount(render());
+    await resizeTo(800, 480);
+    await runFramesUntilIdle();
+    await flush(() => api().inspect('b'));
+    const body = part('details-body');
+    body.scrollTop = 40;
+    part('details').querySelector<HTMLElement>('button[data-node-id="c"]')?.focus();
+    shown = 'outline';
+    await tree.rerender(render());
+    await runFramesUntilIdle();
+    expect(part('details-body')).not.toBe(body);
+    expect(part('details-body').scrollTop).toBe(40);
+    expect(document.activeElement).toBe(part('details').querySelector('button[data-node-id="c"]'));
+
+    part('details-close').focus();
+    shown = 'map';
+    await tree.rerender(render());
+    expect(document.activeElement).toBe(part('details-close'));
+    expect(part('details').parentElement).toBe(part('viewport').parentElement);
+  });
+
   it('leaves the outline room to scroll clear of an open drawer', async () => {
     await ready({ defaultMode: 'outline' });
     const scroller = part('outline').parentElement;

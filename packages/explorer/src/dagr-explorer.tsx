@@ -16,15 +16,15 @@
  * size leaves where it was (see `use-explorer-camera.ts`). The outline mounts
  * the first time it is chosen and is kept after, hidden, for its tab stop and
  * its scroll offset. The toolbar is hidden with the map, and the drawer goes with
- * whichever presentation shows; over the outline it leaves scroll room below
- * the last item. Focus on a switch stays where it is, unless it was in the
+ * whichever presentation shows, keeping its scroll and the control focused in
+ * it; over the outline it leaves scroll room below the last item. Focus on a switch stays where it is, unless it was in the
  * presentation that left: then it moves to the same node in the other one if
  * that has a control for it, else to the other's tab stop, else to the
  * pressed button.
  */
 
-import { useRef, useState } from 'react';
-import type { CSSProperties, ReactElement, Ref } from 'react';
+import { Component, useRef, useState } from 'react';
+import type { CSSProperties, ReactElement, ReactNode, Ref, RefObject } from 'react';
 import type { ExplorerBase } from './base.js';
 import { ExplorerDetails } from './explorer-details.js';
 import type { ExplorerDetailsProps } from './explorer-details.js';
@@ -131,6 +131,61 @@ function OutlineScroll<N extends ExplorerNode>(props: {
   );
 }
 
+interface DrawerSnapshot {
+  readonly scrollTop: number;
+  /** The focused control's node id or part name, `''` for an unnamed one, or `null` if focus was not in the drawer. */
+  readonly focus: string | null;
+}
+
+function findDrawer(containers: readonly RefObject<HTMLDivElement | null>[]): HTMLElement | null {
+  for (const container of containers) {
+    const drawer = container.current?.querySelector<HTMLElement>('[data-dagr-explorer="details"]');
+    if (drawer !== null && drawer !== undefined) return drawer;
+  }
+  return null;
+}
+
+/**
+ * Carries the drawer's scroll and focus across a switch. The drawer renders inside whichever presentation shows, so a
+ * switch mounts a new one, and the old one has left the document before any effect runs. `getSnapshotBeforeUpdate` is
+ * the one place that can still read it.
+ */
+class DrawerCarry extends Component<{
+  readonly mode: DagrExplorerMode;
+  readonly containers: readonly RefObject<HTMLDivElement | null>[];
+  readonly children: ReactNode;
+}> {
+  override getSnapshotBeforeUpdate(previous: Readonly<{ mode: DagrExplorerMode }>): DrawerSnapshot | null {
+    if (previous.mode === this.props.mode) return null;
+    const drawer = findDrawer(this.props.containers);
+    if (drawer === null) return null;
+    const active = drawer.ownerDocument.activeElement;
+    const focused = active instanceof HTMLElement && drawer.contains(active) ? active : null;
+    return {
+      scrollTop: drawer.querySelector('[data-dagr-explorer="details-body"]')?.scrollTop ?? 0,
+      focus: focused === null ? null : (focused.dataset['nodeId'] ?? focused.dataset['dagrExplorer'] ?? ''),
+    };
+  }
+
+  override componentDidUpdate(_previous: unknown, _state: unknown, snapshot: DrawerSnapshot | null): void {
+    const drawer = snapshot === null ? null : findDrawer(this.props.containers);
+    if (snapshot === null || drawer === null) return;
+    const body = drawer.querySelector<HTMLElement>('[data-dagr-explorer="details-body"]');
+    if (body !== null) body.scrollTop = snapshot.scrollTop;
+    const active = drawer.ownerDocument.activeElement;
+    // Something else already took focus, such as a host moving it on the same change.
+    if (snapshot.focus === null || (active !== null && active !== drawer.ownerDocument.body)) return;
+    const same = [...drawer.querySelectorAll<HTMLElement>('[data-node-id], [data-dagr-explorer]')].find(
+      (element) => (element.dataset['nodeId'] ?? element.dataset['dagrExplorer']) === snapshot.focus,
+    );
+    (same ?? body)?.focus();
+  }
+
+  override render(): ReactNode {
+    return this.props.children;
+  }
+}
+
 export type DagrExplorerProps<
   N extends ExplorerNode = ExplorerNode,
   E extends ExplorerEdge = ExplorerEdge,
@@ -194,27 +249,29 @@ export function DagrExplorer<N extends ExplorerNode = ExplorerNode, E extends Ex
       <ModeButtons groupRef={buttonsRef} mode={mode} choose={choose} />
       <ExplorerSearch />
       <ExplorerTraceToggle />
-      <div ref={mapRef} hidden={mode !== 'map'} style={mode === 'map' ? SHOWN : HIDDEN}>
-        {/* The drawer in the viewport's stage overlays the graph, not the whole explorer or the hint. */}
-        <ExplorerViewport<N, E>
-          renderNode={renderNode}
-          nodeAriaLabel={nodeAriaLabel}
-          tiers={tiers}
-          maxOverlayNodes={maxOverlayNodes}
-          base={base}
-          inset={inset}
-          contentPadding={contentPadding}
-        >
-          {mode === 'map' ? details : null}
-        </ExplorerViewport>
-        <ExplorerToolbar />
-      </div>
-      {outlineKept ? (
-        <div ref={outlineRef} hidden={mode !== 'outline'} style={mode === 'outline' ? READER : HIDDEN}>
-          <OutlineScroll<N> nodeAriaLabel={nodeAriaLabel} shown={mode === 'outline'} />
-          {mode === 'outline' ? details : null}
+      <DrawerCarry mode={mode} containers={[mapRef, outlineRef]}>
+        <div ref={mapRef} hidden={mode !== 'map'} style={mode === 'map' ? SHOWN : HIDDEN}>
+          {/* The drawer in the viewport's stage overlays the graph, not the whole explorer or the hint. */}
+          <ExplorerViewport<N, E>
+            renderNode={renderNode}
+            nodeAriaLabel={nodeAriaLabel}
+            tiers={tiers}
+            maxOverlayNodes={maxOverlayNodes}
+            base={base}
+            inset={inset}
+            contentPadding={contentPadding}
+          >
+            {mode === 'map' ? details : null}
+          </ExplorerViewport>
+          <ExplorerToolbar />
         </div>
-      ) : null}
+        {outlineKept ? (
+          <div ref={outlineRef} hidden={mode !== 'outline'} style={mode === 'outline' ? READER : HIDDEN}>
+            <OutlineScroll<N> nodeAriaLabel={nodeAriaLabel} shown={mode === 'outline'} />
+            {mode === 'outline' ? details : null}
+          </div>
+        ) : null}
+      </DrawerCarry>
     </ExplorerRoot>
   );
 }

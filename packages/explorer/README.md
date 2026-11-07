@@ -65,7 +65,8 @@ it keeps its camera through the switch and a resize or a turn while hidden
 and it leaves the tab order; the toolbar is hidden with it. Over the
 outline, the drawer leaves the list room to scroll its items clear, and the
 list keeps its scroll position while the map shows, unless focus moving to
-a node needs that node in view. Focus in
+a node needs that node in view. The drawer keeps its scroll position and
+the control focused in it. Focus in
 the presentation that leaves moves to the same node in the other, else to
 the other's tab stop; focus anywhere else stays where it is.
 
