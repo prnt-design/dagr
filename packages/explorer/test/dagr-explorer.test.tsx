@@ -587,6 +587,46 @@ describe('DagrExplorer: map or outline', () => {
     expect(part('details').parentElement).toBe(part('viewport').parentElement);
   });
 
+  it('puts focus on the drawer body when the focused slot control has no name', async () => {
+    let shown: 'map' | 'outline' = 'map';
+    const render = () => (
+      <DagrExplorer
+        label="Map"
+        views={[overview]}
+        apiRef={apiRef}
+        mode={shown}
+        renderDetails={() => <button type="button">More</button>}
+      />
+    );
+    tree = await mount(render());
+    await resizeTo(800, 480);
+    await runFramesUntilIdle();
+    await flush(() => api().inspect('b'));
+    part('details-body').querySelector('button')?.focus();
+    shown = 'outline';
+    await tree.rerender(render());
+    expect(document.activeElement).toBe(part('details-body'));
+  });
+
+  it('opens the drawer at the top when the host switches and inspects another node at once', async () => {
+    let shown: 'map' | 'outline' = 'map';
+    let selected = 'b';
+    const render = () => (
+      <DagrExplorer label="Map" views={[overview]} apiRef={apiRef} mode={shown} selectedId={selected} />
+    );
+    tree = await mount(render());
+    await resizeTo(800, 480);
+    await runFramesUntilIdle();
+    await flush(() => api().inspect('b'));
+    part('details-body').scrollTop = 40;
+    shown = 'outline';
+    selected = 'c';
+    await tree.rerender(render());
+    await runFramesUntilIdle();
+    expect(part('details-label').textContent).toBe('Gamma');
+    expect(part('details-body').scrollTop).toBe(0);
+  });
+
   it('leaves the outline room to scroll clear of an open drawer', async () => {
     await ready({ defaultMode: 'outline' });
     const scroller = part('outline').parentElement;
