@@ -106,7 +106,11 @@ export function ExplorerDetails<N extends ExplorerNode = ExplorerNode, E extends
     return open && aside !== null ? internals.obstructions.add(aside) : undefined;
   }, [open, internals]);
 
+  // Not on mount: a new body is already at the top, unless `DagrExplorer` carried a scroll across a switch.
+  const scrolledFor = useRef(nodeId);
   useEffect(() => {
+    if (nodeId === scrolledFor.current) return;
+    scrolledFor.current = nodeId;
     if (nodeId !== null && bodyRef.current !== null) bodyRef.current.scrollTop = 0;
   }, [nodeId]);
 
