@@ -520,7 +520,8 @@ branches never enter public docs, source, npm artifacts, or job fixtures.
 - [x] **M5.0** Landing page and the muslin re-port.
 - [x] **M5.1** `@prnt/dagr-react`: `<DagrCanvas>`, `useDagr`, `<Html>`.
 - [ ] **M5.2** Reusable selection, hover and gesture interaction. Split into
-  the independently shippable slices below; GPU picking is one future adapter.
+  the independently shippable slices below. Current source includes the opt-in
+  GPU node adapter (M4.8b); port hits remain planned (M6.3a).
 - [x] **M5.2a** Shared React gesture and controlled selection contract with a
   caller-supplied hit provider, demonstrated by the generic atlas. Define stable
   node/port identity, coordinate and scene-revision semantics, and stale-target
