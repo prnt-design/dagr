@@ -17,10 +17,10 @@
  * the first time it is chosen and is kept after, hidden, for its tab stop and
  * its scroll offset. The toolbar is hidden with the map, and the drawer goes with
  * whichever presentation shows, keeping its scroll and the control focused in
- * it; over the outline it leaves scroll room below the last item. Focus on a
- * switch stays where it is, unless it was in the presentation that left: then
- * it moves to the same node in the other one if that has a control for it,
- * else to the other's tab stop, else to the pressed button.
+ * it; over the outline it leaves scroll room below the last item. Other focus
+ * on a switch stays where it is, unless it was in the presentation that left:
+ * then it moves to the same node in the other one if that has a control for
+ * it, else to the other's tab stop, else to the pressed button.
  */
 
 import { Component, useRef, useState } from 'react';
@@ -174,7 +174,8 @@ class DrawerCarry extends Component<DrawerCarryProps> {
     const active = drawer.ownerDocument.activeElement;
     let focus: DrawerSnapshot['focus'] = null;
     // A control the slot leaves unnamed resolves to the body around it.
-    const control = active instanceof HTMLElement && drawer.contains(active) ? active.closest<HTMLElement>(CONTROLS) : null;
+    const control =
+      active instanceof HTMLElement && drawer.contains(active) ? active.closest<HTMLElement>(CONTROLS) : null;
     if (control !== null) {
       const key = controlKey(control);
       const same = [...drawer.querySelectorAll<HTMLElement>(CONTROLS)].filter((each) => controlKey(each) === key);

@@ -146,8 +146,8 @@ search, trace and the open drawer carry across a switch, and the map keeps
 its pan and zoom while hidden, following a node chosen in the outline. The
 outline keeps its scroll position while the map shows, unless focus moving
 to a node needs that node in view. The open drawer keeps its scroll
-position and the control focused in it. Focus in the presentation that
-leaves moves to the same node in the other.
+position, and focus in it stays on the same control. Focus elsewhere in
+the presentation that leaves moves to the same node in the other.
 
 ## The parts and your own layout
 
