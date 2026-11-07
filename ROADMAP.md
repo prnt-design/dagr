@@ -17,16 +17,40 @@ implementation PR links its Dispatch task and evidence. After verified merge,
 attach the merged PR to that task, mark it done, and link the existing or newly
 created successor task in the completed task and handoff. Refresh this file
 only when scope, priority, outcome or the active milestone task changes. An
-unfinished slice does not become a new competing checklist here. Report tasks
-keep their separate scheduler and dependencies.
+unfinished slice does not become a new competing checklist here. New report
+implementation keeps its dedicated scheduling and dependencies; existing PR
+delivery follows the daily-owner model below.
 The working record and historical decisions live in
 [specs/roadmap-notes.md](specs/roadmap-notes.md) under the same milestone IDs.
+
+## Direction and delivery update (2026-11-07 maintainer request)
+
+Dagr is becoming a general data visualization toolkit, retaining graph/layout
+stability and animated rendering as strengths. Graph owns identity and patches;
+layout owns geometry; renderer owns drawing and motion; React binds them;
+Explorer adds graph reading/navigation; VDSL adapts consumer-defined node and
+connection types. The private chart package supports bar and line charts with
+GPU or SVG rendering. It remains outside the published umbrella until a
+separately authorized release. No additional visualization families are promised.
+
+One scheduled daily owner resumes eligible existing PRs across tracks before
+new feature work, including existing R1 report-format delivery. New R-track
+implementation keeps its dedicated scheduling and dependencies. Renderer and
+review/delivery recovery jobs are unscheduled specialists available on demand.
+Never preempt a live owner or retry an unchanged blocked head without a concrete
+changed condition. Required gates and merge safeguards remain in AGENTS.md.
+
+Weekly process research covers agentic development, OSS and data visualization,
+checking prior experiments and proposing bounded evaluations. Research does not
+automatically create implementation tasks or reprioritize this roadmap. The
+mobile, skill and consumer-readiness sequence below, measured renderer limits,
+completed milestones and deliberately deferred work remain in force.
 
 ## Priority refresh (2026-10-29 maintainer request)
 
 The next product work is mobile usability, portable skill distribution, then
 external-consumer library readiness. This ordering supersedes the scheduling
-language below, while retaining the renderer identity and measured limits.
+language below, while retaining the graph/renderer strengths and measured limits.
 Released correctness/install regressions still preempt feature work. Dispatch
 owns execution criteria and blockers; the following is the milestone order,
 not a second implementation queue.
@@ -36,7 +60,7 @@ not a second implementation queue.
 | P0 | Benchmark gate reliability, `tsk_1048e2545110` | Resolve the existing measurement blocker without weakening the gate; green CI alone does not permit merge. |
 | P1 | M5.8a shared pinch, `tsk_98c8dffe7bda` | Merged in PR #175: one `createPinchGesture` in renderer core, used by DagrCanvas and Explorer. M5.7b mobile reading merged in PR #171. M5.8b's slices merged: its shared visible-frame geometry in PR #198, DagrCanvas inset framing in PR #200, Explorer's visual-viewport observation in PR #199, DagrCanvas visual-viewport observation in PR #201, a DagrCanvas flight under way retargeting when its frame changes in PR #202, and a headless Chromium check of both surfaces under page scroll, pinch-zoom, a shorter layout viewport and emulated zoom in PR #203. Safe areas are deferred until a consumer needs them. M5.8c's emulated input corpus merged in PRs #204 to #210, with docs in PR #211 and a drag-then-pinch row in PR #214. Both still lack real-device evidence (iOS Safari, Android Chrome, software keyboard, safe areas, screen reader, phone GPU memory and frame budgets), which needs a phone or device lab, and WebKit evidence, which needs a host that can launch it. |
 | P1 | M5.8b viewport/occlusion, `tsk_e55c78e6012c`; M5.8c mobile conformance, `tsk_7656d37da9de` | Follow the shared input foundation with usable visible-area handling and cross-surface evidence, including explicitly unverified real-device cases. |
-| P1 | M5.7c shared-state outline, `tsk_17e1212b51f0` | Follow M5.7b with a readable alternative using the same selection, query, details and content. Slice 1 (PR #213) adds the `ExplorerOutline` part; slice 2 adds the map or outline choice in `DagrExplorer`, keeping state, camera and focus across the switch. Outline items carry the map's node names, including a host's `nodeAriaLabel`, and a focus or selection move re-renders only the items it changes; a hidden outline keeps its scroll position across a switch, and the drawer keeps its scroll and focused control; virtualization and the skill's wording remain follow-ups on `tsk_9d50069fe421`. |
+| P1 | M5.7c shared-state outline, `tsk_17e1212b51f0` | Follow M5.7b with a readable alternative using the same selection, query, details and content. Slice 1 (PR #213) added the `ExplorerOutline` part; slice 2 (merged in PR #216) added the map or outline choice in `DagrExplorer`, keeping state, camera and focus across the switch. Outline items carry the map's node names, including a host's `nodeAriaLabel`, and a focus or selection move re-renders only the items it changes; a hidden outline keeps its scroll position across a switch, and the drawer keeps its scroll and focused control; virtualization and the skill's wording remain follow-ups on `tsk_9d50069fe421`. |
 | P1 | M5.7d-1 portable skill installation, `tsk_a05bb1f08658` | Verified and merged in PR #192: local and pinned-Git installation plus first use outside this workspace. Preserve the documented recipe and evidence. |
 | P2 | M5.9 consumer readiness, `tsk_0d0a71099683` | Exercise packed mobile APIs in external consumers, document support evidence and prepare a release handoff. Publication remains human-gated. PR #197 adds packed React 18/19 Explorer consumers (SSR, hydration, cleanup, core pinch and visible frame) to `verify:tools` and the [release handoff](packaging/consumer-readiness.md). Real-device rows stay unverified with M5.8b/c. |
 | P2 | M5.7d-2 authoring evaluation, `tsk_1b6fb4253f02` | Evaluate three authoring briefs after the install path is verified; this broader study does not block skill distribution. |
@@ -64,6 +88,9 @@ that compound layout, audio or an additional rendering backend is required.
 
 ## Status (2026-10-17 UTC)
 
+This historical baseline is broadened by the 2026-11-07 direction above.
+The release and renderer evidence below includes subsequent updates.
+
 On 2026-10-17 the maintainer chose dagr's lead identity: the GPU renderer for
 big directed graphs that animate as they change. The renderer queue below proves
 the WebGPU renderer first within that track. A [daily report track](#daily-report-track) of this
@@ -82,8 +109,9 @@ focus.
 Shared click-versus-pan and controlled selection now ship from the React package
 through a caller-supplied, displayed-revision hit provider, and `DagrCanvas`
 now supplies exact CPU node hits (M5.2b, released in 0.1.3) with opt-in navigation,
-camera flights and zoom-tiered node rendering. Edge and port hits are not
-shipped. Edge styles still change geometry without obstacle avoidance. Visual
+camera flights and zoom-tiered node rendering. CPU edge hits are implemented in
+current source but unreleased since 0.1.4; port hits remain planned. Edge styles
+still change geometry without obstacle avoidance. Visual
 groups are annotations, not compound layout or enforced boundaries. GPU
 picking is `Renderer.pickNode` (unreleased), which `DagrCanvas` uses only
 behind an opt-in `hitTesting="gpu"`, priced on one device (AMD RDNA 2,
@@ -492,7 +520,8 @@ branches never enter public docs, source, npm artifacts, or job fixtures.
 - [x] **M5.0** Landing page and the muslin re-port.
 - [x] **M5.1** `@prnt/dagr-react`: `<DagrCanvas>`, `useDagr`, `<Html>`.
 - [ ] **M5.2** Reusable selection, hover and gesture interaction. Split into
-  the independently shippable slices below; GPU picking is one future adapter.
+  the independently shippable slices below. Current source includes the opt-in
+  GPU node adapter (M4.8b); port hits remain planned (M6.3a).
 - [x] **M5.2a** Shared React gesture and controlled selection contract with a
   caller-supplied hit provider, demonstrated by the generic atlas. Define stable
   node/port identity, coordinate and scene-revision semantics, and stale-target
