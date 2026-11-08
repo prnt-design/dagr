@@ -1,5 +1,5 @@
 import Link from '@docusaurus/Link';
-import SystemAtlas from '@site/src/components/SystemAtlas';
+import FrameworkMap from '@site/src/components/FrameworkMap';
 import LiveLayout from '@site/src/components/LiveLayout';
 import CodeBlock from '@theme/CodeBlock';
 import Layout from '@theme/Layout';
@@ -19,12 +19,12 @@ const result = layout({ graph });
 export default function Home() {
   return (
     <Layout
-      title="Graph layout, rendering, and motion"
-      description="Dagr: graph layout, rendering, animated changes, and rich content. An open-source toolkit by Nii Yeboah, creator of PRNT."
+      title="Data visualization, graph layout, and motion"
+      description="Dagr: an open-source data visualization toolkit with graph layout, GPU rendering, animated changes, and rich content. By Nii Yeboah, creator of PRNT."
     >
       <main className={styles.page}>
         <header className={styles.hero}>
-          <p className={styles.eyebrow}>A GRAPH TOOLKIT FOR THE WEB</p>
+          <p className={styles.eyebrow}>A DATA VISUALIZATION TOOLKIT FOR THE WEB</p>
           <div className={styles.intro}>
             <div>
               <h1>
@@ -38,9 +38,9 @@ export default function Home() {
             </div>
             <div className={styles.context}>
               <p>
-                Graph layout, GPU rendering, and the building blocks for visual
-                languages. Explore a complete system, from its architecture
-                to the typed contracts inside every node.
+                Data visualization built on graph layout, GPU rendering and
+                motion. Compose reading interfaces, charts and visual languages
+                from focused packages. Explore Dagr’s own building blocks below.
               </p>
               <p className={styles.byline}>
                 By <a href="https://niiyeboah.com">Nii Yeboah</a>, engineer and
@@ -50,7 +50,7 @@ export default function Home() {
             </div>
           </div>
         </header>
-        <SystemAtlas />
+        <FrameworkMap />
         <section className={styles.story} aria-labelledby="meaning-title">
           <p className={styles.eyebrow}>THE GRAPH IS THE MEDIUM</p>
           <div className={styles.storyBody}>

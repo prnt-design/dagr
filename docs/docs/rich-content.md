@@ -10,8 +10,8 @@ A node can hold a preview, a configuration summary, a small chart, or a status.
 An edge can name the data it carries. Dagr draws the geometry; your application
 supplies the vocabulary and the content.
 
-Explore the [system atlas](/#system-atlas) for rich HTML nodes, typed port
-contracts, search, and zoom-dependent detail over a Dagr layout. This example
+Explore the [framework map](/#framework-map) for package explanations, search,
+connected details and an outline reader over a Dagr layout. This example
 uses HTML and SVG; the GPU renderer's React overlay API is described below.
 
 ## React content on a node

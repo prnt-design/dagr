@@ -41,7 +41,7 @@ renderer.setNodes([
 renderer.render();
 ```
 
-The [system atlas](/#system-atlas) demonstrates rich content with HTML and SVG
+The [framework map](/#framework-map) demonstrates Explorer with HTML and SVG
 over Dagr layout. It does not use the GPU renderer described on this page.
 Earlier campaign and shape-ladder captures remain in the repository's
 [historical screenshots](https://github.com/prnt-design/dagr/tree/main/assets/screenshots).
