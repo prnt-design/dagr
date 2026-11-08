@@ -259,7 +259,6 @@ export const featureEdges: readonly FrameworkEdge[] = [
   ...features.map((node) => relationship(node.packageId, node.id, 'provides')),
   relationship('package:react', 'feature:stability', 'uses'),
   relationship('package:react', 'feature:motion', 'uses'),
-  relationship('package:explorer', 'feature:stability', 'uses'),
   relationship('package:chart', 'feature:motion', 'uses'),
 ];
 // Separate member annotations keep cross-rank category hulls from enclosing unrelated packages.

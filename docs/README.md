@@ -43,7 +43,7 @@ Render deployment filters in `render.yaml`.
 | Theme | `src/css/custom.css` |
 | Reader documentation | `docs/` |
 
-The fixture validates every node configuration and edge before layout. Change
+The historical commerce fixture validates every node configuration and edge before layout. Change
 the registry, fixture, and associated tests together when evolving the language.
 
 ## Browser-only rendering
