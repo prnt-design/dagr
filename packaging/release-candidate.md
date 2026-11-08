@@ -68,13 +68,16 @@ configuration decisions for Nii, not changes applied by preparation.
 | Dense groups, category collisions, tooltip clipping, invented smooth extrema | #228 merged: bounded bar geometry, measured labels/tooltips, linear segments; tests included | Preserve its tests; prior screenshots are not new post-merge visual evidence |
 | SVG/layout root still reaches GPU imports | Known dependency/bundle limit, not a missing-peer defect: Three is required even for SVG/layout imports | Separate implementation task for isolated entry points if lightweight or Three-free SVG/layout is promised; do not advertise that contract now |
 | Keyboard mark inspection, missing values, time/log x, stacking, legend, per-axis formatting/domain controls | Unsupported, documented product limits | Follow-up implementation; do not promise Recharts feature or accessibility parity |
-| Chart umbrella and public configuration | Absent, intentionally unchanged | Nii authorizes explicit configuration patch; add forwarding source and identity/type checks before calling chart an umbrella release |
+| Chart umbrella and public configuration | Absent, intentionally unchanged | Nii decides the Three dependency policy and authorizes configuration; add forwarding source and identity/type checks before calling chart an umbrella release |
 
 The 2026-11-05 npm quality audit at `83e6666` measured roughly 270 KB gzip
 for SVG DagrChart with its static GPU dependency graph. That is prior evidence,
 not a fresh bundle-size measurement. Source still statically imports the scene
 and full renderer. SVG does not acquire a GPU context, but the prop does not
-create a dependency-isolated entry. Chart remains React 19 only.
+create a dependency-isolated entry. Chart remains React 19 only. Adding it as an umbrella dependency today would
+make Three install transitively through its required peer, changing the
+existing Three-free umbrella/core/Explorer install contract. Resolve that
+policy explicitly before adding umbrella exposure.
 
 The paired visual audit at the same source SHA identified the four issues
 subsequently addressed in #228 and the compositing issue owned by #222.

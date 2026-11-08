@@ -45,7 +45,7 @@ beforeAll(() => {
   chart = result.packages.find((p) => p.name === '@prnt/dagr-chart');
   roots = new Map([...result.roots].filter(([name]) => name !== '@prnt/dagr-chart'));
   dispose = result.dispose;
-  // A tsc run for seven packages, seven packs and seven extractions. Explicit
+  // A build, pack and extraction for seven public packages plus chart. Explicit
   // rather than left to the default, because a default vitest timeout is not
   // a constant on a shared box (M4.8a).
 }, 300_000);
@@ -613,7 +613,6 @@ if (!control.includes("Cannot find package 'three'")) {
   );
 });
 
-
 describe('private chart release candidate', () => {
   it('packs resolved entries, source maps, CSS, consumer docs and the repository license', () => {
     expect(chart).toBeDefined();
@@ -627,5 +626,4 @@ describe('private chart release candidate', () => {
     const rendererManifest = JSON.parse(readFileSync(join(roots.get('@prnt/dagr-render')!, 'package.json'), 'utf8'));
     expect(candidate.manifest.dependencies?.['@prnt/dagr-render']).toBe(`^${rendererManifest.version}`);
   });
-
 });

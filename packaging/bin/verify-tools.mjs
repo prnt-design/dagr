@@ -10,6 +10,8 @@
  * 4. Two Explorer consumers from `fixtures/explorer`, on React 18 and 19 and
  *    without three: SSR, hydration, cleanup and the core pinch and
  *    visible-frame APIs.
+ * 5. The private chart candidate: installed NodeNext types, layout, SVG SSR
+ *    and CSS, with its required GPU dependencies present.
  *
  * The vitest suite beside this is the gate: it runs on every `pnpm test`, needs
  * no registry, and checks the things that go wrong silently. This script is the
@@ -20,13 +22,13 @@
  *
  * WHY THE PROFILE IS `esm-only` AND NOT THE DEFAULT `strict`. Every one of these
  * packages is `"type": "module"` with no CommonJS build, on purpose. Under
- * `strict`, attw reports `CJSResolvesToESM` on all seven, which is not a defect:
+ * `strict`, attw reports `CJSResolvesToESM` on these packages, which is not a defect:
  * it is the accurate description of an ESM-only package, and the profile exists
  * to say so. If a CommonJS build is ever added, this profile is the line that
  * has to change.
  *
- * WHY `./styles.css` IS EXCLUDED. The explorer exports its stylesheet as
- * `@prnt/dagr-explorer/styles.css`. A CSS file has no JavaScript and no type
+ * WHY `./styles.css` IS EXCLUDED. Explorer and chart export stylesheets as
+ * `./styles.css`. A CSS file has no JavaScript and no type
  * declarations, so attw reports `NoResolution` for that entry point under every
  * resolution mode. That is a false positive for a stylesheet, and the packaging
  * test already checks that the file is in the tarball. Only that one entry
