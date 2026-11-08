@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+- Forward renderer pinch/visible-frame and GPU picking APIs, React edge
+  interaction and opt-in GPU hit testing, and Explorer outline/map modes and
+  mobile framing fixes through the existing subpaths. See each scoped
+  package's changelog for behavior and compatibility notes.
+- Proposed next version: 0.2.0, pending maintainer approval. The expanded hit
+  target union and required renderer/Explorer interface members need consumer
+  migration. Chart remains private and is not exposed by this umbrella.
+  See [release candidate](../../packaging/release-candidate.md).
+
 ## 0.1.4
 
 - `@prnt/dagr/explorer` forwards `@prnt/dagr-explorer` 0.1.4: a camera that frames the part of the graph the open drawer leaves uncovered, `api.focusViewport()`, connections that follow their edge, and icon buttons. Its changelog lists what to change when upgrading from 0.1.3.

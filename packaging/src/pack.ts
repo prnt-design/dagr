@@ -47,17 +47,18 @@ export const REPO_ROOT = fileURLToPath(new URL('../..', import.meta.url));
  *
  * The caller owns the returned directory and must `dispose()` it.
  */
-export function packPublishedPackages(): {
+export function packPublishedPackages(additionalPackages: readonly string[] = []): {
   packages: PackedPackage[];
   roots: ReadonlyMap<string, string>;
   dispose: () => void;
 } {
+  const packageNames = [...PUBLISHED_PACKAGES, ...additionalPackages];
   const workDir = mkdtempSync(join(tmpdir(), 'dagr-packaging-'));
   try {
     run(
       'pnpm',
       [
-        ...PUBLISHED_PACKAGES.flatMap((p) => [
+        ...packageNames.flatMap((p) => [
           '--filter',
           p === 'dagr' ? '@prnt/dagr' : `@prnt/dagr-${p}`,
         ]),
@@ -67,7 +68,7 @@ export function packPublishedPackages(): {
     );
 
     const roots = new Map<string, string>();
-    const packages = PUBLISHED_PACKAGES.map((name) => {
+    const packages = packageNames.map((name) => {
       const packageDir = join(REPO_ROOT, 'packages', name);
       const tarball = run('pnpm', ['pack', '--pack-destination', workDir], packageDir).trim().split('\n').pop();
       if (tarball === undefined || tarball === '') {

@@ -42,7 +42,7 @@ import { basename, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const REPO_ROOT = fileURLToPath(new URL('../..', import.meta.url));
-const PACKAGES = ['graph', 'layout', 'render', 'explorer', 'react', 'vdsl', 'dagr'];
+const PACKAGES = ['graph', 'layout', 'render', 'explorer', 'react', 'vdsl', 'dagr', 'chart'];
 
 const workDir = mkdtempSync(join(tmpdir(), 'dagr-verify-'));
 let failures = 0;
@@ -319,6 +319,22 @@ try {
   );
   run('npx', ['tsc', '--noEmit'], scratch, 'tsc over scoped and umbrella public package surfaces');
   run('node', ['smoke.mjs'], scratch, 'headless scoped and umbrella graph, layout, VDSL, render, explorer, and React smoke');
+  console.log('\nInstalled chart candidate (still private):');
+  const chartConsumer = join(workDir, 'chart-consumer');
+  mkdirSync(chartConsumer);
+  writeFileSync(join(chartConsumer, 'package.json'), JSON.stringify({ private: true, type: 'module' }));
+  for (const file of ['consumer.tsx', 'smoke.mjs', 'tsconfig.json']) {
+    copyFileSync(join(REPO_ROOT, 'packaging/fixtures/chart', file), join(chartConsumer, file));
+  }
+  if (run('npm', [
+    'install', '--no-audit', '--no-fund', '--ignore-scripts',
+    ...tarballs, 'react@19.2.8', 'react-dom@19.2.8',
+    'three@0.185.1', '@types/three@0.185.0', '@types/react@19', '@types/react-dom@19', 'typescript@5.9.3',
+  ], chartConsumer, 'chart packed install with renderer and required peers')) {
+    run('npx', ['tsc', '--noEmit'], chartConsumer, 'chart NodeNext types without skipLibCheck');
+    run('node', ['smoke.mjs'], chartConsumer, 'chart public layout, SVG SSR, CSS and umbrella exclusion');
+  }
+
   console.log('\nInstalled Explorer SSR/hydration and teardown, without three:');
   for (const version of ['18.3.1', '19.2.8']) {
     const major = version.split('.')[0];

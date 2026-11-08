@@ -35,13 +35,15 @@ import {
 import { PUBLISHED_PACKAGES, REPO_ROOT, packPublishedPackages } from '../src/pack.js';
 
 let packed: PackedPackage[] = [];
+let chart: PackedPackage | undefined;
 let roots: ReadonlyMap<string, string> = new Map();
 let dispose = () => {};
 
 beforeAll(() => {
-  const result = packPublishedPackages();
-  packed = result.packages;
-  roots = result.roots;
+  const result = packPublishedPackages(['chart']);
+  packed = result.packages.filter((p) => p.name !== '@prnt/dagr-chart');
+  chart = result.packages.find((p) => p.name === '@prnt/dagr-chart');
+  roots = new Map([...result.roots].filter(([name]) => name !== '@prnt/dagr-chart'));
   dispose = result.dispose;
   // A tsc run for seven packages, seven packs and seven extractions. Explicit
   // rather than left to the default, because a default vitest timeout is not
@@ -609,4 +611,21 @@ if (!control.includes("Cannot find package 'three'")) {
     // An external install and a node process, as the smoke above is.
     30_000,
   );
+});
+
+
+describe('private chart release candidate', () => {
+  it('packs resolved entries, source maps, CSS, consumer docs and the repository license', () => {
+    expect(chart).toBeDefined();
+    const candidate = chart!;
+    expect(workspaceRanges(candidate.manifest)).toEqual([]);
+    expect(unresolvedEntryPoints(candidate)).toEqual([]);
+    expect(danglingSourceMaps(candidate)).toEqual([]);
+    expect(missingConsumerFiles(candidate)).toEqual([]);
+    expect(candidate.text('LICENSE')).toBe(readFileSync(join(REPO_ROOT, 'LICENSE'), 'utf8'));
+    expect(candidate.text('styles.css')).toContain('.dagr-chart');
+    const rendererManifest = JSON.parse(readFileSync(join(roots.get('@prnt/dagr-render')!, 'package.json'), 'utf8'));
+    expect(candidate.manifest.dependencies?.['@prnt/dagr-render']).toBe(`^${rendererManifest.version}`);
+  });
+
 });
