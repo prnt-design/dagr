@@ -75,8 +75,10 @@ are removed even when a check fails.
 For an application evaluating unreleased APIs, use these locally packed
 artifacts and install the matching graph/layout/render/Explorer tarballs
 together. Installing only one source tarball can resolve its sibling version
-ranges to registry 0.1.4. A source manifest saying 0.1.4 does not mean that
-source implementation was published.
+ranges through the registry. The approved candidate now uses 0.2.0 sibling
+ranges, which cannot fall back to 0.1.4; before publication, an incomplete
+local set can fail to install. Install the complete matching set. A local
+version does not establish published availability.
 
 ## Registry and source inventory
 
@@ -95,13 +97,13 @@ checks below. Publication remains a maintainer action.
 | Visible frame (adapters) | Explorer frames around its drawer and a host `inset`; no visual-viewport framing | Explorer and `DagrCanvas` frame in what the visual viewport leaves; `DagrCanvas` adds an `inset` prop; a `fit()`/`focusNode` flight retargets on a frame change |
 | Compact Explorer details | Published details implementation has no compact docking | Bottom docking below 720 CSS pixels, 44px primary controls, 16px search input |
 | Touch adapters | Earlier independent input handling; capture-transfer bug reproduced in Chromium | Shared pinch/contact lifecycle; capture-transfer fix merged in #196 |
-| Renderer and React fixes | See released changelogs | GPU node picking, edge retarget/empty-edge fixes, edge interaction and GPU hit-testing bindings in package Unreleased sections |
+| Renderer and React fixes | See released changelogs | GPU node picking, edge retarget/empty-edge fixes, edge interaction and GPU hit-testing bindings in package 0.2.0 sections |
 
 The package changelogs are the complete release-note inputs, including
 [renderer](../packages/render/CHANGELOG.md),
 [React](../packages/react/CHANGELOG.md), and
 [Explorer](../packages/explorer/CHANGELOG.md). This table is a bounded adoption
-inventory, not a substitute for reviewing every Unreleased section at release.
+inventory, not a substitute for reviewing the final package changelogs.
 
 ## Evidence and remaining validation
 
@@ -117,7 +119,8 @@ inventory, not a substitute for reviewing every Unreleased section at release.
 
 Before release, rerun the packed-artifact fixture and required gates on the
 final tree. Record diff/tree review resolutions, a passing five-command local
-gate and concluded green CI for that head. The maintainer must choose the
-release version, inspect the final changelogs and publish; no version or
-publish configuration is changed by this increment. Keep device and occlusion
-rows unverified until measured.
+gate and concluded green CI for that head. Nii has approved the seven-package 0.2.0 version patch, now applied in source;
+inspect the [final migration guide](migration-0.2.0.md) and release handoff
+before separately authorizing publication. This historical onboarding fixture
+does not publish packages. Keep device and occlusion rows unverified until
+measured.
