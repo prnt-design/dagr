@@ -1,6 +1,8 @@
 # @prnt/dagr-explorer
 
-## Unreleased
+## 0.2.0
+
+- Compatibility: complete `ExplorerLabels` values need `outline`, `presentation`, `mapMode` and `outlineMode`. Partial overrides still inherit defaults.
 
 - `DagrExplorer` lets the reader choose the map or an outline of the same
   nodes, at any width, with a Map and an Outline button. `mode`,

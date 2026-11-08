@@ -1,15 +1,16 @@
 # Changelog
 
-## Unreleased
+## 0.2.0
 
 - Forward renderer pinch/visible-frame and GPU picking APIs, React edge
   interaction and opt-in GPU hit testing, and Explorer outline/map modes and
   mobile framing fixes through the existing subpaths. See each scoped
   package's changelog for behavior and compatibility notes.
-- Proposed next version: 0.2.0, pending maintainer approval. The expanded hit
+- Coordinated version: 0.2.0. The expanded hit
   target union and required renderer/Explorer interface members need consumer
   migration. Chart remains private and is not exposed by this umbrella.
-  See [release candidate](../../packaging/release-candidate.md).
+  See [release candidate](../../packaging/release-candidate.md) and
+  [migration guide](../../packaging/migration-0.2.0.md).
 
 ## 0.1.4
 
