@@ -12,9 +12,11 @@ import {
   searchText,
 } from './model';
 import styles from './styles.module.css';
+import { useFrameworkPresentation } from './useFrameworkPresentation';
 
 export default function FrameworkMap() {
   useBrokenLinks().collectAnchor('framework-map');
+  const { hostRef, mode, chooseMode } = useFrameworkPresentation();
   return (
     <section
       id="framework-map"
@@ -47,10 +49,12 @@ export default function FrameworkMap() {
           </li>
         ))}
       </ul>
-      <div className={styles.explorer}>
+      <div ref={hostRef} className={styles.explorer}>
         <DagrExplorer
           label="Dagr framework packages and features"
           views={frameworkViews}
+          mode={mode}
+          onModeChange={chooseMode}
           strictGroups
           searchText={searchText}
           renderViews={({ views, activeView, selectView }) => (
