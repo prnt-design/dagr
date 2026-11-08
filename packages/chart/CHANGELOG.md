@@ -6,7 +6,8 @@
   extrema. Measure category labels and tooltip content for collision avoidance
   and containment. Shrink dense bar gaps and widths within category bands.
 
-- New package, private until it joins the packaging checks and the umbrella.
+- New package, still private. Packed-artifact checks now cover it; public
+  configuration and umbrella exposure remain pending.
   `DagrChart` draws bar and line series over a category axis with
   `@prnt/dagr-render`: one or two y-axes scaled by `d3-scale`, marks matched
   across renders by id so a change glides, grows in or shrinks out on the

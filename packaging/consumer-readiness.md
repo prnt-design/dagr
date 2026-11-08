@@ -1,3 +1,8 @@
+Current release preparation and compatibility decisions are recorded in
+[the release candidate](release-candidate.md). The 2026-11-02 evidence below
+remains historical; #203 is now merged and chart has additional packed checks.
+No real-device certification is implied.
+
 # External consumer onboarding and release handoff
 
 Evidence checked on 2026-11-02 against main 7774b6d. This is readiness work
