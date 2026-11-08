@@ -9,8 +9,8 @@
 - Coordinated version: 0.2.0. The expanded hit
   target union and required renderer/Explorer interface members need consumer
   migration. Chart remains private and is not exposed by this umbrella.
-  See [release candidate](../../packaging/release-candidate.md) and
-  [migration guide](../../packaging/migration-0.2.0.md).
+  See [release candidate](https://github.com/prnt-design/dagr/blob/main/packaging/release-candidate.md) and
+  [migration guide](https://github.com/prnt-design/dagr/blob/main/packaging/migration-0.2.0.md).
 
 ## 0.1.4
 
