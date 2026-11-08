@@ -118,4 +118,3 @@ switches. Compact details and visual-viewport camera framing intentionally
 change layout/navigation behavior; retain the documented device limitations.
 React 18 applications still use scoped Explorer; umbrella and React canvas
 remain React 19 surfaces.
-
