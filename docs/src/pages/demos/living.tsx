@@ -26,8 +26,8 @@ export default function LivingDemoPage(): ReactNode {
             <Link to="/docs/incremental-layout">
               measurements and limitations
             </Link>
-            , or return <Link to="/#system-atlas">to the system atlas</Link> to explore the
-            architecture.
+            , or return <Link to="/#framework-map">to the framework map</Link> to explore the
+            framework.
           </p>
         </header>
         <LivingDemo />
