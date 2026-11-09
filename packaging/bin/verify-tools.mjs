@@ -1,12 +1,17 @@
 #!/usr/bin/env node
 /**
- * The three checks `pnpm test` deliberately cannot run, because each of them
- * needs the network.
+ * The checks `pnpm test` deliberately cannot run, because each of them needs
+ * the network.
  *
  * 1. `publint` over every tarball.
  * 2. `arethetypeswrong` over every tarball, under the `esm-only` profile.
  * 3. A scratch project OUTSIDE the workspace that installs all seven tarballs,
  *    typechecks their public surfaces, and runs a headless runtime smoke.
+ * 4. Two Explorer consumers from `fixtures/explorer`, on React 18 and 19 and
+ *    without three: SSR, hydration, cleanup and the core pinch and
+ *    visible-frame APIs.
+ * 5. The private chart candidate: installed NodeNext types, layout, SVG SSR
+ *    and CSS, with its required GPU dependencies present.
  *
  * The vitest suite beside this is the gate: it runs on every `pnpm test`, needs
  * no registry, and checks the things that go wrong silently. This script is the
@@ -17,13 +22,13 @@
  *
  * WHY THE PROFILE IS `esm-only` AND NOT THE DEFAULT `strict`. Every one of these
  * packages is `"type": "module"` with no CommonJS build, on purpose. Under
- * `strict`, attw reports `CJSResolvesToESM` on all seven, which is not a defect:
+ * `strict`, attw reports `CJSResolvesToESM` on these packages, which is not a defect:
  * it is the accurate description of an ESM-only package, and the profile exists
  * to say so. If a CommonJS build is ever added, this profile is the line that
  * has to change.
  *
- * WHY `./styles.css` IS EXCLUDED. The explorer exports its stylesheet as
- * `@prnt/dagr-explorer/styles.css`. A CSS file has no JavaScript and no type
+ * WHY `./styles.css` IS EXCLUDED. Explorer and chart export stylesheets as
+ * `./styles.css`. A CSS file has no JavaScript and no type
  * declarations, so attw reports `NoResolution` for that entry point under every
  * resolution mode. That is a false positive for a stylesheet, and the packaging
  * test already checks that the file is in the tarball. Only that one entry
@@ -33,20 +38,24 @@
  */
 
 import { execFileSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { copyFileSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { basename, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const REPO_ROOT = fileURLToPath(new URL('../..', import.meta.url));
-const PACKAGES = ['graph', 'layout', 'render', 'explorer', 'react', 'vdsl', 'dagr'];
+const PACKAGES = ['graph', 'layout', 'render', 'explorer', 'react', 'vdsl', 'dagr', 'chart'];
 
 const workDir = mkdtempSync(join(tmpdir(), 'dagr-verify-'));
 let failures = 0;
 
 function run(command, args, cwd, label) {
   try {
-    execFileSync(command, args, { cwd, stdio: 'pipe', encoding: 'utf8' });
+    execFileSync(command, args, {
+      cwd, stdio: 'pipe', encoding: 'utf8',
+      // pnpm's shim can expose workspace dependencies to scratch consumers.
+      env: Object.fromEntries(Object.entries(process.env).filter(([key]) => key !== 'NODE_PATH')),
+    });
     console.log(`  PASS  ${label}`);
     return true;
   } catch (error) {
@@ -312,6 +321,41 @@ try {
   );
   run('npx', ['tsc', '--noEmit'], scratch, 'tsc over scoped and umbrella public package surfaces');
   run('node', ['smoke.mjs'], scratch, 'headless scoped and umbrella graph, layout, VDSL, render, explorer, and React smoke');
+  console.log('\nInstalled chart candidate (still private):');
+  const chartConsumer = join(workDir, 'chart-consumer');
+  mkdirSync(chartConsumer);
+  writeFileSync(join(chartConsumer, 'package.json'), JSON.stringify({ private: true, type: 'module' }));
+  for (const file of ['consumer.tsx', 'smoke.mjs', 'tsconfig.json']) {
+    copyFileSync(join(REPO_ROOT, 'packaging/fixtures/chart', file), join(chartConsumer, file));
+  }
+  if (run('npm', [
+    'install', '--no-audit', '--no-fund', '--ignore-scripts',
+    ...tarballs, 'react@19.2.8', 'react-dom@19.2.8',
+    'three@0.185.1', '@types/three@0.185.0', '@types/react@19', '@types/react-dom@19', 'typescript@5.9.3',
+  ], chartConsumer, 'chart packed install with renderer and required peers')) {
+    run('npx', ['tsc', '--noEmit'], chartConsumer, 'chart NodeNext types without skipLibCheck');
+    run('node', ['smoke.mjs'], chartConsumer, 'chart public layout, SVG SSR, CSS and umbrella exclusion');
+  }
+
+  console.log('\nInstalled Explorer SSR/hydration and teardown, without three:');
+  for (const version of ['18.3.1', '19.2.8']) {
+    const major = version.split('.')[0];
+    const consumer = join(workDir, `explorer-react-${major}`);
+    mkdirSync(consumer);
+    writeFileSync(join(consumer, 'package.json'), JSON.stringify({ private: true, type: 'module' }));
+    for (const file of ['server.mjs', 'client.mjs', 'consumer.tsx', 'tsconfig.json']) {
+      copyFileSync(join(REPO_ROOT, 'packaging/fixtures/explorer', file), join(consumer, file));
+    }
+    if (run('npm', [
+      'install', '--no-audit', '--no-fund', '--ignore-scripts', '--omit=optional',
+      graphTarball, layoutTarball, renderTarball, explorerTarball,
+      `react@${version}`, `react-dom@${version}`, 'jsdom@30.0.1',
+      `@types/react@${major}`, `@types/react-dom@${major}`, 'typescript@5.9.3',
+    ], consumer, `Explorer React ${major} public peers install`)) {
+      run('npx', ['tsc', '--noEmit'], consumer, `Explorer React ${major} NodeNext types without three or skipLibCheck`);
+      run('node', ['client.mjs', major], consumer, `Explorer React ${major} SSR, hydration, CSS, pinch, visible frame and cleanup`);
+    }
+  }
 } finally {
   rmSync(workDir, { recursive: true, force: true });
 }

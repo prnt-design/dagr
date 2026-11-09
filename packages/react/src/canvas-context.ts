@@ -36,7 +36,7 @@ export interface FitOptions {
 
 /** Options for {@link DagrCanvasApi.focusNode}. */
 export interface FocusNodeOptions extends FitOptions {
-  /** CSS pixels per world unit to end at, clamped by the camera's limits. Default: the node fills about half the viewport. */
+  /** CSS pixels per world unit to end at, clamped by the camera's limits. Default: the node fills about half the frame `inset` leaves. */
   readonly zoom?: number | undefined;
 }
 

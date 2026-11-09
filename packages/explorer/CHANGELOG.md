@@ -2,6 +2,40 @@
 
 ## Unreleased
 
+- `DagrExplorer` lets the reader choose the map or an outline of the same
+  nodes, at any width, with a Map and an Outline button. `mode`,
+  `defaultMode` and `onModeChange` control it, and new labels
+  `presentation`, `mapMode` and `outlineMode` name it. Selection, the
+  query, trace and the drawer carry across a switch; the map stays mounted
+  and hidden behind the outline, so it keeps its camera and leaves the tab
+  order. The map's stage, hint and toolbar now sit in a `display: contents`
+  wrapper, so they stay the root's flex items. Over the outline, the
+  drawer leaves the list room to scroll clear of it, and choosing an item
+  scrolls it into view. Focus in the presentation that leaves moves to the
+  same node in the other. A drawer closing returns focus to the same
+  node's control when its opener is now hidden.
+- New part, `ExplorerOutline`: the active view's nodes as a list, a second
+  way to read the graph on the root's own selection, query, trace and
+  drawer. Choosing an item inspects its node, pans a graph beside it to
+  bring the node into view, and closing the drawer returns focus to it.
+  One tab stop, moved with the up and down arrows, `Home` and `End`. A new
+  label, `outline`, names the list, and the stylesheet styles it.
+  Items are named as the map names its nodes by default, with the groups
+  each node is in. `ExplorerOutline` takes `nodeAriaLabel`, as
+  `ExplorerViewport` does, and `DagrExplorer` passes its `nodeAriaLabel` to
+  both, so a host's names reach the outline items. A focus or selection
+  move re-renders only the items it changes.
+- The camera frames what the visual viewport leaves, observing its resize
+  and scroll. Fit, focus and reveal avoid an area the visual viewport no
+  longer shows, such as one a software keyboard covers without resizing the
+  page. A shrinking visual viewport keeps the camera's scale (unless the
+  smaller frame lowers the most it may zoom) and reveals the
+  selected node if it covered it; a camera fitted while it was short fills
+  the frame again when it grows back. Page pinch-zoom does not shrink the
+  graph. Tested in jsdom and headless Chromium emulation
+  (`bench/browser/visible-frame-check.mjs`), not yet on an iOS or Android
+  device or with a software keyboard.
+- Keep a touch pan or pinch active when a node hands implicit pointer capture to the viewport. This also fixes the unfiltered capture-loss handling shipped in 0.1.3 and 0.1.4.
 - Use the shared renderer-core touch gesture for pinch geometry/contact lifecycle, retaining Explorer focus-gated scrolling, camera constraints and click suppression.
 - Details dock below the map in containers narrower than 720 CSS pixels,
   leaving at least half the graph visible. An entirely offscreen compact

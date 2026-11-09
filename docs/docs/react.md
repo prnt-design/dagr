@@ -583,8 +583,9 @@ At most one pick is in flight; a query arriving meanwhile is answered stale and
 never picked later, since the camera may have moved by then, so re-query the
 resting pointer from `onPicked`. The pick is exact to the device pixel under the
 pointer and has none of the CPU index's touch tolerance. `DagrCanvas` wires
-this provider in behind `hitTesting="gpu"` (next section); what it costs on a
-device is the next M4.8b step.
+this provider in behind `hitTesting="gpu"` (next section). At 10,000 nodes a
+pick took about 0.1 to 0.2 ms of CPU on one device, on WebGPU (see
+`bench/browser/README.md`, "What a pick costs a frame").
 
 ## Navigation, node events and camera control
 
@@ -623,8 +624,11 @@ scrolls the page and the camera moves only with two fingers. In that mode the
 browser can still claim a two-finger gesture that starts as a scroll, so pinch
 is dependable when both fingers land before either moves; test it on your
 target devices, which nothing here has. A second finger never takes over an
-active single-pointer gesture. `maxPixelRatio` (try `2`) caps the render
-resolution, which matters on 3x phones and large displays; the canvas also
+active single-pointer gesture. `maxPixelRatio` (for example `2`) caps the
+render resolution and so the drawing buffer. Software WebGL2 drew slower at a
+larger buffer and an RTX 4090 did not; no phone has been measured, so measure
+on your target devices (`bench/browser/README.md`, "Mobile pixel-ratio
+budget"). The canvas also
 resizes when the browser's ratio changes.
 
 **Tolerance.** A hit that lands inside no silhouette falls back to the nearest
@@ -707,7 +711,8 @@ back, one at a time, until the drawing rests. Hover primes the picks, so
 index, touch with its fingertip tolerance, since a tap, or a pen that does not
 report hover, has nothing picked before it. A renderer rebuilt after a lost
 context starts with no picks rather than answering from the lost one's. The
-default stays `'cpu'` until M4.8b prices the pass on a device.
+default stays `'cpu'` because of the ignored presses and clicks, not the pass's
+cost.
 
 **Camera control.** `apiRef` (and `useDagrCanvas()` inside the canvas) gives the
 methods below. It is `apiRef` rather than `ref` on purpose: `ref` on a React
@@ -718,7 +723,7 @@ drawing's frame budget.
 
 | Method | Does |
 | --- | --- |
-| `focusNode(id, { zoom?, durationMs? })` | Flies to centre the node. Default zoom makes the node fill about half the viewport. Returns `false` and moves nothing for an unknown id or an unsized canvas. |
+| `focusNode(id, { zoom?, durationMs? })` | Flies to centre the node. Default zoom makes the node fill about half the frame `inset` leaves. Returns `false` and moves nothing for an unknown id or an unsized canvas. |
 | `fit({ durationMs? })` | Flies back to the whole graph, including group boundaries, with `fitPadding`. Returns `false`, moving nothing, before there is a layout and a size. |
 
 Flights take 450 ms (zoom is interpolated geometrically, so it feels even) and
@@ -864,12 +869,16 @@ data and not the only way to reach it.
 
 ## What is not here yet
 
-- **Edge, port and GPU hits.** Exact CPU node hits ship with `DagrCanvas`.
+- **Port hits (edges stay on the CPU).** Exact CPU node hits ship with `DagrCanvas`.
   Ports are M6.3a. GPU node picks are opt-in through `hitTesting="gpu"`
   (M4.8b), priced on one device at about 0.1 to 0.2 ms of CPU per pick. Edge
   hits on `DagrCanvas` are CPU only. At 10,000 nodes a query takes 0.2 ms
   or less, but rebuilding the index while edges glide took 2 ms at one
-  segment per edge and 12 to 14 ms at three, on one device (see
+  segment per edge and 12 to 14 ms at three, on one device. A cheaper build
+  since takes 1.8 ms at one segment per edge and 4.8 to 4.9 ms at three on
+  the same device. Paid every frame at three, it still misses ticks, but
+  `DagrCanvas` pays it only on a click's frame and at most one hover frame in
+  six while edges glide, so edges stay on the CPU (see
   `bench/browser/README.md`, "What an edge hit costs a frame").
 - **A React tier helper.** Tiers are DOM elements. Rendering React into them is
   possible by hand and not wrapped.
@@ -888,8 +897,29 @@ graph, including group labels and padding. The maximum fits a single node with
 5% margin (or `fitPadding`); for mixed node sizes the smallest fitting node sets
 the ceiling. Panning stays within the padded content bounds and keeps part of an actual node
 visible, including in sparse graphs. An axis smaller
-than the viewport stays centered. Limits follow resizing, layout changes, and
+than the frame stays centered. Limits follow resizing, layout changes, and
 animated bounds without resetting a valid close-up.
+
+`inset={{ right: 320 }}` tells the canvas that something drawn over it covers
+that much of a side, such as a details drawer or a toolbar. The first fit,
+`fit()`, `focusNode` and these limits then frame the rest, so the graph is not
+fitted under the drawer. An inset that would leave less than 160 CSS pixels of
+width (120 of height), or less than a quarter of that axis, is ignored on that
+axis. Keyboard zoom anchors at the frame's centre. Drawing and hit testing
+still cover the whole canvas, and changing the inset keeps a camera at rest,
+only re-clamping it. A `fit()` or `focusNode` flight still under way works its
+target out again in the new frame and lands when it would have, so a handler
+that opens a drawer, passes it as `inset` and calls `focusNode` ends with the
+node in the middle of what the drawer leaves. One that lands at once
+(`durationMs: 0`, or any flight under `prefers-reduced-motion: reduce`) has
+nothing left to retarget, so calling it once the new inset has rendered, for
+example from an effect, is the pattern that works for everyone. A flight under way retargets the same way when the canvas resizes.
+
+The canvas also observes the visual viewport and leaves out what it hides of
+the canvas beyond the layout viewport, such as the part of the page a software
+keyboard covers without resizing it, taking the larger of that and `inset` on
+each side. It too keeps the camera, and the page's own pinch-zoom takes
+nothing off. See the [mobile guide](./mobile.md#visible-frame-contract).
 
 `fit={false}` only skips the initial fit. Use `cameraLimits={false}` to opt out
 of content constraints when implementing a custom camera policy. Low-level
@@ -921,7 +951,9 @@ to avoid smoothing them twice.
 
 `DagrCanvas` and Explorer consume the same three.js-free pinch primitive.
 The first two touches remain the active pair when an extra finger arrives;
-cancellation/lost capture ends the pair, and coincident fingers pan without a
-zoom spike. Existing `touchNavigation` modes and their browser-scroll tradeoffs
+cancellation ends the pair, and so does lost capture on the surface itself
+(a child element such as the `<canvas>` losing a touch's implicit capture is a
+handover, so the pinch continues). Coincident fingers pan without a zoom
+spike. Existing `touchNavigation` modes and their browser-scroll tradeoffs
 remain unchanged. See [Mobile architecture](./mobile.md) for the public core
 API, layer boundaries and remaining viewport/device validation work.

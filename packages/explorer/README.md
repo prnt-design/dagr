@@ -55,6 +55,21 @@ The node type is inferred from your data, so `renderNode` above sees `team`.
 `maxOverlayNodes`, `base`, `nodeAriaLabel`, `inset` and `contentPadding`,
 which it forwards to the parts.
 
+**Map or outline, at any width.** `DagrExplorer` shows a Map and an Outline
+button, and the outline is `ExplorerOutline` in a pane the height of the
+graph. `mode` (`'map'` or `'outline'`) is controllable, with `defaultMode`
+and `onModeChange`. The selection, the query, trace and the drawer carry
+across a switch. The map stays mounted, hidden, while the outline shows, so
+it keeps its camera through the switch and a resize or a turn while hidden
+(a node chosen in the outline is revealed on it),
+and it leaves the tab order; the toolbar is hidden with it. Over the
+outline, the drawer leaves the list room to scroll its items clear, and the
+list keeps its scroll position while the map shows, unless focus moving to
+a node needs that node in view. The drawer keeps its scroll position, and
+focus in it stays on the same control. Focus elsewhere in the presentation
+that leaves moves to the same node in the other, else to the other's tab
+stop; focus anywhere else stays where it is.
+
 ### The parts
 
 `DagrExplorer` is built only from these, with no private access, so a host
@@ -108,6 +123,7 @@ export function Architecture() {
 | `ExplorerTraceToggle` | trace on and off |
 | `ExplorerViewport` | the graph: pan and zoom, the SVG base, node elements for nodes large enough to read. Takes `renderNode`, `nodeAriaLabel`, `tiers`, `maxOverlayNodes`, `base`, `inset`, `contentPadding`. Its children, such as `ExplorerDetails`, share a positioned stage with the graph, and the graph's hint comes after the stage, where an overlay cannot cover it |
 | `ExplorerDetails` | the drawer: an overlay with a close button and a scrolling body. Children `({ node, connections, inspect, follow })` replace the body, and `renderConnection(edge, otherNode, direction)` draws one connection in the default body, given `'to'`, `'from'` or `'self'` |
+| `ExplorerOutline` | the active view's nodes as a list of buttons in data order, on the same selection, query, trace and drawer as the graph. One tab stop; the up and down arrows, `Home` and `End` move between items. Takes `nodeAriaLabel`, as the viewport does. Not virtualized |
 | `ExplorerToolbar` | zoom out, the zoom readout, zoom in, fit, and zoom to the selected node. Zoom out, zoom in, fit and the drawer's close button are icons, named and titled by their labels |
 
 Every part takes `className` and `style`, and your `style` wins over the
@@ -243,6 +259,11 @@ With a node focused:
 With the surface focused, the arrow keys pan. In both cases `+` and `=` zoom
 in, `-` zooms out and `0` fits. `Escape` closes the drawer if it is open,
 and otherwise leaves the graph. A key with `Ctrl`, `Command` or `Alt` is left to the browser.
+
+Every camera move but a drag or a pinch eases to where it is going: keys,
+the wheel, search, the drawer opening or closing, and the `fit`, `zoomBy`,
+`focusNode` and `reveal` methods. Under `prefers-reduced-motion: reduce` it
+lands there at once. A drag or a pinch follows the pointer either way.
 
 A node that takes focus from the keyboard is brought into view by the
 least pan, at the current zoom. A node you click is not moved to.

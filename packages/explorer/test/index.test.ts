@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import * as api from '../src/index.js';
 import type {
+  DagrExplorerMode,
   DagrExplorerProps,
   ExplorerApi,
   ExplorerBase,
@@ -15,6 +16,7 @@ import type {
   ExplorerEmphasis,
   ExplorerLabels,
   ExplorerNode,
+  ExplorerOutlineProps,
   ExplorerRootProps,
   ExplorerSearchProps,
   ExplorerState,
@@ -46,6 +48,7 @@ describe('@prnt/dagr-explorer', () => {
         'ExplorerContextError',
         'ExplorerDataError',
         'ExplorerDetails',
+        'ExplorerOutline',
         'ExplorerRoot',
         'ExplorerSearch',
         'ExplorerToolbar',
@@ -66,6 +69,7 @@ describe('@prnt/dagr-explorer', () => {
 
   it('exports the public types', () => {
     type Exported = [
+      DagrExplorerMode,
       DagrExplorerProps,
       ExplorerApi,
       ExplorerBase,
@@ -78,6 +82,7 @@ describe('@prnt/dagr-explorer', () => {
       ExplorerDetailsProps,
       ExplorerEmphasis,
       ExplorerLabels,
+      ExplorerOutlineProps,
       ExplorerRootProps,
       ExplorerSearchProps,
       ExplorerState,
@@ -90,8 +95,8 @@ describe('@prnt/dagr-explorer', () => {
       ExplorerViewsProps,
       ExplorerVisibleSet,
     ];
-    const count: Exported['length'] = 23;
-    expect(count).toBe(23);
+    const count: Exported['length'] = 25;
+    expect(count).toBe(25);
   });
 
   it('exports the camera and the visible set as the shapes the public api hands out', () => {

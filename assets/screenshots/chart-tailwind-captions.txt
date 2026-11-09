@@ -1,0 +1,25 @@
+Chart styling integration, 2026-11-05 UTC.
+
+Headless Playwright Chromium (chromium-1223), Tailwind CSS 4.3.4
+compiled by @tailwindcss/cli. Light and dark desktop views are 1000 x 620 CSS
+pixels, mobile views are 390 x 650. No browser page errors. Browser and Vite
+server were closed after capture. All browser processes ran inside a shared
+Dispatch compute window, separate from the exclusive benchmark gate.
+
+chart-tailwind-light.png: SVG bars and cumulative line, CSS-variable colours,
+Tailwind fonts, tooltip and shadow utilities. Tooltip is over January.
+chart-tailwind-dark.png: same chart after changing the ancestor data-theme
+attribute. Orders changes from sRGB #615fff to #7c86ff, converted from the
+Tailwind OKLCH tokens by the chart's colour binding.
+chart-tailwind-mobile.png: dark SVG at 390 px, with the tooltip clamped inside
+the viewport.
+chart-tailwind-webgl2.png: the same theme bindings and layout after switching
+to GPU mode. This host uses Chromium's software WebGL2 fallback, not hardware
+WebGPU. The capture proves drawing and mode switching, not GPU performance.
+
+The fixture imports DagrChart from its workspace package and styles.css before
+the generated Tailwind stylesheet. This ordering caught and verified the fix
+for preflight resetting component padding. The harness also asserted colour
+changes, font overrides, tooltip background and padding, mobile tooltip bounds,
+and absence of page errors. Unit tests cover renderer switching and disposal,
+shared SVG animation, DOM classes, stable mark elements and binding updates.

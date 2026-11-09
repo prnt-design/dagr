@@ -3,7 +3,8 @@
  * gestures, bound to a viewport element and the plane inside it.
  *
  * A port of the docs' `useGraphCamera` with its arithmetic taken out: every
- * camera this file holds comes from `camera.ts`. What is left here is time
+ * camera this file holds comes from `camera.ts`, and the frame it aims in
+ * from `visibleFrame` in `@prnt/dagr-render/core`. What is left here is time
  * (the frame loop), input (wheel, pointer, keys) and the DOM writes.
  *
  * **The camera never causes a React render.** A frame is one
@@ -28,28 +29,34 @@
  * fit is fitted again, so a user zoomed in on a node keeps it.
  *
  * **The camera frames what nothing covers.** The frame is the viewport less
- * the host's `inset` and the overlays registered as obstructions (the
- * drawer), measured on every resize of either. A frame that changes refits a
- * camera at fit, and otherwise keeps the camera and reveals the `keepInView`
- * box (the selected node) if the change covered it.
+ * the host's `inset`, the overlays registered as obstructions (the drawer)
+ * and what the visual viewport hides of it, measured on every resize of
+ * either and every resize or scroll of the visual viewport. A frame that
+ * changes refits a camera at fit, and otherwise keeps the camera and reveals
+ * the `keepInView` box (the selected node) if the change covered it. A change
+ * of the visual viewport alone never refits, so a keyboard opening or the
+ * page scrolling under it does not set the graph flying while the user
+ * types. A camera fitted while it was short still fills the frame when it
+ * grows back: the least the limits let it zoom is the fit. While the page is
+ * pinch-zoomed the visual viewport takes nothing off the frame, and a change
+ * of page zoom reveals nothing: a smaller frame would lower the most the
+ * camera may zoom, so magnifying the page would shrink the graph.
  *
  * Internal to the package. Nothing here is exported from the entry.
  */
 
 import { useEffect, useRef, useState } from 'react';
 import type { RefObject } from 'react';
-import { createPinchGesture } from '@prnt/dagr-render/core';
-import type { PinchDelta, Vec2 } from '@prnt/dagr-render/core';
+import { coverInset, createPinchGesture, visibleFrame, visualViewportInset } from '@prnt/dagr-render/core';
+import type { PinchDelta, ScreenRect, Vec2 } from '@prnt/dagr-render/core';
 import {
   CONTENT_PADDING,
-  cameraFrame,
   cameraSettled,
   createCameraLimits,
   easeCamera,
   fitCamera,
   focusCamera,
   frameCenter,
-  obstructionInset,
   panCamera,
   revealCamera,
   screenToWorld,
@@ -152,6 +159,8 @@ function createEngine(
     typeof window.matchMedia === 'function'
       ? window.matchMedia('(prefers-reduced-motion: reduce)')
       : null;
+  const visual = window.visualViewport ?? null;
+  let visualScale = visual?.scale ?? 1;
   let layout = initialLayout;
   let size: ExplorerViewportSize = { width: 0, height: 0 };
   // The part of the viewport nothing covers, which the camera frames.
@@ -268,30 +277,48 @@ function createEngine(
     aim(camera);
   };
 
-  /** What the registered obstructions cover, measured against the viewport's content box. */
-  const obstructed = (): ExplorerInset[] => {
-    const overlays = obstructions?.list() ?? [];
-    if (overlays.length === 0) return [];
+  /** The viewport's content box on screen. */
+  const contentBox = (): ScreenRect => {
     const box = viewport.getBoundingClientRect();
     const left = box.left + viewport.clientLeft;
     const top = box.top + viewport.clientTop;
-    const inner = { left, top, right: left + viewport.clientWidth, bottom: top + viewport.clientHeight };
-    return overlays.map((overlay) => obstructionInset(inner, overlay.getBoundingClientRect()));
+    return { left, top, right: left + viewport.clientWidth, bottom: top + viewport.clientHeight };
   };
 
-  /** `force` rebuilds the limits even when neither the size nor the frame changed. */
-  const measure = (force = false): void => {
+  /** What the registered obstructions and the visual viewport take off the content box. */
+  const obstructed = (): ExplorerInset[] => {
+    const overlays = obstructions?.list() ?? [];
+    if (overlays.length === 0 && visual === null) return [];
+    const inner = contentBox();
+    const insets = overlays.map((overlay) => coverInset(inner, overlay.getBoundingClientRect()));
+    if (visual !== null) {
+      // The page's own scroll is not observed, so `visualViewportInset`
+      // leaving out what the layout viewport hides also keeps the frame from
+      // depending on when something else happened to measure.
+      const root = document.documentElement;
+      insets.push(visualViewportInset(inner, { width: root.clientWidth, height: root.clientHeight }, visual));
+    }
+    return insets;
+  };
+
+  /**
+   * `force` rebuilds the limits even when neither the size nor the frame
+   * changed. `visual` is a resize or scroll of the visual viewport.
+   */
+  const measure = (cause: 'resize' | 'force' | 'visual' = 'resize'): void => {
     if (disposed) return;
+    const pageZoomed = visual !== null && visual.scale !== visualScale;
+    if (visual !== null) visualScale = visual.scale;
     const width = viewport.clientWidth;
     const height = viewport.clientHeight;
     // A zero dimension is a hidden viewport, not a tiny one. Keeping the last
     // camera means showing it again needs no refit when the size comes back.
     if (!(width > 0) || !(height > 0)) return;
     const nextSize = { width, height };
-    const nextFrame = cameraFrame(nextSize, options.inset, ...obstructed());
+    const nextFrame = visibleFrame(nextSize, options.inset, ...obstructed());
     const resized = width !== size.width || height !== size.height;
     const uncovered = covered(nextFrame, nextSize) !== covered(area, size);
-    if (!force && !resized && !uncovered && limits !== null) return;
+    if (cause !== 'force' && !resized && !uncovered && limits !== null) return;
     const previous = size;
     const wasAtFit = atFit(limits, area);
     size = nextSize;
@@ -315,11 +342,11 @@ function createEngine(
     } else {
       framing = true;
     }
-    if (wasAtFit) {
+    if (wasAtFit && (resized || cause !== 'visual')) {
       aim(fitCamera(layout, area, bounds));
       return;
     }
-    const keep = uncovered ? keepInView() : null;
+    const keep = uncovered && !pageZoomed ? keepInView() : null;
     aim(keep !== null && isFiniteBox(keep) ? revealCamera(target, keep, area) : target);
   };
 
@@ -520,6 +547,11 @@ function createEngine(
     if (touches.up(event.pointerId) && pinching) endPinch();
   };
 
+  // A child handing its implicit capture to the viewport keeps the contact.
+  const onLostPointerCapture = (event: PointerEvent): void => {
+    if (event.target === viewport) onPointerEnd(event);
+  };
+
   const onClick = (event: MouseEvent): void => {
     // A click with no count came from a key or a script, never from a drag.
     if (!suppress || event.detail === 0) {
@@ -636,13 +668,16 @@ function createEngine(
 
   const observer = new ResizeObserver(() => measure());
   observer.observe(viewport);
+  const onVisualChange = (): void => measure('visual');
+  visual?.addEventListener('resize', onVisualChange);
+  visual?.addEventListener('scroll', onVisualChange);
   const unsubscribe = obstructions?.subscribe(observeObstructions);
   viewport.addEventListener('keydown', onKeyDown);
   viewport.addEventListener('pointerdown', onPointerDown);
   viewport.addEventListener('pointermove', onPointerMove);
   viewport.addEventListener('pointerup', onPointerEnd);
   viewport.addEventListener('pointercancel', onPointerEnd);
-  viewport.addEventListener('lostpointercapture', onPointerEnd);
+  viewport.addEventListener('lostpointercapture', onLostPointerCapture);
   // Capture, so a suppressed click is gone before any listener on the
   // viewport or below it sees it.
   viewport.addEventListener('click', onClick, true);
@@ -686,7 +721,7 @@ function createEngine(
         (['top', 'right', 'bottom', 'left'] as const).every((side) => next.inset[side] === options.inset[side]);
       if (disposed || same) return;
       options = next;
-      measure(true);
+      measure('force');
     },
     setLayout(next) {
       if (disposed || next === layout) return;
@@ -706,13 +741,15 @@ function createEngine(
       stop();
       unsubscribe?.();
       observer.disconnect();
+      visual?.removeEventListener('resize', onVisualChange);
+      visual?.removeEventListener('scroll', onVisualChange);
       listenForWheel(false);
       viewport.removeEventListener('keydown', onKeyDown);
       viewport.removeEventListener('pointerdown', onPointerDown);
       viewport.removeEventListener('pointermove', onPointerMove);
       viewport.removeEventListener('pointerup', onPointerEnd);
       viewport.removeEventListener('pointercancel', onPointerEnd);
-      viewport.removeEventListener('lostpointercapture', onPointerEnd);
+      viewport.removeEventListener('lostpointercapture', onLostPointerCapture);
       viewport.removeEventListener('click', onClick, true);
       viewport.removeEventListener('dblclick', onDoubleClick, true);
       viewport.removeEventListener('focusin', onFocusIn);

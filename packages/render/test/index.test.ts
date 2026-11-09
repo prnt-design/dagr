@@ -93,6 +93,8 @@ describe('@prnt/dagr-render', () => {
       'advanceDashFlow',
       'alignRoutes',
       'canvasPoint',
+      'clipInset',
+      'coverInset',
       'createBoundsMotion',
       'createEdgeMotion',
       'createHtmlOverlay',
@@ -113,6 +115,8 @@ describe('@prnt/dagr-render', () => {
       'shapeEdgePath',
       'stepSpring',
       'stepSpring2D',
+      'visibleFrame',
+      'visualViewportInset',
       'wheelZoomFactor',
     ]);
   });

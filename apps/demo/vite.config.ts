@@ -36,6 +36,11 @@ export default defineConfig({
       '@dagr/living-stage': fileURLToPath(
         new URL('../../packages/living-stage/src/index.ts', import.meta.url),
       ),
+      // The subpath before the bare name, for the reason given above.
+      '@prnt/dagr-chart/styles.css': fileURLToPath(
+        new URL('../../packages/chart/styles.css', import.meta.url),
+      ),
+      '@prnt/dagr-chart': fileURLToPath(new URL('../../packages/chart/src/index.ts', import.meta.url)),
       '@prnt/dagr-react': fileURLToPath(new URL('../../packages/react/src/index.ts', import.meta.url)),
       '@prnt/dagr-graph': fileURLToPath(new URL('../../packages/graph/src/index.ts', import.meta.url)),
       '@prnt/dagr-layout': fileURLToPath(new URL('../../packages/layout/src/index.ts', import.meta.url)),

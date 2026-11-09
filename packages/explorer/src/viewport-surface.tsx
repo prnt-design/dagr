@@ -49,6 +49,7 @@ import type { ExplorerCamera, ExplorerInset, ExplorerViewportSize } from './came
 import type { ExplorerBox, ExplorerLayout } from './layout.js';
 import { nearestInDirection } from './navigation.js';
 import type { ExplorerDirection } from './navigation.js';
+import { defaultNodeName, groupsByNode } from './node-name.js';
 import { useIsomorphicLayoutEffect } from './isomorphic-layout-effect.js';
 import { svgBase } from './svg-base.js';
 import type { ExplorerEdge, ExplorerGroup, ExplorerNode, ExplorerView } from './types.js';
@@ -159,14 +160,6 @@ function everythingAsMarks(index: LayoutIndex): ExplorerVisibleSet {
 }
 
 const IN_GROUP = (groupLabel: string): string => `in ${groupLabel}`;
-
-function defaultName(
-  node: ExplorerNode,
-  groups: readonly ExplorerGroup[],
-  inGroup: (groupLabel: string) => string,
-): string {
-  return [node.label, ...groups.map((group) => inGroup(group.label))].join(', ');
-}
 
 /**
  * What the last scan covered: the options and index it ran with, its scale,
@@ -590,17 +583,7 @@ export function ViewportSurface<N extends ExplorerNode, E extends ExplorerEdge>(
   const visible = first ?? shown.set;
   const emphasis = useMemo<ExplorerEmphasis>(() => ({ selectedId, dimmed }), [selectedId, dimmed]);
   const nodes = useMemo(() => new Map(view.nodes.map((node) => [node.id, node])), [view.nodes]);
-  const groupsOf = useMemo(() => {
-    const map = new Map<string, ExplorerGroup[]>();
-    for (const group of view.groups ?? []) {
-      for (const id of new Set(group.nodeIds)) {
-        const list = map.get(id);
-        if (list === undefined) map.set(id, [group]);
-        else list.push(group);
-      }
-    }
-    return map;
-  }, [view.groups]);
+  const groupsOf = useMemo(() => groupsByNode(view.groups), [view.groups]);
 
   const overlay: ReactElement[] = [];
   for (const [id, tier] of visible.overlay) {
@@ -621,7 +604,7 @@ export function ViewportSurface<N extends ExplorerNode, E extends ExplorerEdge>(
         data-selected={selected ? 'true' : undefined}
         data-dimmed={isDimmed ? 'true' : undefined}
         aria-pressed={selected}
-        aria-label={nodeAriaLabel === undefined ? defaultName(node, groups, inGroup) : nodeAriaLabel(node, { groups })}
+        aria-label={nodeAriaLabel === undefined ? defaultNodeName(node, groups, inGroup) : nodeAriaLabel(node, { groups })}
         style={{ position: 'absolute', left: box.x, top: box.y, width: box.width, height: box.height }}
       >
         {renderNode === undefined ? node.label : renderNode(node, { tier, selected, dimmed: isDimmed })}
