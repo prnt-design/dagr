@@ -728,10 +728,13 @@ to this track, not by the renderer queue's daily increment, so "the first
 ready slice" above never means an R task. The decision record is in
 `specs/roadmap-notes.md` under "Daily report track".
 
-- [ ] **R1** Report format v0 and its validator: views, nodes with rich
+- [x] **R1** Report format v0 and its validator: views, nodes with rich
   content, sources, confidence, status against the previous report, and a
   tour. Node ids derive from stable names (PR number, package name, milestone
   id), so a thing that persists keeps its place from one day to the next.
+  Done in PR #187: the private `apps/reports` workspace holds the contract,
+  `validateReport`, `entityId`, and the valid and invalid fixtures R2 and R3
+  share. It has no generator or host.
 - [ ] **R2** Generator: one JSON report a day from the repository's history
   and PR records, written to the agreed append-only location, which R2
   decides and records.
