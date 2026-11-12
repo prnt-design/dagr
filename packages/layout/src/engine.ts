@@ -12,7 +12,7 @@ import { DagrLayoutError, EngineStateError, WorkerTransportError } from './error
 import type { InfluenceSet } from './influence.js';
 import { influenceRegion, wholeRoster } from './influence.js';
 import { movesNothing, sameSizes } from './inert.js';
-import { prepare, runPipeline } from './pipeline.js';
+import { prepare, runPipeline, runPlaced } from './pipeline.js';
 import type {
   LayoutConfig,
   LayoutResult,
@@ -52,6 +52,7 @@ const EVERY_STAGE: readonly LayoutStageName[] = Object.freeze([
   'position',
   'route',
 ]);
+const PLACED_STAGES: readonly LayoutStageName[] = Object.freeze(['position', 'route']);
 const NO_STAGE: readonly LayoutStageName[] = Object.freeze([]);
 
 /**
@@ -259,16 +260,13 @@ export interface RelayoutResult {
    * relayout names all four; the path this milestone shipped first names none,
    * because a patch that changes nothing the pipeline reads has nothing for a
    * stage to do and the drawing the caller is holding is already the answer.
+   * An attribute edit that changes a size names `position` and `route`, which
+   * run over the held ranks and layers.
    *
-   * A LIST RATHER THAN THE BOOLEAN IT IS TODAY, and the reason is that the
-   * boolean is an accident of which fast path landed first. The one here skips
-   * every stage; the entry's other two do not. An add-leaf patch attached to an
-   * existing rank needs no cycle pass and no re-rank and still has to position
-   * and route, and an attribute edit that DOES change a size is a
-   * position-and-route-only run, so both of those name two of the four. A
-   * boolean would have to be replaced on the day either lands, and a consumer
-   * reading it would have to be told that `false` had stopped meaning what it
-   * meant.
+   * A LIST RATHER THAN A BOOLEAN, because a boolean was an accident of which
+   * fast path landed first: the resize path runs two of the four, and an
+   * add-leaf patch attached to an existing rank will need no re-rank and still
+   * have to position and route.
    *
    * IT IS NOT A PERFORMANCE HINT AND IT IS NOT ADVISORY: it says what ran, so a
    * test can assert that a patch cost nothing rather than assert that it was
@@ -754,12 +752,44 @@ export function createLayout(options: LayoutEngineOptions = {}): LayoutEngine {
    * so seeding it from the previous state would seed one graph's ordering from
    * another graph's.
    */
-  const runPrepared = (graph: Graph, prepared: PreparedState): LayoutResult => {
-    const { result, routed } = runPipeline(prepared, stages);
+  const runPrepared = (graph: Graph, prepared: PreparedState): LayoutResult =>
+    retain(graph, prepared, runPipeline(prepared, stages));
+
+  const retain = (
+    graph: Graph,
+    prepared: PreparedState,
+    { result, routed }: { readonly result: LayoutResult; readonly routed: RoutedState },
+  ): LayoutResult => {
     held = graph;
     warm = warmStartOf(routed);
     measured = prepared.sizes;
     return result;
+  };
+
+  /**
+   * The run a relayout that {@link unchanged} declined needs, and the stages it
+   * ran.
+   *
+   * M3.9b's first fast path that does work. A patch that passes `movesNothing`
+   * and still reached here changed sizes and nothing else, and neither a rank
+   * stage nor an order stage in this package reads a size, so the held ranks
+   * and layers are the ones a full run would compute again. The order stage
+   * already promised as much: its warm start holds every pair of a cohort, and
+   * with the roster unchanged every layer is one whole cohort. So position and
+   * route run over the held state, and the answer is the full path's answer,
+   * which `layout.fastpath.test.ts` checks against an engine that cannot skip.
+   * The same two conditions as {@link unchanged}: this package's stages, and a
+   * held state that came from a run on this thread.
+   */
+  const runChanged = (
+    graph: Graph,
+    patch: Patch,
+    prepared: PreparedState,
+  ): { readonly next: LayoutResult; readonly ran: readonly LayoutStageName[] } => {
+    if (ownStages && warm !== undefined && movesNothing(patch)) {
+      return { next: retain(graph, prepared, runPlaced(prepared, warm, stages)), ran: PLACED_STAGES };
+    }
+    return { next: runPrepared(graph, prepared), ran: EVERY_STAGE };
   };
 
   const runHere = (graph: Graph, previous: PreviousLayout | undefined): LayoutResult =>
@@ -898,7 +928,12 @@ export function createLayout(options: LayoutEngineOptions = {}): LayoutEngine {
    * ANSWER, because the worker laid out the graph as it was when the run was
    * sent; what it does not give is an inconsistent one.
    */
-  const report = (graph: Graph, next: LayoutResult, region: InfluenceSet): RelayoutResult => {
+  const report = (
+    graph: Graph,
+    next: LayoutResult,
+    region: InfluenceSet,
+    ran: readonly LayoutStageName[],
+  ): RelayoutResult => {
     const previous = reported;
     if (previous === undefined) {
       throw new EngineStateError('this engine was reset while a relayout was in flight');
@@ -910,7 +945,7 @@ export function createLayout(options: LayoutEngineOptions = {}): LayoutEngine {
       delta,
       influence: wholeRoster(graph, previous),
       region,
-      ran: EVERY_STAGE,
+      ran,
     };
   };
 
@@ -994,7 +1029,8 @@ export function createLayout(options: LayoutEngineOptions = {}): LayoutEngine {
       const skipped = unchanged(patch, previous, prepared.sizes);
       if (skipped !== undefined) return skipped;
       const region = regionFor(graph, patch, previous, prepared.sizes);
-      return report(graph, runPrepared(graph, prepared), region);
+      const { next, ran } = runChanged(graph, patch, prepared);
+      return report(graph, next, region, ran);
     },
 
     async relayoutAsync(patch) {
@@ -1004,7 +1040,8 @@ export function createLayout(options: LayoutEngineOptions = {}): LayoutEngine {
         const skipped = unchanged(patch, previous, prepared.sizes);
         if (skipped !== undefined) return skipped;
         const region = regionFor(graph, patch, previous, prepared.sizes);
-        return report(graph, runPrepared(graph, prepared), region);
+        const { next, ran } = runChanged(graph, patch, prepared);
+        return report(graph, next, region, ran);
       }
       // The warm start does not cross, so the run over there is prepared
       // without one, exactly as it was before this method had a region to
@@ -1019,7 +1056,7 @@ export function createLayout(options: LayoutEngineOptions = {}): LayoutEngine {
       if (skipped !== undefined) return skipped;
       const region = regionFor(graph, patch, previous, prepared.sizes);
       const next = await runThere(graph, prepared, worker);
-      return report(graph, next, region);
+      return report(graph, next, region, EVERY_STAGE);
     },
 
     dispose() {

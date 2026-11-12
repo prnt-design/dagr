@@ -291,14 +291,21 @@ describe('what a relayout costs', () => {
     const page = readFileSync(new URL('../../../docs/docs/incremental-layout.md', import.meta.url), 'utf8');
     const section = page.slice(page.indexOf('## What a relayout costs'));
     const { kinds } = committed;
-    const row = (label: string, pick: (row: KindRow) => number, bold = false): string => {
-      const cell = (value: number): string => (bold ? `**${render(value)}**` : render(value));
+    const row = (label: string, pick: (row: KindRow) => number | undefined, bold = false): string => {
+      const cell = (value: number | undefined): string => {
+        if (value === undefined) return 'not run';
+        return bold ? `**${render(value)}**` : render(value);
+      };
       return `| ${label} | ${KINDS.map((kind) => cell(pick(kinds[kind]))).join(' | ')} |`;
     };
     const expected = [
       '| Phase | add a leaf | remove a leaf | resize a node |',
       '| --- | --- | --- | --- |',
-      ...STAGES.map((key) => row(`\`${stageNames[key] ?? key}\``, (costs) => costs.stages[key] ?? 0)),
+      ...STAGES.map((key) =>
+        row(`\`${stageNames[key] ?? key}\``, (costs) =>
+          costs.ran.includes(key) ? (costs.stages[key] ?? 0) : undefined,
+        ),
+      ),
       row('everything else', (costs) => costs.outside),
       row('**whole relayout**', (costs) => costs.total, true),
     ].join('\n');
