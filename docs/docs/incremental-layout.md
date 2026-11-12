@@ -171,15 +171,17 @@ warmups, so the resize column pools both size changes, 22 relayouts.
 | **whole relayout** | **681ms** | **684ms** | **118ms** |
 
 **A resize runs only position and route.** Neither the rank stage nor the order
-stage reads a size, so the engine positions and routes over the ranks and
-layers it already holds, and the answer is the one a full run gives. An added
+stage reads a size, and run again over an unchanged graph both would land where
+they are, so the engine positions and routes over the ranks and layers it
+already holds, and the answer is the one a full run gives. An added
 or removed leaf still runs all four stages and costs about what a cold layout
 does: a cold run of the same graph, measured in the same session, takes 780ms,
 and the relayouts take between 7 and 41 frames at 60 Hz, against M3.9b's budget
 of one. The order stage is 56% of an added leaf, so a fast path for a leaf that
 still sweeps every rank cannot meet that budget. Neither can one that only skips
-stages: "everything else", the work outside them, is about 4 frames on its own
-even for a resize, which skips the rank and order contract checks. It includes
+stages: "everything else", the work outside them, is about 11 frames on its own
+for an added leaf, and about 4 even for a resize, which skips the rank and order
+contract checks. It includes
 measuring nodes, the influence region, merging the dummy sizes, the stage
 contract checks, assembling the result, the delta and retaining the warm start.
 

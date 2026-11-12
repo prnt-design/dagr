@@ -322,7 +322,8 @@ describe('what a relayout costs', () => {
       `measured in the same session, takes ${render(committed.cold)}`,
       `between ${String(Math.round(Math.min(...totals) / FRAME_MS))} and ` +
         `${String(Math.round(Math.max(...totals) / FRAME_MS))} frames`,
-      `about ${String(Math.round(Math.min(...KINDS.map((kind) => kinds[kind].outside)) / FRAME_MS))} frames on its own`,
+      `about ${String(Math.round(kinds['add-leaf'].outside / FRAME_MS))} frames on its own for an added leaf, ` +
+        `and about ${String(Math.round(kinds.resize.outside / FRAME_MS))} even for a resize`,
       `order stage is ${percent(kinds['add-leaf'].stages['order'] ?? 0, kinds['add-leaf'].total)} ` +
         `of an added leaf`,
       `${committed.machine.cpu} under Node ${committed.machine.node.replace(/^v/u, '')}`,
