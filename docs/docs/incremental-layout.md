@@ -151,6 +151,42 @@ across the seven cycle boundaries it has, and every per-node map is still
 exactly the roster of the drawing, so nothing is retained for a node that has
 left.
 
+## What a relayout costs
+
+Wall-clock milliseconds for one `engine.relayout(patch)` on the 10k corpus
+(10,000 nodes, 40,000 edges) at the defaults, measured on an Apple M4 under Node
+25.6.1 at a one-minute load average of 2.84. Each figure is the median of eleven
+cycles after two warmups. A cycle adds a leaf under a node in the middle of the
+graph, grows that node with a `nodeSize` callback, shrinks it back and removes
+the leaf, so every cycle edits the same drawing; the resize column is both size
+changes.
+
+| Phase | add a leaf | remove a leaf | resize a node |
+| --- | --- | --- | --- |
+| `longest-path-rank` | 64.6ms | 62.9ms | 63.1ms |
+| `barycenter-order` | 408ms | 369ms | 371ms |
+| `grid-position` | 23.0ms | 22.1ms | 21.8ms |
+| `polyline-route` | 28.6ms | 27.9ms | 28.3ms |
+| everything else | 188ms | 184ms | 187ms |
+| **whole relayout** | **712ms** | **666ms** | **671ms** |
+
+**Every one of these edits still runs all four stages**, so a small edit costs
+about what a cold layout does: a cold run of the same graph takes 786ms, and
+the relayouts take between 39 and 43 frames at 60 Hz, against M3.9b's budget of
+one. The order stage is 57% of an added leaf, so a fast path that still sweeps
+every rank cannot meet that budget whatever it skips elsewhere. "Everything
+else" is the work outside the stages: measuring nodes, the influence region,
+the stage contract checks, assembling the result and the delta.
+
+Like [What a run costs](layout.md#what-a-run-costs), this is a measurement and
+not a baseline: nothing gates on it. The test that holds this table to the
+committed file also checks which stages each patch kind runs, so a fast path
+that lands without re-measuring fails it. Regenerate with:
+
+```
+MEASURE_COST=1 pnpm --filter @prnt/dagr-layout test layout.relayout-cost
+```
+
 ## What is not here yet
 
 Every relayout on this page is a full pipeline run, with one exception noted
