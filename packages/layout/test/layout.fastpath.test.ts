@@ -314,7 +314,7 @@ describe('the relayout that skips rank and order', () => {
     }, 60_000);
   }
 
-  it('runs all four for a resize when a rank or order stage is not this package own', () => {
+  it("runs all four for a resize when the order stage is not this package's own", () => {
     const { graph, patches } = watched(diamond());
     const { stages } = recordingStages();
     const laid = engine({ config: { nodeSize }, stages: { order: stages.order } });

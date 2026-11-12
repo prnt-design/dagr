@@ -156,34 +156,34 @@ left.
 
 Wall-clock milliseconds for one `engine.relayout(patch)` on the 10k corpus
 (10,000 nodes, 40,000 edges) at the defaults, measured on an Apple M4 under Node
-25.6.1 at a one-minute load average of 2.35. A cycle adds a leaf under a node in
+25.6.1 at a one-minute load average of 3.17. A cycle adds a leaf under a node in
 the middle of the graph, grows that node with a `nodeSize` callback, shrinks it
 back and removes the leaf. Each figure is a median over eleven cycles after two
 warmups, so the resize column pools both size changes, 22 relayouts.
 
 | Phase | add a leaf | remove a leaf | resize a node |
 | --- | --- | --- | --- |
-| `longest-path-rank` | 64.9ms | 63.4ms | not run |
-| `barycenter-order` | 378ms | 381ms | not run |
-| `grid-position` | 22.3ms | 21.5ms | 21.2ms |
-| `polyline-route` | 29.0ms | 28.7ms | 29.0ms |
-| everything else | 186ms | 184ms | 67.6ms |
-| **whole relayout** | **681ms** | **684ms** | **118ms** |
+| `longest-path-rank` | 64.9ms | 67.0ms | not run |
+| `barycenter-order` | 372ms | 387ms | not run |
+| `grid-position` | 22.2ms | 22.4ms | 20.7ms |
+| `polyline-route` | 28.6ms | 29.9ms | 28.6ms |
+| everything else | 189ms | 190ms | 66.6ms |
+| **whole relayout** | **678ms** | **704ms** | **116ms** |
 
 **A resize runs only position and route.** Neither the rank stage nor the order
 stage reads a size, and run again over an unchanged graph both would land where
 they are, so the engine positions and routes over the ranks and layers it
 already holds, and the answer is the one a full run gives. An added
 or removed leaf still runs all four stages and costs about what a cold layout
-does: a cold run of the same graph, measured in the same session, takes 780ms,
-and the relayouts take between 7 and 41 frames at 60 Hz, against M3.9b's budget
-of one. The order stage is 56% of an added leaf, so a fast path for a leaf that
+does: a cold run of the same graph, measured in the same session, takes 771ms,
+and the relayouts take between 7 and 42 frames at 60 Hz, against M3.9b's budget
+of one. The order stage is 55% of an added leaf, so a fast path for a leaf that
 still sweeps every rank cannot meet that budget. Neither can one that only skips
 stages: "everything else", the work outside them, is about 11 frames on its own
 for an added leaf, and about 4 even for a resize, which skips the rank and order
-contract checks. It includes
-measuring nodes, the influence region, merging the dummy sizes, the stage
-contract checks, assembling the result, the delta and retaining the warm start.
+contract checks. It includes measuring nodes, the influence region, merging the
+dummy sizes, the stage contract checks, assembling the result, the delta and
+retaining the warm start.
 
 Like the pipeline page's [What a run costs](layout.md#what-a-run-costs), which
 was measured on a different machine, this is a measurement and not a baseline:
@@ -193,8 +193,9 @@ fires there without a re-measure fails it.
 
 ## What is not here yet
 
-Every relayout on this page is a full pipeline run, with one exception noted
-below. The stability above comes from what the stages are handed rather than
+Every relayout in the session corpus is a full pipeline run, with one exception
+noted below; no session resizes a node, so the resize path above never fires
+there. The stability above comes from what the stages are handed rather than
 from work they skip, so a patch that moves nothing still costs a cold layout in
 time.
 
