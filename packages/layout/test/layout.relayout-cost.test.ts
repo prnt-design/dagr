@@ -20,8 +20,8 @@ import type { LayoutEngine, LayoutStageOverrides, LayoutStageName } from '../src
  *
  * The ordinary run reads the committed file and checks that it still describes
  * this engine: the stages it names, the stages each patch kind runs, and the
- * table the docs page prints. A fast path that lands without re-measuring
- * fails the second check.
+ * table the docs page prints. A fast path that fires on the 1k corpus without a
+ * re-measure fails the second check.
  */
 
 const KINDS = ['add-leaf', 'remove-leaf', 'resize'] as const;
@@ -32,7 +32,15 @@ const STAGES = ['rank', 'order', 'position', 'route'] as const;
 interface KindRow {
   readonly ran: readonly LayoutStageName[];
   readonly stages: Readonly<Record<string, number>>;
-  /** The whole `relayout` call, so it includes everything the stages do not. */
+  /** The median, per relayout, of the call less its stages. */
+  readonly outside: number;
+  readonly total: number;
+}
+
+interface Sample {
+  readonly kind: Kind;
+  readonly ran: readonly LayoutStageName[];
+  readonly stages: Readonly<Record<string, number>>;
   readonly total: number;
 }
 
@@ -92,8 +100,8 @@ function percent(part: number, whole: number): string {
   return `${String(Math.round((part / whole) * 100))}%`;
 }
 
-function outside(row: KindRow): number {
-  return row.total - STAGES.reduce((sum, key) => sum + (row.stages[key] ?? 0), 0);
+function outside(sample: Sample): number {
+  return sample.total - STAGES.reduce((sum, key) => sum + (sample.stages[key] ?? 0), 0);
 }
 
 /**
@@ -121,21 +129,22 @@ function timedStages(into: Record<string, number>): LayoutStageOverrides {
 
 /**
  * One cycle of the three patch kinds against a mid-graph node: add a leaf
- * under it, grow it, shrink it back, remove the leaf. The graph ends where it
- * started, so every cycle measures the same edits on the same drawing.
+ * under it, grow it, shrink it back, remove the leaf, so every cycle makes the
+ * same edits to the same graph.
  */
 function cycle(
   graph: Graph,
   engine: LayoutEngine,
   parent: string,
   into: Record<string, number>,
-): ReadonlyArray<{ readonly kind: Kind; readonly ran: readonly LayoutStageName[]; readonly stages: Record<string, number>; readonly total: number }> {
+): readonly Sample[] {
   let patch: Patch | undefined;
   const unsubscribe = graph.subscribe((emitted) => {
     patch = emitted;
   });
-  const measured: Array<{ kind: Kind; ran: readonly LayoutStageName[]; stages: Record<string, number>; total: number }> = [];
+  const measured: Sample[] = [];
   const relayout = (kind: Kind, edit: () => void): void => {
+    patch = undefined;
     edit();
     if (patch === undefined) throw new Error(`the ${kind} edit emitted no patch`);
     for (const key of Object.keys(into)) delete into[key];
@@ -166,14 +175,23 @@ function engineFor(graph: Graph, into: Record<string, number>): LayoutEngine {
   return engine;
 }
 
-/** Which stages each kind runs, on any graph with a node in its middle. */
+/** The one set of stages every sample of a kind ran, or a throw naming the kind that disagreed. */
+function ranOf(samples: readonly Sample[], kind: Kind): readonly LayoutStageName[] {
+  const sets = new Set(samples.filter((sample) => sample.kind === kind).map((sample) => sample.ran.join(',')));
+  if (sets.size !== 1) throw new Error(`${kind} ran ${String(sets.size)} different sets of stages`);
+  return samples.find((sample) => sample.kind === kind)?.ran ?? [];
+}
+
+/** Which stages each kind runs on the engine a caller gets, with no timing wrapper. */
 function ranByKind(spec: GraphSpec): Record<Kind, readonly LayoutStageName[]> {
   const graph = build(spec);
-  const into: Record<string, number> = {};
-  const parent = spec.nodes[Math.floor(spec.nodes.length / 2)] ?? '';
-  const ran: Partial<Record<Kind, readonly LayoutStageName[]>> = {};
-  for (const sample of cycle(graph, engineFor(graph, into), parent, into)) ran[sample.kind] = sample.ran;
-  return ran as Record<Kind, readonly LayoutStageName[]>;
+  const engine = createLayout({ config: { nodeSize } });
+  engine.run(graph);
+  const samples = cycle(graph, engine, spec.nodes[Math.floor(spec.nodes.length / 2)] ?? '', {});
+  return Object.fromEntries(KINDS.map((kind) => [kind, ranOf(samples, kind)])) as Record<
+    Kind,
+    readonly LayoutStageName[]
+  >;
 }
 
 function measure(spec: GraphSpec): Pick<RelayoutCostFile, 'cold' | 'kinds'> {
@@ -189,21 +207,21 @@ function measure(spec: GraphSpec): Pick<RelayoutCostFile, 'cold' | 'kinds'> {
   }
 
   const engine = engineFor(graph, into);
-  const samples = new Map<Kind, Array<{ ran: readonly LayoutStageName[]; stages: Record<string, number>; total: number }>>();
+  const samples: Sample[] = [];
   for (let run = 0; run < WARMUP + RUNS; run += 1) {
     const measured = cycle(graph, engine, parent, into);
-    if (run < WARMUP) continue;
-    for (const { kind, ...sample } of measured) samples.set(kind, [...(samples.get(kind) ?? []), sample]);
+    if (run >= WARMUP) samples.push(...measured);
   }
 
   const kinds = {} as Record<Kind, KindRow>;
   for (const kind of KINDS) {
-    const rows = samples.get(kind) ?? [];
+    const rows = samples.filter((sample) => sample.kind === kind);
     const stages: Record<string, number> = {};
     for (const key of STAGES) stages[key] = round(median(rows.map((row) => row.stages[key] ?? 0)));
     kinds[kind] = {
-      ran: rows[0]?.ran ?? [],
+      ran: ranOf(samples, kind),
       stages,
+      outside: round(median(rows.map(outside))),
       total: round(median(rows.map((row) => row.total))),
     };
   }
@@ -242,8 +260,8 @@ describe('what a relayout costs', () => {
         stageNames,
         ...measure(spec),
       };
+      expect(Object.fromEntries(KINDS.map((kind) => [kind, file.kinds[kind].ran]))).toEqual(ranByKind(spec));
       writeFileSync(costPath, `${JSON.stringify(file, undefined, 2)}\n`);
-      expect(Object.keys(file.kinds)).toEqual([...KINDS]);
     }, 900_000);
     return;
   }
@@ -265,7 +283,7 @@ describe('what a relayout costs', () => {
     for (const kind of KINDS) {
       const row = committed.kinds[kind];
       expect(Object.keys(row.stages).sort()).toEqual([...STAGES].sort());
-      expect(outside(row)).toBeGreaterThanOrEqual(0);
+      expect(row.outside).toBeGreaterThanOrEqual(0);
     }
   });
 
@@ -281,7 +299,7 @@ describe('what a relayout costs', () => {
       '| Phase | add a leaf | remove a leaf | resize a node |',
       '| --- | --- | --- | --- |',
       ...STAGES.map((key) => row(`\`${stageNames[key] ?? key}\``, (costs) => costs.stages[key] ?? 0)),
-      row('everything else', outside),
+      row('everything else', (costs) => costs.outside),
       row('**whole relayout**', (costs) => costs.total, true),
     ].join('\n');
     const rows: string[] = [];
@@ -294,9 +312,10 @@ describe('what a relayout costs', () => {
     const totals = KINDS.map((kind) => kinds[kind].total);
     const flattened = section.replace(/\s+/gu, ' ');
     for (const phrase of [
-      `a cold run of the same graph takes ${render(committed.cold)}`,
-      `between ${Math.floor(Math.min(...totals) / FRAME_MS)} and ` +
-        `${Math.ceil(Math.max(...totals) / FRAME_MS)} frames`,
+      `measured in the same session, takes ${render(committed.cold)}`,
+      `between ${String(Math.round(Math.min(...totals) / FRAME_MS))} and ` +
+        `${String(Math.round(Math.max(...totals) / FRAME_MS))} frames`,
+      `about ${String(Math.round(Math.min(...KINDS.map((kind) => kinds[kind].outside)) / FRAME_MS))} frames on its own`,
       `order stage is ${percent(kinds['add-leaf'].stages['order'] ?? 0, kinds['add-leaf'].total)} ` +
         `of an added leaf`,
       `${committed.machine.cpu} under Node ${committed.machine.node.replace(/^v/u, '')}`,
