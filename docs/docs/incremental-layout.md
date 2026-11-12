@@ -12,7 +12,7 @@ rather than the API behind it: what the stability of an incremental drawing
 costs, what it buys, and how both were measured. The types, the engine and the
 metrics themselves are on the [layout pipeline](./layout.md) page.
 
-The numbers here come from a committed corpus,
+The stability numbers here come from a committed corpus,
 `packages/layout/test/sequence-stability.golden.json`, produced by
 `layout.sequence.golden.test.ts` and asserted on exactly. A change to the
 pipeline that moves any of them moves the file too, so a stability regression
@@ -122,8 +122,9 @@ remove a crossing is the swap the constraint forbids.
 
 The numbers here are counts and distances rather than timings, so they are the
 same on any machine that runs the suite. What a run costs in milliseconds is
-[on the pipeline page](./layout.md#what-a-run-costs), where it is scoped to the
-machine it was measured on.
+[on the pipeline page](./layout.md#what-a-run-costs), and what a relayout costs
+is [below](#what-a-relayout-costs), each scoped to the machine it was measured
+on.
 
 ## Two things the corpus found
 
@@ -150,6 +151,40 @@ that it settles: the session's held state takes at most two distinct values
 across the seven cycle boundaries it has, and every per-node map is still
 exactly the roster of the drawing, so nothing is retained for a node that has
 left.
+
+## What a relayout costs
+
+Wall-clock milliseconds for one `engine.relayout(patch)` on the 10k corpus
+(10,000 nodes, 40,000 edges) at the defaults, measured on an Apple M4 under Node
+25.6.1 at a one-minute load average of 3.11. A cycle adds a leaf under a node in
+the middle of the graph, grows that node with a `nodeSize` callback, shrinks it
+back and removes the leaf. Each figure is a median over eleven cycles after two
+warmups, so the resize column pools both size changes, 22 relayouts.
+
+| Phase | add a leaf | remove a leaf | resize a node |
+| --- | --- | --- | --- |
+| `longest-path-rank` | 63.5ms | 63.7ms | 63.6ms |
+| `barycenter-order` | 381ms | 380ms | 398ms |
+| `grid-position` | 22.3ms | 21.8ms | 23.1ms |
+| `polyline-route` | 30.5ms | 28.3ms | 29.1ms |
+| everything else | 184ms | 187ms | 184ms |
+| **whole relayout** | **678ms** | **677ms** | **702ms** |
+
+**Every one of these edits still runs all four stages**, so a small edit costs
+about what a cold layout does: a cold run of the same graph, measured in the
+same session, takes 779ms, and the relayouts take between 41 and 42 frames at 60
+Hz, against M3.9b's budget of one. The order stage is 56% of an added leaf, so a
+fast path that still sweeps every rank cannot meet that budget. Neither can one
+that only skips stages: "everything else", the work outside them, is about 11
+frames on its own. It includes measuring nodes, the influence region, merging
+the dummy sizes, the stage contract checks, assembling the result, the delta
+and retaining the warm start.
+
+Like the pipeline page's [What a run costs](layout.md#what-a-run-costs), which
+was measured on a different machine, this is a measurement and not a baseline:
+nothing gates on it. The test that holds this table to the committed file also
+checks, on the 1k corpus, which stages each patch kind runs, so a fast path that
+fires there without a re-measure fails it.
 
 ## What is not here yet
 
@@ -188,6 +223,7 @@ evidence, and the compounding above is exactly the evidence that reopens it.
 
 ```
 UPDATE_GOLDEN=1 pnpm --filter @prnt/dagr-layout test layout.sequence.golden
+MEASURE_COST=1 pnpm --filter @prnt/dagr-layout test layout.relayout-cost
 ```
 
 Do it when you deliberately changed what the pipeline does and can say what

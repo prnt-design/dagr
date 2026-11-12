@@ -1,0 +1,75 @@
+{
+  "measure": "MEASURE_COST=1 pnpm --filter @prnt/dagr-layout test layout.relayout-cost",
+  "isNotABaseline": "Wall-clock milliseconds on one machine, published so M3.9b has a starting point to beat. Nothing gates on it and the benchmark gate never reads it.",
+  "machine": {
+    "platform": "darwin",
+    "arch": "arm64",
+    "cpu": "Apple M4",
+    "cores": 10,
+    "node": "v25.6.1",
+    "loadAverage": 3.11
+  },
+  "runs": 11,
+  "corpus": {
+    "name": "large-10k",
+    "nodes": 10000,
+    "edges": 40000
+  },
+  "stageNames": {
+    "rank": "longest-path-rank",
+    "order": "barycenter-order",
+    "position": "grid-position",
+    "route": "polyline-route"
+  },
+  "cold": 778.951,
+  "kinds": {
+    "add-leaf": {
+      "ran": [
+        "rank",
+        "order",
+        "position",
+        "route"
+      ],
+      "stages": {
+        "rank": 63.466,
+        "order": 380.77,
+        "position": 22.313,
+        "route": 30.482
+      },
+      "outside": 183.988,
+      "total": 678.147
+    },
+    "remove-leaf": {
+      "ran": [
+        "rank",
+        "order",
+        "position",
+        "route"
+      ],
+      "stages": {
+        "rank": 63.663,
+        "order": 380.068,
+        "position": 21.767,
+        "route": 28.319
+      },
+      "outside": 187.023,
+      "total": 677.194
+    },
+    "resize": {
+      "ran": [
+        "rank",
+        "order",
+        "position",
+        "route"
+      ],
+      "stages": {
+        "rank": 63.602,
+        "order": 398.253,
+        "position": 23.051,
+        "route": 29.104
+      },
+      "outside": 184.411,
+      "total": 701.989
+    }
+  }
+}
