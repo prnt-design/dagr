@@ -2146,7 +2146,8 @@ warm run takes the previous ranks as a floor rather than an answer and can land
 on different ranks, so with it a resize runs all four stages. On the 10k-node
 corpus a resize drops from about 700ms to about 120ms; see
 [What a relayout costs](./incremental-layout.md#what-a-relayout-costs). It is
-also refused in the same two cases as the patch that runs no stage. `region` is
+also refused in the same two cases as the patch that runs no stage, and a
+`relayoutAsync` on an engine with a worker posts the run there. `region` is
 still computed and `influence` is still the whole roster, since the position
 stage is entitled to move any node.
 

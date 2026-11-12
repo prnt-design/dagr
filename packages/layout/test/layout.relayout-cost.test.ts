@@ -3,7 +3,7 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import { Graph } from '@prnt/dagr-graph';
 import { largeCorpus, smallCorpus } from '@dagr/bench';
 import { describe, expect, it } from 'vitest';
-import { authored } from '../src/authorship.js';
+import { authored, seedKeeping } from '../src/authorship.js';
 import { createLayout } from '../src/engine.js';
 import { defaultStages } from '../src/stages.js';
 import type { GraphSpec } from '@dagr/bench';
@@ -105,9 +105,9 @@ function outside(sample: Sample): number {
 }
 
 /**
- * The default stages, timed, and marked as this package's own: an unmarked
- * wrapper would switch off every fast path and measure an engine no caller
- * running the defaults gets.
+ * The default stages, timed, and marked as the defaults are, rank included as
+ * one that keeps its seed: a wrapper missing a mark would switch off a fast
+ * path and measure an engine no caller running the defaults gets.
  */
 function timedStages(into: Record<string, number>): LayoutStageOverrides {
   const time = <T>(key: string, run: () => T): T => {
@@ -117,7 +117,9 @@ function timedStages(into: Record<string, number>): LayoutStageOverrides {
     return output;
   };
   return {
-    rank: authored({ ...defaultStages.rank, run: (input) => time('rank', () => defaultStages.rank.run(input)) }),
+    rank: seedKeeping(
+      authored({ ...defaultStages.rank, run: (input) => time('rank', () => defaultStages.rank.run(input)) }),
+    ),
     order: authored({ ...defaultStages.order, run: (input) => time('order', () => defaultStages.order.run(input)) }),
     position: authored({
       ...defaultStages.position,

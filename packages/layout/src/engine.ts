@@ -479,9 +479,9 @@ export interface LayoutEngine {
    * node still gets a rank and a position. A batch emits the whole edit as one
    * patch, so the engine sees the one graph state you meant.
    *
-   * IT IS NO FASTER THAN A COLD RUN, on purpose, and the tests hold it to
-   * landing the same geometry a cold run of the same graph does. The whole
-   * pipeline runs again. That is what makes the delta contract, the engine
+   * A STRUCTURAL EDIT IS NO FASTER THAN A COLD RUN, on purpose, and the tests
+   * hold it to landing the same geometry a cold run of the same graph does. The
+   * whole pipeline runs again. That is what makes the delta contract, the engine
    * lifetime and the retained state testable before any incremental algorithm
    * exists, and it gives M3.6 through M3.9 a correct baseline to be measured
    * against rather than nothing. The patch is read for three things today:
@@ -498,7 +498,9 @@ export interface LayoutEngine {
    * take, and M3.8b and M3.9b are still what change that. M3.9a is the first
    * thing here that costs LESS, and it does it by not running rather than by
    * running less: a patch that changes nothing the pipeline reads is answered
-   * from the drawing already in hand. See {@link RelayoutResult.ran}.
+   * from the drawing already in hand. M3.9b's resize path runs less: a patch
+   * that only changes sizes runs position and route over the held ranks and
+   * layers. See {@link RelayoutResult.ran}.
    *
    * The delta is measured against the geometry this engine last REPORTED rather
    * than against its last computed run, which is what makes a nonzero
@@ -782,7 +784,8 @@ export function createLayout(options: LayoutEngineOptions = {}): LayoutEngine {
    * route run over the held state, and the answer is the full path's answer,
    * which `layout.fastpath.test.ts` checks against an engine that cannot skip.
    * Plus the two conditions of {@link unchanged}: this package's stages, and a
-   * held state that came from a run on this thread.
+   * held state that came from a run on this thread. A worker-backed
+   * `relayoutAsync` never takes it: the run goes to the worker.
    */
   const runChanged = (
     graph: Graph,
