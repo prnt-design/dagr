@@ -6,6 +6,8 @@ import { afterEach, describe, expect, it } from 'vitest';
 import {
   createLayout,
   isEmptyDelta,
+  longestPathRank,
+  networkSimplexRank,
   networkSimplexRankStage,
   serveLayout,
 } from '../src/index.js';
@@ -261,14 +263,18 @@ function unmarked(stages: LayoutStageOverrides): LayoutStageOverrides {
 }
 
 describe('the relayout that skips rank and order', () => {
-  const sets: readonly (readonly [string, LayoutStageOverrides])[] = [
-    ['the defaults', {}],
-    ['the simplex ranker', { rank: networkSimplexRankStage }],
-    ['insertion order', { order: insertionOrderStage }],
-    ['Brandes-Koepf positions', { position: brandesKoepfPositionStage }],
+  // A warm simplex run can move ranks, with or without its pivot budget
+  // running out, so a resize has to run it.
+  const sets: readonly (readonly [string, LayoutStageOverrides, readonly string[]])[] = [
+    ['the defaults', {}, PLACED_STAGES],
+    ['a longest-path ranker with no warm share', { rank: longestPathRank({ maxWarmShare: 0 }) }, PLACED_STAGES],
+    ['the simplex ranker', { rank: networkSimplexRankStage }, ALL_STAGES],
+    ['a simplex ranker out of pivots', { rank: networkSimplexRank({ maxIterations: 1 }) }, ALL_STAGES],
+    ['insertion order', { order: insertionOrderStage }, PLACED_STAGES],
+    ['Brandes-Koepf positions', { position: brandesKoepfPositionStage }, PLACED_STAGES],
   ];
 
-  for (const [name, stages] of sets) {
+  for (const [name, stages, resized] of sets) {
     it(`gives the answer the full path gives, through resizes and an edit between them, with ${name}`, () => {
       const spec = smallCorpus();
       const skipping = watched(build(spec));
@@ -281,8 +287,8 @@ describe('the relayout that skips rank and order', () => {
       const first = spec.nodes[0] ?? '';
 
       const edits: readonly (readonly [readonly string[], (graph: Graph) => void])[] = [
-        [PLACED_STAGES, (graph) => graph.updateNodeAttrs(middle, { big: true })],
-        [PLACED_STAGES, (graph) => graph.updateNodeAttrs(first, { big: true })],
+        [resized, (graph) => graph.updateNodeAttrs(middle, { big: true })],
+        [resized, (graph) => graph.updateNodeAttrs(first, { big: true })],
         [
           ALL_STAGES,
           (graph) =>
@@ -291,7 +297,7 @@ describe('the relayout that skips rank and order', () => {
               graph.addEdge(middle, 'leaf');
             }),
         ],
-        [PLACED_STAGES, (graph) => graph.updateNodeAttrs(middle, { big: false })],
+        [resized, (graph) => graph.updateNodeAttrs(middle, { big: false })],
       ];
       for (const [ran, edit] of edits) {
         edit(skipping.graph);

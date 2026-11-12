@@ -261,7 +261,9 @@ branches never enter public docs, source, npm artifacts, or job fixtures.
   "What a relayout costs" in `docs/docs/incremental-layout.md`. The resize
   path landed the same day: neither rank nor order reads a size, so a
   size-only patch positions and routes over the held ranks and layers, with
-  the full path's answer, at 118ms. Leaf patches remain.
+  the full path's answer, at 118ms (681ms to 684ms for the leaf kinds in the
+  same re-measure). The simplex ranker keeps all four stages, since a warm run
+  of it can move ranks. Leaf patches remain.
 - [x] **M3.10a** The session corpus: six scripted mutation sessions with
   stability metrics committed as golden files, and the docs page publishing
   the numbers.

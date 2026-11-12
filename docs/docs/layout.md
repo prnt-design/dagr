@@ -2137,15 +2137,18 @@ graph.updateNodeAttrs('n7', { expanded: true }); // nodeSize reads `expanded`
 engine.relayout(patch).ran; // ['position', 'route']
 ```
 
-The answer is the one a full run gives, because the order stage's warm start
-holds every pair of a layer whose members did not change, and the tests check
-it against an engine that cannot skip, with each rank, order and position stage
-this package builds. On the 10k-node corpus a resize drops from about 700ms to
-about 120ms; see
+The answer is the one a full run gives, because run again over an unchanged
+graph the longest-path ranker returns the ranks it was seeded with and the order
+stage's warm start holds every pair of a layer whose members did not change.
+The tests check it against an engine that cannot skip, with each order and
+position stage this package builds. `networkSimplexRank` does not qualify: a
+warm run takes the previous ranks as a floor rather than an answer and can land
+on different ranks, so with it a resize runs all four stages. On the 10k-node
+corpus a resize drops from about 700ms to about 120ms; see
 [What a relayout costs](./incremental-layout.md#what-a-relayout-costs). It is
-refused in the same two cases as the patch that runs no stage. `region` is still
-computed and `influence` is still the whole roster, since the position stage is
-entitled to move any node.
+also refused in the same two cases as the patch that runs no stage. `region` is
+still computed and `influence` is still the whole roster, since the position
+stage is entitled to move any node.
 
 ### The tolerance, on the engine
 

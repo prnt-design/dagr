@@ -4,7 +4,7 @@
  */
 
 import type { EdgeId, Graph, NodeId, Patch } from '@prnt/dagr-graph';
-import { isAuthored } from './authorship.js';
+import { isAuthored, keepsItsSeed } from './authorship.js';
 import { resolveConfig } from './config.js';
 import { applyDelta, diffLayout, requireEpsilon } from './delta.js';
 import type { LayoutDelta } from './delta.js';
@@ -13,6 +13,7 @@ import type { InfluenceSet } from './influence.js';
 import { influenceRegion, wholeRoster } from './influence.js';
 import { movesNothing, sameSizes } from './inert.js';
 import { prepare, runPipeline, runPlaced } from './pipeline.js';
+import { defaultStages } from './stages.js';
 import type {
   LayoutConfig,
   LayoutResult,
@@ -623,6 +624,7 @@ export function createLayout(options: LayoutEngineOptions = {}): LayoutEngine {
     (stages?.order === undefined || isAuthored(stages.order)) &&
     (stages?.position === undefined || isAuthored(stages.position)) &&
     (stages?.route === undefined || isAuthored(stages.route));
+  const rankKeepsItsSeed = keepsItsSeed(stages?.rank ?? defaultStages.rank);
 
   /**
    * What the engine retains between runs, which is what M3.2 built it for.
@@ -772,13 +774,14 @@ export function createLayout(options: LayoutEngineOptions = {}): LayoutEngine {
    *
    * M3.9b's first fast path that does work. A patch that passes `movesNothing`
    * and still reached here changed sizes and nothing else, and neither a rank
-   * stage nor an order stage in this package reads a size, so the held ranks
-   * and layers are the ones a full run would compute again. The order stage
-   * already promised as much: its warm start holds every pair of a cohort, and
-   * with the roster unchanged every layer is one whole cohort. So position and
+   * stage nor an order stage in this package reads a size. Not reading them is
+   * not enough: a full run would also have to land where the held state is.
+   * The rank stage has to be one that {@link keepsItsSeed}, and every order
+   * stage here does, since its warm start holds every pair of a cohort and with
+   * the roster unchanged every layer is one whole cohort. Then position and
    * route run over the held state, and the answer is the full path's answer,
    * which `layout.fastpath.test.ts` checks against an engine that cannot skip.
-   * The same two conditions as {@link unchanged}: this package's stages, and a
+   * Plus the two conditions of {@link unchanged}: this package's stages, and a
    * held state that came from a run on this thread.
    */
   const runChanged = (
@@ -786,7 +789,7 @@ export function createLayout(options: LayoutEngineOptions = {}): LayoutEngine {
     patch: Patch,
     prepared: PreparedState,
   ): { readonly next: LayoutResult; readonly ran: readonly LayoutStageName[] } => {
-    if (ownStages && warm !== undefined && movesNothing(patch)) {
+    if (ownStages && rankKeepsItsSeed && warm !== undefined && movesNothing(patch)) {
       return { next: retain(graph, prepared, runPlaced(prepared, warm, stages)), ran: PLACED_STAGES };
     }
     return { next: runPrepared(graph, prepared), ran: EVERY_STAGE };
