@@ -2012,9 +2012,11 @@ you meant, and reports the node once. The suite measures both paths side by side
 in `test/layout.relayout.test.ts`. See
 [Batching](./graph-model.md#batching) for what a batch is and what it is not.
 
-**It is no faster than a cold run, unless it runs no stage at all.** For any
-patch that changes the drawing the whole pipeline runs again, and the tests hold
-it to landing the same geometry a cold run of the same graph does.
+**It is no faster than a cold run, unless it runs no stage at all or only
+resizes.** For a patch that adds or removes a node or an edge the whole pipeline
+runs again, and the tests hold it to landing the same geometry a cold run of the
+same graph does. A resize runs only position and route: see
+[the resize that keeps its ranks and order](#the-resize-that-keeps-its-ranks-and-order).
 That is the point of shipping it in this shape first: it makes the delta
 contract, the engine lifetime and the retained state testable before any
 incremental algorithm exists, and it gives the stages that become incremental
@@ -2122,6 +2124,28 @@ there are the worker's and this side cannot name them, so the relayout after a
 `runAsync` served by a worker runs the pipeline. An engine that has run on this
 thread since keeps the fast path, and its inert patches never reach the port at
 all.
+
+### The resize that keeps its ranks and order
+
+An attribute edit that changes a size through your `nodeSize` callback changes
+the drawing, but not its ranks or its order: neither stage reads a size. So the
+engine positions and routes over the ranks and layers it already holds:
+
+```ts
+graph.updateNodeAttrs('n7', { expanded: true }); // nodeSize reads `expanded`
+
+engine.relayout(patch).ran; // ['position', 'route']
+```
+
+The answer is the one a full run gives, because the order stage's warm start
+holds every pair of a layer whose members did not change, and the tests check
+it against an engine that cannot skip, with each rank, order and position stage
+this package builds. On the 10k-node corpus a resize drops from about 700ms to
+about 120ms; see
+[What a relayout costs](./incremental-layout.md#what-a-relayout-costs). It is
+refused in the same two cases as the patch that runs no stage. `region` is still
+computed and `influence` is still the whole roster, since the position stage is
+entitled to move any node.
 
 ### The tolerance, on the engine
 
