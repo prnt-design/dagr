@@ -67,14 +67,17 @@ On narrow hosts, compose public parts under one `ExplorerRoot` if needed;
 second graph dataset, search implementation or selection store for a mobile
 version.
 
-Releases after 0.1.4 add an outline reader and details that dock below the
-map in containers narrower than 720 CSS pixels. Use them only when the
-installed package's types export them: `DagrExplorer` then takes `mode`
-(`'map'` or `'outline'`), `defaultMode` and `onModeChange`, and composed
-hosts get an `ExplorerOutline` part on the same root. The outline lists every
-node in the active view and is not virtualized, so keep a view an outline
-reader can scan. Against 0.1.4, do not import these names; offer search and
-details as the reading path instead.
+Versions after 0.1.4 dock details below the map in containers narrower than
+720 CSS pixels, with no host code; in 0.1.4 details stay a side overlay, so
+check them in a narrow container either way. The same versions add an opt-in
+outline reader. If the installed types export `ExplorerOutline` and
+`DagrExplorerMode`, `DagrExplorer` takes `mode` (`'map'` or `'outline'`),
+`defaultMode` and `onModeChange`, and a composed host can place
+`ExplorerOutline` under the same `ExplorerRoot`. The outline lists every node
+in the active view and is not virtualized, so split a large graph into views
+rather than leaving the outline to page through thousands of nodes. Otherwise
+do not pass these props or import `ExplorerOutline`; offer search and details
+as the reading path instead.
 
 Before delivery, typecheck the integration against the installed package,
 verify edge endpoints/IDs and any cited sources, and ask whether a reader can
