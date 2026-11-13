@@ -3930,8 +3930,9 @@ An Apple M4 Mac mini (10 cores, 16 GB, macOS 26.6.2), Google Chrome
 `--enable-webgpu-developer-features` on every run, where the NVIDIA timing
 runs had it only for `--gpu` (in earlier runs on this machine, headless
 Chrome paced the control at 33.3 ms, which fails the runner's tick check;
-not repeated here). The adapter, probed at run time, was `apple` `metal-3` (`Apple M4`), not a fallback, and
-`renderer.backend` was `webgpu` on every row of every run. Viewport 1280 by
+not repeated here). The adapter, probed at run time, was `apple` `metal-3`
+(`Apple M4`), not a fallback, and `renderer.backend` was `webgpu` on every
+row of every run. Viewport 1280 by
 720, `fit` (zoom 0.0715), 13,169 edges, 60 warm-up and 1,200 measured frames
 per mode, control tick 16.7 ms in every run. Three runs at each DPR, DPR 1
 and 2 alternating, one at a time, load average 3.2 to 3.8 at the start of
