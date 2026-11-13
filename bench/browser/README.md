@@ -4001,3 +4001,121 @@ read higher than moving ones here.
 Hit testing is not in these rows either. Still not covered by the matrix:
 sizes below 10,000, a zoom other than `fit`, rich nodes, the WebGL2 fallback,
 and unrounded GPU timestamps on the NVIDIA adapter.
+
+### Sizes below 10,000 on the Apple M4 (2026-11-13)
+
+`tsk_ad4b7ce0d93b`, the matrix's smaller sizes. The rows
+[above](#the-same-matrix-on-an-apple-m4-2026-10-31) at 1,000, 2,500 and
+5,000 nodes, on main `918042d`, nothing changed.
+
+```
+python3 -m http.server 8733 --bind 127.0.0.1    # from the repo root
+DAGR_CHROMIUM="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" \
+DAGR_CHROMIUM_ARGS=--enable-webgpu-developer-features \
+node bench/browser/frame-profile.mjs \
+  --motion=springs --sizes=1000,2500,5000 --edges=straight,smooth --moving=1,0.1 --frames=1200 --dpr=1   # then --dpr=2
+```
+
+The same Apple M4 Mac mini, now on Google Chrome 157.0.8103.51, headed and
+launched by the script with `--enable-webgpu-developer-features`. The adapter,
+probed at run time, was `apple` `metal-3` (`Apple M4`), not a fallback, and
+`renderer.backend` was `webgpu` on every row of every run. Viewport 1280 by
+720, `fit` (zoom 0.2215, 0.1407 and 0.1007 at the three sizes), 1,281, 3,238
+and 6,551 edges, 60 warm-up and 1,200 measured frames per mode, 42 retargets
+per animated mode, control tick 16.7 ms in every run. Three runs at each DPR,
+DPR 1 and 2 alternating, one at a time, load average 2.4 to 4.3 at the start
+of each (read with `uptime`), which was not controlled. Columns as above.
+
+| DPR | Nodes | Edges | Motion | Interval p95 | Past one tick | `apply` | `advance` | `setNodes` | `setEdges` | `render` | Holds the tick |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 1 | 1,000 | straight | still | 18.7 | 0% to 0.1% | | | | | 0.4 | yes |
+| 1 | 1,000 | straight | all moving | 18.6 to 18.7 | 0%, 0%, 0.1% | 3.0 to 3.4 | 0.7 to 0.9 | 0.6 | 0.5 to 0.6 | 0.4 | yes |
+| 1 | 1,000 | straight | a tenth | 18.6 to 18.7 | 0%, 0%, 0% | 0.5 | 0.2 | 0.6 | 0.5 | 0.5 | yes |
+| 1 | 1,000 | smooth | still | 18.6 to 18.7 | 0% to 0.1% | | | | | 0.3 to 0.4 | yes |
+| 1 | 1,000 | smooth | all moving | 18.7 | 0.1%, 0%, 0% | 3.6 to 4.1 | 0.6 to 0.8 | 0.4 | 2.4 to 2.5 | 0.4 | yes |
+| 1 | 1,000 | smooth | a tenth | 18.7 | 0%, 0%, 0% | 0.8 to 1.0 | 0.2 | 0.6 | 1.1 | 0.5 | yes |
+| 1 | 2,500 | straight | still | 18.6 to 18.7 | 0% to 0.1% | | | | | 0.3 to 0.4 | yes |
+| 1 | 2,500 | straight | all moving | 18.7 | 0%, 0%, 0% | 5.0 to 5.6 | 1.2 to 1.3 | 0.9 to 1.0 | 0.8 to 0.9 | 0.4 | yes |
+| 1 | 2,500 | straight | a tenth | 18.6 to 18.7 | 0%, 0%, 0% | 0.9 to 1.0 | 0.3 to 0.4 | 1.2 to 1.3 | 0.7 to 0.8 | 0.4 | yes |
+| 1 | 2,500 | smooth | still | 18.7 | 0% | | | | | 0.3 | yes |
+| 1 | 2,500 | smooth | all moving | 18.6 | 0%, 0%, 0% | 3.8 to 4.2 | 0.9 to 1.3 | 0.4 to 0.6 | 1.6 to 1.9 | 0.2 | yes |
+| 1 | 2,500 | smooth | a tenth | 18.7 | 0%, 0%, 0.3% | 1.1 to 1.2 | 0.2 to 0.3 | 0.7 to 0.8 | 1.4 to 1.6 | 0.5 | yes |
+| 1 | 5,000 | straight | still | 18.7 | 0% to 0.1% | | | | | 0.3 | yes |
+| 1 | 5,000 | straight | all moving | 18.7 | 0%, 0%, 0% | 4.2 to 4.7 | 1.8 to 2.0 | 0.7 to 0.9 | 0.5 to 0.6 | 0.2 | yes |
+| 1 | 5,000 | straight | a tenth | 18.7 | 0%, 0%, 0% | 1.2 to 1.4 | 0.5 to 0.7 | 1.7 | 1.2 to 1.3 | 0.4 | yes |
+| 1 | 5,000 | smooth | still | 18.6 to 18.7 | 0% to 0.1% | | | | | 0.3 | yes |
+| 1 | 5,000 | smooth | all moving | 17.8 to 18.6 | 0%, 0%, 0% | 4.9 to 5.4 | 0.8 to 1.0 | 0.6 | 2.8 to 3.3 | 0.3 | yes |
+| 1 | 5,000 | smooth | a tenth | 18.6 to 18.7 | 0%, 0%, 0% | 0.8 | 0.2 | 0.6 | 1.3 | 0.3 to 0.4 | yes |
+| 2 | 1,000 | straight | still | 18.6 to 18.7 | 0% | | | | | 0.4 | yes |
+| 2 | 1,000 | straight | all moving | 18.7 | 0%, 0%, 0% | 3.1 to 3.2 | 0.7 to 0.9 | 0.6 | 0.5 to 0.6 | 0.4 | yes |
+| 2 | 1,000 | straight | a tenth | 18.7 | 0%, 0%, 0% | 0.5 | 0.2 | 0.6 to 0.7 | 0.5 | 0.5 | yes |
+| 2 | 1,000 | smooth | still | 18.6 to 18.7 | 0% to 0.2% | | | | | 0.3 to 0.4 | yes |
+| 2 | 1,000 | smooth | all moving | 18.7 | 0%, 0%, 0% | 3.4 to 4.0 | 0.5 to 0.6 | 0.3 to 0.4 | 2.0 to 2.4 | 0.3 to 0.4 | yes |
+| 2 | 1,000 | smooth | a tenth | 18.6 to 18.7 | 0%, 0.1%, 0% | 0.8 to 0.9 | 0.2 | 0.5 to 0.6 | 1.0 to 1.1 | 0.4 to 0.5 | yes |
+| 2 | 2,500 | straight | still | 18.6 to 18.7 | 0% to 0.2% | | | | | 0.3 | yes |
+| 2 | 2,500 | straight | all moving | 18.7 | 0%, 0%, 0% | 4.5 to 5.5 | 1.0 to 1.3 | 0.9 to 1.0 | 0.7 to 0.8 | 0.3 to 0.4 | yes |
+| 2 | 2,500 | straight | a tenth | 18.6 to 18.7 | 0.2%, 0%, 0% | 0.9 | 0.3 to 0.4 | 1.1 to 1.2 | 0.7 | 0.4 | yes |
+| 2 | 2,500 | smooth | still | 18.7 | 0% to 0.2% | | | | | 0.3 | yes |
+| 2 | 2,500 | smooth | all moving | 18.7 | 0%, 0%, 0% | 3.6 to 4.1 | 0.6 to 1.0 | 0.4 to 0.7 | 1.6 to 1.9 | 0.2 | yes |
+| 2 | 2,500 | smooth | a tenth | 18.6 to 18.7 | 0%, 0%, 0% | 1.0 | 0.2 to 0.3 | 0.7 to 0.8 | 1.4 to 1.5 | 0.4 to 0.5 | yes |
+| 2 | 5,000 | straight | still | 18.7 | 0% | | | | | 0.3 | yes |
+| 2 | 5,000 | straight | all moving | 18.6 to 18.7 | 0%, 0%, 0% | 4.3 to 4.7 | 1.4 to 1.7 | 0.7 to 1.0 | 0.5 to 0.6 | 0.2 | yes |
+| 2 | 5,000 | straight | a tenth | 18.6 to 18.7 | 0%, 0%, 0% | 1.2 to 1.3 | 0.4 to 0.5 | 1.4 to 1.6 | 0.9 to 1.1 | 0.4 | yes |
+| 2 | 5,000 | smooth | still | 18.7 | 0% to 0.5% | | | | | 0.3 | yes |
+| 2 | 5,000 | smooth | all moving | 18.6 | 0%, 0%, 0% | 5.5 to 5.9 | 0.7 to 0.8 | 0.6 | 2.8 to 3.3 | 0.3 | yes |
+| 2 | 5,000 | smooth | a tenth | 18.6 to 18.7 | 0%, 0%, 0% | 0.8 to 1.1 | 0.2 | 0.6 | 1.3 to 1.4 | 0.3 to 0.4 | yes |
+
+`input` was 0.2 to 1.0 ms on every animated row and the interval median was
+16.7 ms on every row of every run. The interval p95 was at or below 18.7 ms
+on every row, which is this Chrome's control too, as at 10,000 nodes. Where
+an animated row missed a tick it was one to four intervals in 1,200, the
+longest 105 ms; the still rows missed up to six (0.5%), the longest 104 ms.
+
+**GPU time per frame**, from `--gpu` with the same launch, one run at each DPR
+straight after the six above. The runner accepted both, with timestamps at a
+1 ns grain. Medians / 95th percentiles of the frame's passes summed, in
+milliseconds:
+
+| DPR | Nodes | Edges | Still | All moving | A tenth moving |
+| --- | --- | --- | --- | --- | --- |
+| 1 | 1,000 | straight | 0.27 / 0.28 | 0.29 / 0.29 | 0.28 / 0.29 |
+| 1 | 1,000 | smooth | 0.31 / 0.32 | 0.31 / 0.32 | 0.31 / 0.32 |
+| 1 | 2,500 | straight | 0.31 to 0.32 / 0.32 | 0.33 / 0.34 | 0.32 / 0.32 |
+| 1 | 2,500 | smooth | 0.39 / 0.40 | 0.41 / 0.41 | 0.40 / 0.41 |
+| 1 | 5,000 | straight | 0.37 / 0.38 | 0.38 / 0.39 | 0.38 / 0.38 |
+| 1 | 5,000 | smooth | 0.52 / 0.53 | 0.57 / 0.84 | 0.53 / 0.54 |
+| 2 | 1,000 | straight | 1.00 / 1.01 | 1.00 / 1.01 | 1.00 / 1.01 |
+| 2 | 1,000 | smooth | 1.03 / 1.03 | 1.03 / 1.08 | 1.03 / 1.04 |
+| 2 | 2,500 | straight | 1.02 to 1.03 / 1.03 | 1.05 / 1.07 | 1.03 / 1.04 |
+| 2 | 2,500 | smooth | 1.11 / 1.12 | 1.10 / 1.12 | 1.12 / 1.13 |
+| 2 | 5,000 | straight | 1.06 / 1.07 | 1.08 / 1.10 | 1.07 / 1.42 |
+| 2 | 5,000 | smooth | 1.25 / 1.26 | 1.26 / 1.64 | 1.25 / 1.28 |
+
+With timestamp queries on, every row missed 0% to 0.4% of ticks. The longest
+single GPU frame was 5.2 ms at DPR 1 and 6.5 ms at DPR 2.
+
+- **Every row holds the tick at all three sizes**, smooth edges with every
+  node moving included, at both ratios. The animated rows' 0% to 0.3% of
+  ticks past one is within the still rows' 0% to 0.5% on the same scenes.
+  The row that barely misses at 10,000 on this machine (Chrome 156 there,
+  157 here) holds at 5,000 and below.
+- **The heaviest row is smooth edges, all moving, at 5,000 nodes.** Between
+  retargets `setEdges` is 2.8 to 3.3 ms and `advance` 0.7 to 1.0, against
+  6.1 to 7.3 and 1.6 to 2.3 at 10,000; a retarget frame's `apply` is 4.9 to
+  5.9 ms, against 13.4 to 14.4. Those step medians sum to under 12 ms on a
+  retarget frame, inside one tick, where at 10,000 they do not.
+- **The GPU frame is set by the pixels more than the scene.** DPR 2 adds about
+  0.7 ms on every row, as it does at 10,000, while going from 1,000 to 5,000
+  nodes adds less than 0.3 ms at the median at either DPR.
+- **Two step readings are not explained.** `setNodes` reads higher with a
+  tenth moving than with all moving with straight edges at 2,500 and 5,000
+  (1.1 to 1.7 ms against 0.7 to 1.0) and smooth at 1,000 and 2,500 (0.5 to
+  0.8 against 0.3 to 0.7), and level on the other two, and with
+  every node moving `advance` reads higher with straight edges than smooth at
+  5,000 (1.4 to 2.0 against 0.7 to 1.0), the reverse of 10,000. Both orderings
+  hold in every run at both ratios, so they are not run-to-run spread; neither
+  was traced.
+
+Hit testing is not in these rows. Still not covered by the matrix: on the
+NVIDIA adapter, sizes below 10,000 and unrounded GPU timestamps; on either
+machine, a zoom other than `fit`, rich nodes and the WebGL2 fallback.
