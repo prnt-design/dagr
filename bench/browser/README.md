@@ -3999,10 +3999,8 @@ read higher than moving ones here.
   here as there: the ranges are three runs' spread with the phase unknown.
 
 Hit testing is not in these rows either. Still not covered by the matrix:
-sizes below 10,000 (measured on this machine
-[below](#sizes-below-10000-on-the-apple-m4-2026-11-13)), a zoom other than
-`fit`, rich nodes, the WebGL2 fallback, and unrounded GPU timestamps on the
-NVIDIA adapter.
+sizes below 10,000, a zoom other than `fit`, rich nodes, the WebGL2 fallback,
+and unrounded GPU timestamps on the NVIDIA adapter.
 
 ### Sizes below 10,000 on the Apple M4 (2026-11-13)
 
@@ -4068,10 +4066,10 @@ of each (read with `uptime`), which was not controlled. Columns as above.
 | 2 | 5,000 | smooth | a tenth | 18.6 to 18.7 | 0%, 0%, 0% | 0.8 to 1.1 | 0.2 | 0.6 | 1.3 to 1.4 | 0.3 to 0.4 | yes |
 
 `input` was 0.2 to 1.0 ms on every animated row and the interval median was
-16.7 ms on every row of every run. The interval p95 of 18.6 to 18.7 ms is
-this Chrome's control too, as at 10,000 nodes. Where a row missed a tick it
-was one to four intervals in 1,200, the longest 105 ms, and the still rows
-did the same (up to 0.5%, the longest 104 ms).
+16.7 ms on every row of every run. The interval p95 was at or below 18.7 ms
+on every row, which is this Chrome's control too, as at 10,000 nodes. Where
+an animated row missed a tick it was one to four intervals in 1,200, the
+longest 105 ms; the still rows missed up to six (0.5%), the longest 104 ms.
 
 **GPU time per frame**, from `--gpu` with the same launch, one run at each DPR
 straight after the six above. The runner accepted both, with timestamps at a
@@ -4093,13 +4091,14 @@ milliseconds:
 | 2 | 5,000 | straight | 1.06 / 1.07 | 1.08 / 1.10 | 1.07 / 1.42 |
 | 2 | 5,000 | smooth | 1.25 / 1.26 | 1.26 / 1.64 | 1.25 / 1.28 |
 
-With timestamp queries on, every row missed 0% to 0.3% of ticks. The longest
+With timestamp queries on, every row missed 0% to 0.4% of ticks. The longest
 single GPU frame was 5.2 ms at DPR 1 and 6.5 ms at DPR 2.
 
 - **Every row holds the tick at all three sizes**, smooth edges with every
   node moving included, at both ratios. The animated rows' 0% to 0.3% of
-  ticks past one is the still rows' rate on the same scenes. The row that
-  barely misses at 10,000 on this machine holds at 5,000 and below.
+  ticks past one is within the still rows' 0% to 0.5% on the same scenes.
+  The row that barely misses at 10,000 on this machine (Chrome 156 there,
+  157 here) holds at 5,000 and below.
 - **The heaviest row is smooth edges, all moving, at 5,000 nodes.** Between
   retargets `setEdges` is 2.8 to 3.3 ms and `advance` 0.7 to 1.0, against
   6.1 to 7.3 and 1.6 to 2.3 at 10,000; a retarget frame's `apply` is 4.9 to
@@ -4107,16 +4106,16 @@ single GPU frame was 5.2 ms at DPR 1 and 6.5 ms at DPR 2.
   retarget frame, inside one tick, where at 10,000 they do not.
 - **The GPU frame is set by the pixels more than the scene.** DPR 2 adds about
   0.7 ms on every row, as it does at 10,000, while going from 1,000 to 5,000
-  nodes adds less than 0.3 ms at either ratio.
-- **Two step readings are not explained.** With straight edges at 2,500 and
-  5,000 nodes, `setNodes` reads higher with a tenth moving (1.1 to 1.7 ms)
-  than with all moving (0.7 to 1.0), and `advance` reads higher with straight
-  edges than smooth at 5,000 (1.4 to 2.0 against 0.7 to 1.0), the reverse of
-  10,000. Neither was traced; V8's allocation phases (see ["Where the frame
-  points are allocated"](#where-the-frame-points-are-allocated-2026-10-30)
-  above) are one candidate, so as before the ranges are three runs' spread
-  with the phase unknown.
+  nodes adds less than 0.3 ms at the median at either DPR.
+- **Two step readings are not explained.** `setNodes` reads higher with a
+  tenth moving than with all moving with straight edges at 2,500 and 5,000
+  (1.1 to 1.7 ms against 0.7 to 1.0) and smooth at 1,000 and 2,500 (0.5 to
+  0.8 against 0.3 to 0.7), and level on the other two, and with
+  every node moving `advance` reads higher with straight edges than smooth at
+  5,000 (1.4 to 2.0 against 0.7 to 1.0), the reverse of 10,000. Both orderings
+  hold in every run at both ratios, so they are not run-to-run spread; neither
+  was traced.
 
-Hit testing is not in these rows. Still not covered by the matrix: sizes
-below 10,000 on the NVIDIA adapter, a zoom other than `fit`, rich nodes, the
-WebGL2 fallback, and unrounded GPU timestamps on the NVIDIA adapter.
+Hit testing is not in these rows. Still not covered by the matrix: on the
+NVIDIA adapter, sizes below 10,000 and unrounded GPU timestamps; on either
+machine, a zoom other than `fit`, rich nodes and the WebGL2 fallback.

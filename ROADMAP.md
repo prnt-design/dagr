@@ -488,17 +488,16 @@ branches never enter public docs, source, npm artifacts, or job fixtures.
     Chrome 157 headed, `apple` `metal-3`, WebGPU, not a fallback adapter,
     `fit`, DPR 1 and 2, three runs each, at 1,000, 2,500 and 5,000 nodes.
     Every row holds the tick, smooth edges with every node moving included:
-    animated rows missed 0% to 0.3% of ticks, the still rows' rate. The
+    animated rows missed 0% to 0.3% of ticks, within the still rows' 0% to 0.5%. The
     heaviest, smooth all moving at 5,000, spends 2.8 to 3.3 ms in `setEdges`
     between retargets and 4.9 to 5.9 ms in a retarget's `apply`. GPU median
     and p95 stay below 1.7 ms. See
     [the smaller sizes](bench/browser/README.md#sizes-below-10000-on-the-apple-m4-2026-11-13).
 
   Remaining task: `tsk_ad4b7ce0d93b` (Backlog, behind the 2026-10-29 priority
-  refresh), complete the matrix with smaller sizes on the NVIDIA adapter,
-  another zoom, rich nodes, WebGL2 and unrounded GPU timestamps on the NVIDIA
-  adapter. The 10k slice is
-  merged; the whole matrix is not done.
+  refresh), complete the matrix with, on the NVIDIA adapter, sizes below
+  10,000 and unrounded GPU timestamps, and on either machine another zoom,
+  rich nodes and WebGL2. The 10k slice is merged; the whole matrix is not done.
   The [browser measurement record](bench/browser/README.md#springs-in-flight-on-webgpu-m410)
   preserves the optimization sequence, rejected experiments and reproduction
   details; [working notes](specs/roadmap-notes.md#m4-renderer-dagrrender)
