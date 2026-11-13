@@ -65,8 +65,19 @@ real-device check. Do not claim mobile support from a narrow screenshot alone.
 On narrow hosts, compose public parts under one `ExplorerRoot` if needed;
 `useExplorer` and `useExplorerApi` share state and commands. Do not create a
 second graph dataset, search implementation or selection store for a mobile
-version. A first-class outline reader and adaptive library details are planned,
-not current public components. Avoid presenting proposed names as imports.
+version.
+
+Versions after 0.1.4 dock details below the map in containers narrower than
+720 CSS pixels, with no host code; in 0.1.4 details stay a side overlay, so
+check them in a narrow container either way. The same versions add an opt-in
+outline reader. If the installed types export `ExplorerOutline` and
+`DagrExplorerMode`, `DagrExplorer` takes `mode` (`'map'` or `'outline'`),
+`defaultMode` and `onModeChange`, and a composed host can place
+`ExplorerOutline` under the same `ExplorerRoot`. The outline lists every node
+in the active view and is not virtualized, so split a large graph into views
+rather than leaving the outline to page through thousands of nodes. Otherwise
+do not pass these props or import `ExplorerOutline`; offer search and details
+as the reading path instead.
 
 Before delivery, typecheck the integration against the installed package,
 verify edge endpoints/IDs and any cited sources, and ask whether a reader can
