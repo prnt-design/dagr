@@ -487,7 +487,8 @@ branches never enter public docs, source, npm artifacts, or job fixtures.
 
   Remaining task: `tsk_ad4b7ce0d93b` (Backlog, behind the 2026-10-29 priority
   refresh), complete the matrix with smaller sizes, another zoom, rich nodes,
-  WebGL2 and unrounded GPU timestamps on the NVIDIA adapter. The 10k slice is merged; the whole matrix is not done.
+  WebGL2 and unrounded GPU timestamps on the NVIDIA adapter. The 10k slice is
+  merged; the whole matrix is not done.
   The [browser measurement record](bench/browser/README.md#springs-in-flight-on-webgpu-m410)
   preserves the optimization sequence, rejected experiments and reproduction
   details; [working notes](specs/roadmap-notes.md#m4-renderer-dagrrender)
