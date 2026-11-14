@@ -1,17 +1,18 @@
-# Next release candidate
+# Dagr 0.2.0 release candidate
 
-Prepared from `35ed88e14eb7c35514cdc4f2500ab9c2d494fe54` (origin/main,
-2026-11-08 UTC). This is a release handoff, not authorization to publish.
-The preparation PR adds packaging evidence and release notes, not a version bump.
+Versioned from preparation commit `0d7fd9291ee8d3a97401c64c4699f3b07c1310ab`
+(origin/main, 2026-11-08 UTC). Nii approved the seven-package metadata patch.
+This records a versioned candidate, not published availability or authorization
+to publish. Publication, release tags and GitHub releases remain human actions.
 
 ## Version and exact scope
 
-Recommend **0.2.0** for the seven existing public packages:
+The seven existing public package manifests now specify **0.2.0**:
 `@prnt/dagr-graph`, `@prnt/dagr-layout`, `@prnt/dagr-render`,
 `@prnt/dagr-explorer`, `@prnt/dagr-react`, `@prnt/dagr-vdsl`, and `@prnt/dagr`.
-All source manifests still say **0.1.4**. Release them together so sibling
-ranges cannot silently select older implementations. Keep chart private in this
-candidate. It is assessed below as a first-public-release follow-up.
+Release them together so sibling ranges cannot silently select older
+implementations. Chart remains private and unchanged. Its standalone public
+release is a separate decision; umbrella inclusion is optional later work.
 
 A patch release would obscure source compatibility changes: `GraphHitTarget`
 gains an edge variant, `Renderer` gains required `pickNode`, and Explorer's
@@ -45,14 +46,17 @@ Renderer additions include `createPinchGesture`, `PinchGesture`, `PinchDelta`,
 pure additions. React adds `EdgeHitIndex`, `PickedNodeHitOptions` and
 `PickedNodeHitProvider`; Explorer adds `ExplorerOutline`, `ExplorerOutlineProps`
 and `DagrExplorerMode`, plus `mode`, `defaultMode` and `onModeChange` props.
-Package Unreleased changelogs retain the behavioral details.
+Package 0.2.0 changelogs retain the behavioral details.
 
-Published 0.1.4 has the Explorer capture-transfer bug fixed by #196. A manifest
-label of 0.1.4 in a local tarball does not mean its implementation is published.
+Published 0.1.4 has the Explorer capture-transfer bug fixed by #196. A local
+tarball version does not mean its implementation is published.
 Install the entire locally packed sibling set when evaluating this candidate.
 Keep React/React DOM aligned. Full renderer, React canvas and chart consumers
 install the documented Three peer and matching `@types/three` for strict types.
 ESM-only support is unchanged. No CommonJS build is proposed.
+
+See the [0.1.4 to 0.2.0 migration guide](migration-0.2.0.md) for concrete
+interface updates.
 
 ## First public chart assessment
 
@@ -101,10 +105,12 @@ change. Benchmark selection must run through `pnpm bench:gate`, including a
 printed skip where appropriate. Previous unrelated benchmark failures are not
 permission to skip it or weaken a baseline.
 
-Before publishing, Nii must approve/apply the proposed seven-package 0.2.0
-version patch, inspect final changelogs, build and pack that exact tree, rerun
-the full gate and external verifier, then publish in dependency order using
-pnpm. Publication, tags and GitHub releases remain separate human actions.
+The approved seven-package version patch and final changelogs are applied.
+Before publishing, Nii must inspect the final tested SHA and artifact manifest,
+confirm the complete set and publication authorization, then publish the exact
+validated artifacts in dependency order using pnpm. Any source or metadata
+change requires rebuilding, packing and rerunning the full gate and external
+verifier. Publication, tags and GitHub releases remain separate human actions.
 Real iOS/Android, software keyboard, safe-area and hardware GPU claims remain
 bounded by the existing M5.8b/c and renderer evidence tasks. Open documentation
 PRs #231 and #234 are separate work and are not release implementation blockers.

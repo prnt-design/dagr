@@ -9,7 +9,9 @@ which unit a number is in. A caller upgrading past one of those sees a drawing
 in a different place, and no compiler tells them. "Behaviour changed, types did
 not" is the category this file has a heading for.
 
-## Unreleased
+## 0.2.0
+
+- Compatibility: custom Renderer implementations and mocks must implement asynchronous `pickNode`. See the [migration guide](https://github.com/prnt-design/dagr/blob/main/packaging/migration-0.2.0.md).
 
 - Add `visualViewportInset(surface, layout, visualViewport)` with a `VisualViewportBox` type to the full and three.js-free core entries: what the visual viewport hides of a surface beyond the layout viewport, and nothing while the page is pinch-zoomed. Explorer's visual-viewport framing now uses it, unchanged, and `DagrCanvas` frames in it too.
 - Add `Camera2D.setInset(inset)`, `Camera2D.frame` and `Camera2D.centerFor(point, zoom)`. With an inset, `fitBounds`, the content limits from `setContentBounds` and their pan clamping work in `visibleFrame(viewport, inset)` instead of the whole viewport. Without one, every result is unchanged.

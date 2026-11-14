@@ -9,6 +9,10 @@ and M5.4's pre-publish checklist is where a changelog tool gets picked. Starting
 the file now is what stops the v0.1 notes from having to be reconstructed by
 diffing five milestones of doc prose.
 
+## 0.2.0
+
+- Lockstep release with the seven-package 0.2.0 set. No source or runtime API changes in this package since 0.1.4.
+
 ## 0.1.4
 
 - Lockstep release with the explorer's drawer-aware camera and icon controls. No runtime API changes in this package.
