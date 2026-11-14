@@ -497,9 +497,10 @@ branches never enter public docs, source, npm artifacts, or job fixtures.
     Chrome 157 headed, `apple` `metal-3`, WebGPU, not a fallback adapter,
     DPR 1 and 2, three runs each. The same rows hold the tick as at `fit`:
     smooth edges with every node moving barely misses it (0.2% to 0.3% of
-    ticks against the still modes' 0% to 0.2%). The CPU steps match `fit`'s,
-    since every node and edge is updated whatever the camera shows, and the
-    GPU frame is shorter than at `fit` on every row (at most 1.64 ms). See
+    ticks against the still modes' 0% to 0.2%). That row's CPU steps match
+    `fit`'s, since every node and edge is updated whatever the camera shows,
+    and the GPU frame is shorter than at `fit` on every row (at most 1.64 ms),
+    with most of the graph off screen. See
     [zoom 1](bench/browser/README.md#zoom-1-at-10000-nodes-on-the-apple-m4-2026-11-13).
 
   Remaining task: `tsk_ad4b7ce0d93b` (Backlog, behind the 2026-10-29 priority

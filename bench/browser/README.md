@@ -4122,9 +4122,11 @@ machine, a zoom other than `fit`, rich nodes and the WebGL2 fallback.
 
 ### Zoom 1 at 10,000 nodes on the Apple M4 (2026-11-13)
 
-`tsk_ad4b7ce0d93b`, the matrix's first zoom other than `fit`. The 10,000-node
-rows [above](#the-same-matrix-on-an-apple-m4-2026-10-31) at zoom 1, on main
-`766fd04`, nothing changed.
+`tsk_ad4b7ce0d93b`, the matrix's first zoom other than `fit` (zoom 1 was
+measured outside the matrix in
+[GPU time per pass](#gpu-time-per-pass-on-webgpu-m410) above). The
+10,000-node rows [above](#the-same-matrix-on-an-apple-m4-2026-10-31) at zoom
+1, on main `766fd04`, nothing changed.
 
 ```
 python3 -m http.server 8733 --bind 127.0.0.1    # from the repo root
@@ -4139,8 +4141,8 @@ launched by the script with `--enable-webgpu-developer-features`. The adapter,
 probed at run time, was `apple` `metal-3` (`Apple M4`), not a fallback, and
 `renderer.backend` was `webgpu` on every row of every run. Viewport 1280 by
 720, zoom 1 about the fitted view's centre, where `fit` is 0.0715: the view
-spans about a fourteenth of the fitted view's width, and a node rectangle is
-90 CSS pixels wide. 13,169 edges, 60 warm-up and 1,200 measured frames per
+spans about a fourteenth of the fitted view's width and height (about 1/196
+of its area), rectangles are 90 by 50 CSS pixels and circles 50 across. 13,169 edges, 60 warm-up and 1,200 measured frames per
 mode, 42 retargets per animated mode, control tick 16.7 ms in every run. Three
 runs at each DPR, DPR 1 and 2 alternating, one at a time, load average 2.8 to
 4.7 at the start of each (read with `uptime`), which was not controlled.
@@ -4186,19 +4188,25 @@ frame was 0.95 ms at DPR 1 and 1.64 ms at DPR 2.
   of ticks, against the still modes' 0% to 0.2% on the same scene. In five of
   six runs the moving mode missed more than the still mode measured just
   before it, and every run of that row had an interval of two ticks (33.3 to
-  35.4 ms). At `fit` the same row missed 0.1% to 0.8%.
-- **The CPU frame does not change with the zoom.** Every node and edge is
-  updated and submitted whatever the camera shows, and the step medians sit
-  inside or beside `fit`'s ranges: for smooth edges with every node moving,
-  `setEdges` 6.9 to 7.2 ms against 6.1 to 7.3, `advance` 1.6 to 2.4 against
-  1.6 to 2.3, and a retarget's `apply` 13.2 to 14.3 against 13.4 to 14.4. The
-  `fit` rows ran on Chrome 156, these on 157.
+  35.4 ms), though still modes had longer single intervals in some runs
+  (up to 89 ms), so the two-tick interval is not unique to the moving mode.
+  At `fit` the same row missed 0.1% to 0.8%.
+- **The row that misses spends the same CPU time as at `fit`.** Every node
+  and edge is updated and submitted whatever the camera shows. For smooth
+  edges with every node moving, `setEdges` is 6.9 to 7.2 ms against 6.1 to
+  7.3, `advance` 1.6 to 2.4 against 1.6 to 2.3, and a retarget's `apply` 13.2
+  to 14.3 against 13.4 to 14.4. Some straight-edge steps read higher than at
+  `fit`, such as `advance` with a tenth moving at DPR 1 (0.7 ms against 0.3
+  to 0.4) and with every node moving (1.7 to 2.1 against 1.1 to 1.7), with
+  no missed ticks; not traced. The `fit` rows ran on Chrome 156, these on 157.
 - **The GPU frame is shorter at zoom 1 than at `fit`** on every row: 0.36
   against 0.50 to 0.52 ms at the median with straight edges at DPR 1, 0.46 to
   0.49 against 0.86 to 0.97 with smooth edges, and 1.17 to 1.20 against 1.51
-  to 1.57 with smooth edges at DPR 2, although at zoom 1 the nodes cover far
-  more of the screen. The cause was not traced. One difference is that at
-  zoom 1 most of the scene lies outside the view, and at `fit` none of it does.
+  to 1.57 with smooth edges at DPR 2. This matches
+  [GPU time per pass](#gpu-time-per-pass-on-webgpu-m410) above: at zoom 1 most of the graph is outside the viewport, so the node and
+  edge draws shrink while the per-pixel passes stay. At DPR 2 that section
+  measured 1.06 ms straight and 1.20 smooth at zoom 1, against 1.06 to 1.07
+  and 1.17 to 1.20 here.
 
 Hit testing is not in these rows. Still not covered by the matrix: on the
 NVIDIA adapter, sizes below 10,000, a zoom other than `fit` and unrounded GPU
