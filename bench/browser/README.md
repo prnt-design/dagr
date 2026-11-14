@@ -4119,3 +4119,87 @@ single GPU frame was 5.2 ms at DPR 1 and 6.5 ms at DPR 2.
 Hit testing is not in these rows. Still not covered by the matrix: on the
 NVIDIA adapter, sizes below 10,000 and unrounded GPU timestamps; on either
 machine, a zoom other than `fit`, rich nodes and the WebGL2 fallback.
+
+### Zoom 1 at 10,000 nodes on the Apple M4 (2026-11-13)
+
+`tsk_ad4b7ce0d93b`, the matrix's first zoom other than `fit`. The 10,000-node
+rows [above](#the-same-matrix-on-an-apple-m4-2026-10-31) at zoom 1, on main
+`766fd04`, nothing changed.
+
+```
+python3 -m http.server 8733 --bind 127.0.0.1    # from the repo root
+DAGR_CHROMIUM="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" \
+DAGR_CHROMIUM_ARGS=--enable-webgpu-developer-features \
+node bench/browser/frame-profile.mjs \
+  --motion=springs --sizes=10000 --edges=straight,smooth --moving=1,0.1 --frames=1200 --zoom=1 --dpr=1   # then --dpr=2
+```
+
+The same Apple M4 Mac mini, on Google Chrome 157.0.8103.51, headed and
+launched by the script with `--enable-webgpu-developer-features`. The adapter,
+probed at run time, was `apple` `metal-3` (`Apple M4`), not a fallback, and
+`renderer.backend` was `webgpu` on every row of every run. Viewport 1280 by
+720, zoom 1 about the fitted view's centre, where `fit` is 0.0715: the view
+spans about a fourteenth of the fitted view's width, and a node rectangle is
+90 CSS pixels wide. 13,169 edges, 60 warm-up and 1,200 measured frames per
+mode, 42 retargets per animated mode, control tick 16.7 ms in every run. Three
+runs at each DPR, DPR 1 and 2 alternating, one at a time, load average 2.8 to
+4.7 at the start of each (read with `uptime`), which was not controlled.
+Columns as above.
+
+| DPR | Edges | Motion | Interval p95 | Past one tick | `apply` | `advance` | `setNodes` | `setEdges` | `render` | Holds the tick |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 1 | straight | still | 18.6 to 18.7 | 0% | | | | | 0.4 | yes |
+| 1 | straight | all moving | 18.5 to 18.6 | 0%, 0%, 0% | 10.4 to 11.3 | 1.7 to 2.1 | 1.1 | 0.9 | 0.3 | yes |
+| 1 | straight | a tenth | 18.6 to 18.7 | 0%, 0%, 0% | 1.0 | 0.7 | 1.4 to 1.5 | 0.7 | 0.3 | yes |
+| 1 | smooth | still | 18.6 to 18.7 | 0% to 0.2% | | | | | 0.3 to 0.4 | yes |
+| 1 | smooth | all moving | 18.2 to 18.4 | 0.3%, 0.3%, 0.3% | 13.2 to 13.7 | 2.2 to 2.4 | 1.2 to 1.3 | 6.9 to 7.0 | 0.6 | **no**, barely |
+| 1 | smooth | a tenth | 18.5 to 18.6 | 0%, 0%, 0% | 1.4 to 1.5 | 0.4 to 0.5 | 1.1 to 1.2 | 2.5 to 2.8 | 0.7 | yes |
+| 2 | straight | still | 18.6 to 18.7 | 0% | | | | | 0.4 | yes |
+| 2 | straight | all moving | 18.4 to 18.6 | 0%, 0%, 0% | 10.1 to 10.7 | 1.8 | 1.1 to 1.2 | 0.9 to 1.3 | 0.3 | yes |
+| 2 | straight | a tenth | 18.6 to 18.7 | 0%, 0.1%, 0% | 1.0 | 0.4 to 0.5 | 1.2 to 1.3 | 0.7 to 0.8 | 0.3 | yes |
+| 2 | smooth | still | 18.6 to 18.7 | 0% to 0.2% | | | | | 0.3 to 0.4 | yes |
+| 2 | smooth | all moving | 18.5 to 18.6 | 0.3%, 0.3%, 0.2% | 13.2 to 14.3 | 1.6 to 2.1 | 1.2 | 7.0 to 7.2 | 0.6 | **no**, barely |
+| 2 | smooth | a tenth | 17.4 to 18.6 | 0%, 0%, 0% | 1.3 to 1.5 | 0.3 to 0.4 | 1.2 | 2.8 to 2.9 | 0.7 | yes |
+
+`input` was 0.4 to 0.9 ms on every animated row and the interval median was
+16.7 ms on every row of every run. The interval p95 was at or below 18.7 ms on
+every row, this Chrome's control too.
+
+**GPU time per frame**, from `--gpu` with the same launch, one run at each DPR
+straight after the six above. The runner accepted both, with timestamps at a
+1 ns grain. Medians / 95th percentiles of the frame's passes summed, in
+milliseconds:
+
+| DPR | Edges | Still | All moving | A tenth moving |
+| --- | --- | --- | --- | --- |
+| 1 | straight | 0.36 / 0.36 to 0.37 | 0.36 / 0.36 | 0.36 / 0.36 |
+| 1 | smooth | 0.49 / 0.50 | 0.46 / 0.48 | 0.49 / 0.89 |
+| 2 | straight | 1.07 / 1.07 to 1.08 | 1.06 / 1.37 | 1.07 / 1.08 |
+| 2 | smooth | 1.20 / 1.21 | 1.17 / 1.21 | 1.19 / 1.62 |
+
+With timestamp queries on, the smooth all-moving rows missed 0.6% (DPR 1) and
+0.8% (DPR 2) of ticks and every other row 0% to 0.1%. The longest single GPU
+frame was 0.95 ms at DPR 1 and 1.64 ms at DPR 2.
+
+- **Zoom 1 holds the same rows as `fit`.** Every row holds the tick except
+  smooth edges with every node moving, which barely misses it: 0.2% to 0.3%
+  of ticks, against the still modes' 0% to 0.2% on the same scene. In five of
+  six runs the moving mode missed more than the still mode measured just
+  before it, and every run of that row had an interval of two ticks (33.3 to
+  35.4 ms). At `fit` the same row missed 0.1% to 0.8%.
+- **The CPU frame does not change with the zoom.** Every node and edge is
+  updated and submitted whatever the camera shows, and the step medians sit
+  inside or beside `fit`'s ranges: for smooth edges with every node moving,
+  `setEdges` 6.9 to 7.2 ms against 6.1 to 7.3, `advance` 1.6 to 2.4 against
+  1.6 to 2.3, and a retarget's `apply` 13.2 to 14.3 against 13.4 to 14.4. The
+  `fit` rows ran on Chrome 156, these on 157.
+- **The GPU frame is shorter at zoom 1 than at `fit`** on every row: 0.36
+  against 0.50 to 0.52 ms at the median with straight edges at DPR 1, 0.46 to
+  0.49 against 0.86 to 0.97 with smooth edges, and 1.17 to 1.20 against 1.51
+  to 1.57 with smooth edges at DPR 2, although at zoom 1 the nodes cover far
+  more of the screen. The cause was not traced. One difference is that at
+  zoom 1 most of the scene lies outside the view, and at `fit` none of it does.
+
+Hit testing is not in these rows. Still not covered by the matrix: on the
+NVIDIA adapter, sizes below 10,000, a zoom other than `fit` and unrounded GPU
+timestamps; on either machine, rich nodes and the WebGL2 fallback.
