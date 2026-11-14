@@ -914,6 +914,50 @@ export function runPipeline(
   const ordered: OrderedState = { ...ranked, layers: order.run(ranked).layers };
   checkOrdered(order.name, graph, ordered);
 
+  return placed(ordered, stages);
+}
+
+/**
+ * Position and route over the ranks and layers of the run before, for a patch
+ * that changed sizes and nothing else: `engine.ts` decides when that holds.
+ *
+ * Neither check before the position stage runs again. Both held of these
+ * fields when that run produced them, over a roster this patch did not change.
+ */
+export function runPlaced(
+  prepared: PreparedState,
+  held: PreviousLayout,
+  stages?: LayoutStageOverrides,
+): { readonly result: LayoutResult; readonly routed: RoutedState } {
+  const sizes = new Map(prepared.sizes);
+  for (const id of held.virtualNodes) {
+    const size = held.sizes.get(id);
+    if (size === undefined) {
+      throw new InternalLayoutError(`the held drawing declared ${id} and kept no size for it`);
+    }
+    sizes.set(id, size);
+  }
+  return placed(
+    {
+      graph: prepared.graph,
+      config: prepared.config,
+      previous: prepared.previous,
+      ranks: held.ranks,
+      reversedEdges: held.reversedEdges,
+      virtualNodes: held.virtualNodes,
+      virtualChains: held.virtualChains,
+      sizes,
+      layers: held.layers,
+    },
+    stages,
+  );
+}
+
+function placed(
+  ordered: OrderedState,
+  stages: LayoutStageOverrides | undefined,
+): { readonly result: LayoutResult; readonly routed: RoutedState } {
+  const { graph } = ordered;
   const position = stages?.position ?? defaultStages.position;
   const positioned: PositionedState = {
     ...ordered,

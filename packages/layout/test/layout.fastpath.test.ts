@@ -1,15 +1,24 @@
 import { MessageChannel } from 'node:worker_threads';
 import { cpus, loadavg } from 'node:os';
 import { Graph } from '@prnt/dagr-graph';
-import { largeCorpus } from '@dagr/bench';
+import { largeCorpus, smallCorpus } from '@dagr/bench';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
   createLayout,
   isEmptyDelta,
+  longestPathRank,
+  networkSimplexRank,
   networkSimplexRankStage,
   serveLayout,
 } from '../src/index.js';
-import type { LayoutEngine, LayoutPort, LayoutResult } from '../src/index.js';
+import { brandesKoepfPositionStage } from '../src/position.js';
+import { defaultStages, insertionOrderStage } from '../src/stages.js';
+import type {
+  LayoutEngine,
+  LayoutPort,
+  LayoutResult,
+  LayoutStageOverrides,
+} from '../src/index.js';
 import type { GraphSpec } from '@dagr/bench';
 import type { Node, Patch } from '@prnt/dagr-graph';
 import { recordingStages } from './fakes.js';
@@ -27,6 +36,10 @@ import { recordingStages } from './fakes.js';
  */
 
 const ALL_STAGES = ['rank', 'order', 'position', 'route'];
+const PLACED_STAGES = ['position', 'route'];
+
+const nodeSize = (node: Node): { width: number; height: number } | undefined =>
+  node.attrs['big'] === true ? { width: 400, height: 300 } : undefined;
 
 function diamond(): Graph {
   const graph = new Graph();
@@ -133,20 +146,15 @@ describe('the relayout that runs no stage', () => {
     expect(laid.relayout(last(patches)).ran).toEqual([]);
   });
 
-  it('runs all four when the same attribute changes a size', () => {
+  it('runs only position and route when the same attribute changes a size', () => {
     const { graph, patches } = watched(diamond());
-    const laid = engine({
-      config: {
-        nodeSize: (node: Node) =>
-          node.attrs['big'] === true ? { width: 400, height: 300 } : undefined,
-      },
-    });
+    const laid = engine({ config: { nodeSize } });
     laid.run(graph);
 
     graph.updateNodeAttrs('a', { big: true });
     const relaid = laid.relayout(last(patches));
 
-    expect(relaid.ran).toEqual(ALL_STAGES);
+    expect(relaid.ran).toEqual(PLACED_STAGES);
     expect(isEmptyDelta(relaid.delta)).toBe(false);
   });
 
@@ -234,6 +242,112 @@ describe('the relayout that runs no stage', () => {
 
     expect(relaid.ran).toEqual([]);
     expect(relaid.result).toBe(before);
+  });
+});
+
+/**
+ * The same stages with this package's mark taken off, so an engine built on
+ * them runs all four on every relayout: the full path to compare against.
+ */
+function unmarked(stages: LayoutStageOverrides): LayoutStageOverrides {
+  const rank = stages.rank ?? defaultStages.rank;
+  const order = stages.order ?? defaultStages.order;
+  const position = stages.position ?? defaultStages.position;
+  const route = stages.route ?? defaultStages.route;
+  return {
+    rank: { name: rank.name, run: (input) => rank.run(input) },
+    order: { name: order.name, run: (input) => order.run(input) },
+    position: { name: position.name, run: (input) => position.run(input) },
+    route: { name: route.name, run: (input) => route.run(input) },
+  };
+}
+
+describe('the relayout that skips rank and order', () => {
+  // A warm simplex run can move ranks, with or without its pivot budget
+  // running out, so a resize has to run it.
+  const sets: readonly (readonly [string, LayoutStageOverrides, readonly string[]])[] = [
+    ['the defaults', {}, PLACED_STAGES],
+    ['a longest-path ranker with no warm share', { rank: longestPathRank({ maxWarmShare: 0 }) }, PLACED_STAGES],
+    ['the simplex ranker', { rank: networkSimplexRankStage }, ALL_STAGES],
+    ['a simplex ranker out of pivots', { rank: networkSimplexRank({ maxIterations: 1 }) }, ALL_STAGES],
+    ['insertion order', { order: insertionOrderStage }, PLACED_STAGES],
+    ['Brandes-Koepf positions', { position: brandesKoepfPositionStage }, PLACED_STAGES],
+  ];
+
+  for (const [name, stages, resized] of sets) {
+    it(`gives the answer the full path gives, through resizes and an edit between them, with ${name}`, () => {
+      const spec = smallCorpus();
+      const skipping = watched(build(spec));
+      const straight = watched(build(spec));
+      const one = engine({ config: { nodeSize }, stages });
+      const two = engine({ config: { nodeSize }, stages: unmarked(stages) });
+      one.run(skipping.graph);
+      two.run(straight.graph);
+      const middle = spec.nodes[Math.floor(spec.nodes.length / 2)] ?? '';
+      const first = spec.nodes[0] ?? '';
+
+      const edits: readonly (readonly [readonly string[], (graph: Graph) => void])[] = [
+        [resized, (graph) => graph.updateNodeAttrs(middle, { big: true })],
+        [resized, (graph) => graph.updateNodeAttrs(first, { big: true })],
+        [
+          ALL_STAGES,
+          (graph) =>
+            graph.batch(() => {
+              graph.addNode('leaf');
+              graph.addEdge(middle, 'leaf');
+            }),
+        ],
+        [resized, (graph) => graph.updateNodeAttrs(middle, { big: false })],
+      ];
+      for (const [ran, edit] of edits) {
+        edit(skipping.graph);
+        edit(straight.graph);
+        const skipped = one.relayout(last(skipping.patches));
+        const full = two.relayout(last(straight.patches));
+
+        expect(skipped.ran).toEqual(ran);
+        expect(full.ran).toEqual(ALL_STAGES);
+        expect(boxes(skipped.result)).toEqual(boxes(full.result));
+        expect(routes(skipped.result)).toEqual(routes(full.result));
+        expect(skipped.delta).toEqual(full.delta);
+      }
+    }, 60_000);
+  }
+
+  it("runs all four for a resize when the order stage is not this package's own", () => {
+    const { graph, patches } = watched(diamond());
+    const { stages } = recordingStages();
+    const laid = engine({ config: { nodeSize }, stages: { order: stages.order } });
+    laid.run(graph);
+
+    graph.updateNodeAttrs('a', { big: true });
+
+    expect(laid.relayout(last(patches)).ran).toEqual(ALL_STAGES);
+  });
+
+  it('runs all four for a resize when the drawing it holds came from a worker', async () => {
+    const channel = new MessageChannel();
+    const stop = serveLayout(channel.port2 as unknown as LayoutPort);
+    const { graph, patches } = watched(diamond());
+    const laid = engine({ config: { nodeSize }, worker: channel.port1 as unknown as LayoutPort });
+
+    await laid.runAsync(graph);
+    graph.updateNodeAttrs('a', { big: true });
+
+    expect(laid.relayout(last(patches)).ran).toEqual(ALL_STAGES);
+    stop();
+    channel.port1.close();
+    channel.port2.close();
+  });
+
+  it('runs only position and route on this thread when the engine has no worker', async () => {
+    const { graph, patches } = watched(diamond());
+    const laid = engine({ config: { nodeSize } });
+    laid.run(graph);
+
+    graph.updateNodeAttrs('a', { big: true });
+
+    expect((await laid.relayoutAsync(last(patches))).ran).toEqual(PLACED_STAGES);
   });
 });
 

@@ -3,7 +3,7 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import { Graph } from '@prnt/dagr-graph';
 import { largeCorpus, smallCorpus } from '@dagr/bench';
 import { describe, expect, it } from 'vitest';
-import { authored } from '../src/authorship.js';
+import { authored, seedKeeping } from '../src/authorship.js';
 import { createLayout } from '../src/engine.js';
 import { defaultStages } from '../src/stages.js';
 import type { GraphSpec } from '@dagr/bench';
@@ -105,9 +105,9 @@ function outside(sample: Sample): number {
 }
 
 /**
- * The default stages, timed, and marked as this package's own: an unmarked
- * wrapper would switch off every fast path and measure an engine no caller
- * running the defaults gets.
+ * The default stages, timed, and marked as the defaults are, rank included as
+ * one that keeps its seed: a wrapper missing a mark would switch off a fast
+ * path and measure an engine no caller running the defaults gets.
  */
 function timedStages(into: Record<string, number>): LayoutStageOverrides {
   const time = <T>(key: string, run: () => T): T => {
@@ -117,7 +117,9 @@ function timedStages(into: Record<string, number>): LayoutStageOverrides {
     return output;
   };
   return {
-    rank: authored({ ...defaultStages.rank, run: (input) => time('rank', () => defaultStages.rank.run(input)) }),
+    rank: seedKeeping(
+      authored({ ...defaultStages.rank, run: (input) => time('rank', () => defaultStages.rank.run(input)) }),
+    ),
     order: authored({ ...defaultStages.order, run: (input) => time('order', () => defaultStages.order.run(input)) }),
     position: authored({
       ...defaultStages.position,
@@ -291,14 +293,21 @@ describe('what a relayout costs', () => {
     const page = readFileSync(new URL('../../../docs/docs/incremental-layout.md', import.meta.url), 'utf8');
     const section = page.slice(page.indexOf('## What a relayout costs'));
     const { kinds } = committed;
-    const row = (label: string, pick: (row: KindRow) => number, bold = false): string => {
-      const cell = (value: number): string => (bold ? `**${render(value)}**` : render(value));
+    const row = (label: string, pick: (row: KindRow) => number | undefined, bold = false): string => {
+      const cell = (value: number | undefined): string => {
+        if (value === undefined) return 'not run';
+        return bold ? `**${render(value)}**` : render(value);
+      };
       return `| ${label} | ${KINDS.map((kind) => cell(pick(kinds[kind]))).join(' | ')} |`;
     };
     const expected = [
       '| Phase | add a leaf | remove a leaf | resize a node |',
       '| --- | --- | --- | --- |',
-      ...STAGES.map((key) => row(`\`${stageNames[key] ?? key}\``, (costs) => costs.stages[key] ?? 0)),
+      ...STAGES.map((key) =>
+        row(`\`${stageNames[key] ?? key}\``, (costs) =>
+          costs.ran.includes(key) ? (costs.stages[key] ?? 0) : undefined,
+        ),
+      ),
       row('everything else', (costs) => costs.outside),
       row('**whole relayout**', (costs) => costs.total, true),
     ].join('\n');
@@ -315,7 +324,8 @@ describe('what a relayout costs', () => {
       `measured in the same session, takes ${render(committed.cold)}`,
       `between ${String(Math.round(Math.min(...totals) / FRAME_MS))} and ` +
         `${String(Math.round(Math.max(...totals) / FRAME_MS))} frames`,
-      `about ${String(Math.round(Math.min(...KINDS.map((kind) => kinds[kind].outside)) / FRAME_MS))} frames on its own`,
+      `about ${String(Math.round(kinds['add-leaf'].outside / FRAME_MS))} frames on its own for an added leaf, ` +
+        `and about ${String(Math.round(kinds.resize.outside / FRAME_MS))} even for a resize`,
       `order stage is ${percent(kinds['add-leaf'].stages['order'] ?? 0, kinds['add-leaf'].total)} ` +
         `of an added leaf`,
       `${committed.machine.cpu} under Node ${committed.machine.node.replace(/^v/u, '')}`,

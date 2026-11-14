@@ -1,6 +1,6 @@
 import type { NodeId } from '@prnt/dagr-graph';
 import { acyclicView, longestPathRanks, warmLongestPathRanks } from './acyclic.js';
-import { authored } from './authorship.js';
+import { authored, seedKeeping } from './authorship.js';
 import { splitLongEdges } from './chains.js';
 import { feedbackArcSet } from './cycles.js';
 import { InternalLayoutError, InvalidConfigError } from './errors.js';
@@ -199,7 +199,7 @@ function resolveWarmShare(maxWarmShare: number | undefined): number {
  */
 export function longestPathRank(options?: LongestPathRankOptions): RankStage {
   const share = resolveWarmShare(options?.maxWarmShare);
-  return authored({
+  return seedKeeping(authored({
     name: 'longest-path-rank',
     run(input) {
       const { graph } = input;
@@ -230,7 +230,7 @@ export function longestPathRank(options?: LongestPathRankOptions): RankStage {
       if (split === undefined) return { ranks, reversedEdges };
       return { ranks, reversedEdges, ...split };
     },
-  });
+  }));
 }
 
 /**
