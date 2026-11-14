@@ -1,7 +1,7 @@
 /**
- * Frame-time distribution of `@prnt/dagr-render` on a WebGPU adapter, by graph
- * size, edge style and node mode, optionally with node hit testing, still and
- * animating (M4.10a). With `--memory` it measures instead what each pass holds
+ * Frame-time distribution of `@prnt/dagr-render` on a WebGPU adapter, or the
+ * WebGL2 fallback, by graph size, edge style and node mode, optionally with
+ * node hit testing, still and animating (M4.10a). With `--memory` it measures instead what each pass holds
  * in GPU buffers and textures and in the JavaScript heap, and what a moving
  * pass allocates per frame. With `--gpu` it adds the GPU time of every pass
  * from timestamp queries (M4.10), and `--parts` draws the nodes or the edges
@@ -27,7 +27,7 @@
  *   # [--backend=webgpu|webgl2]
  * ```
  *
- * The page asks for `backend: 'webgpu'`, so a browser without an adapter fails
+ * By default the page asks for `backend: 'webgpu'`, so a browser without an adapter fails
  * with `BACKEND_UNAVAILABLE` rather than measuring the WebGL2 fallback. A
  * software adapter such as SwiftShader still comes up on `webgpu`, so the
  * runner also exits non-zero when the adapter, or the one behind any device

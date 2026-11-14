@@ -9,7 +9,7 @@ WebGPU by graph size, edge style, node mode and node hit testing, still and
 animating, with `--memory` measure what each pass holds in GPU and heap
 memory, with `--gpu` the GPU time of each pass, and with `--motion=springs`
 animate through `createSceneMotion`, with `--moving` retargeting only a share
-of the nodes.
+of the nodes, and with `--backend=webgl2` draw through the WebGL2 fallback.
 `backend-probe.html` and `backend-probe.mjs` are the odd ones out and the
 directory name undersells them: they do not measure anything, they CHECK
 something, which is which backend `@prnt/dagr-render` comes up on and whether the
@@ -890,14 +890,14 @@ DAGR_CHROMIUM="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" \
 ```
 
 `frame-profile.mjs` draws a grid of alternating rounded rectangles and circles
-with about 1.3 straight edges per node, through a renderer that asks for
-`backend: 'webgpu'`, so a browser without an adapter fails with
+with about 1.3 straight edges per node, through a renderer that by default asks
+for `backend: 'webgpu'`, so a browser without an adapter fails with
 `BACKEND_UNAVAILABLE` instead of measuring the fallback. A software WebGPU
 adapter, such as SwiftShader, gets past that check, because the renderer can
 come up on `webgpu` through it. So when the adapter reports
 `isFallbackAdapter` the runner says so on stderr before it measures, and exits
-non-zero even if every row then comes up on `webgpu`. Outside `--memory` it
-also exits non-zero unless every device the page created reports
+non-zero even if every row then comes up on `webgpu`. On `webgpu`, outside
+`--memory`, it also exits non-zero unless every device the page created reports
 `isFallbackAdapter: false`. Each size, edge style, node mode, part and motion runs two modes for 300 frames after 60 of warm-up. `still` calls `render()` every frame.
 `animated` also replaces every node centre and every edge route each frame
 through `setNodes` and `setEdges`, from a sway computed from the clock: the
@@ -4417,8 +4417,8 @@ fallback's GPU frame is not in this table.
 - **The fallback holds the same rows as WebGPU.** Every row holds the tick
   except smooth edges with every node moving, as on WebGPU. That row misses
   more on WebGL2: 1.0% to 2.2% of ticks at DPR 1 against the paired WebGPU
-  run's 0.8%, and 3.1% to 6.8% at DPR 2 against 0.3%. At DPR 2 one run's
-  interval p95 reached 33.3 ms, two ticks.
+  run's 0.8%, and 3.1% to 6.8% at DPR 2 against 0.3%. At DPR 2 two of the
+  three runs' interval p95 reached 33.2 and 33.3 ms, two ticks.
 - **The DPR 2 gap is not traced.** At DPR 1 the fallback's steps on that
   row are within 0.5 ms of the paired WebGPU run's. At DPR 2, `advance` reads
   3.6 to 4.6 ms against 2.5, `apply` 15.0 to 15.9 against 13.4 and `input`
