@@ -4236,7 +4236,7 @@ probed at run time, was `apple` `metal-3` (`Apple M4`), not a fallback, and
 720, 13,169 edges, 60 warm-up and 1,200 measured frames per mode, 42 to 44
 retargets per animated mode, control tick 16.7 ms in every run. At `fit`
 (zoom 0.0715) no tier is open and the overlay holds no elements; at zoom 1 it
-held 86 to 88 labels. Three runs at each zoom and DPR, DPR 1 and 2
+had 86 to 88 labels attached at the end of each mode. Three runs at each zoom and DPR, DPR 1 and 2
 alternating, one at a time, load average 2.9 to 4.7 at the start of each
 (read with `uptime`), which was not controlled. Columns as above, with
 `richNodes` (every node's `setNode`) and `sync` (the overlay's cull and
@@ -4268,12 +4268,15 @@ smooth all-moving rows was 33.4 to 51.0 ms, though still modes had long
 single intervals in some runs too (up to 81 ms).
 
 **Paired with plain shapes**, to separate the tiers from the date and the
-Chrome version: three more runs straight after the twelve, at zoom 1 and DPR 1,
+Chrome version: three more runs after the sixteen, at zoom 1 and DPR 1 only,
 with `--edges=smooth --nodes=shapes,rich`, so each launch measured both node
-modes on the same scene, shapes first. With every node moving, `shapes`
-missed 0.4%, 0.3% and 0.2% of ticks and `rich` 2.4%, 1.4% and 1.5%, with
-`setEdges` 5.8 to 6.1 ms and a retarget's `apply` 14.0 to 17.1 in both
-modes. The still modes missed 0% in every run.
+modes on the same scene, shapes first in every launch. Load average 2.6 to
+4.1 at the start of each. Two first attempts exited 1 when the page's local
+HTTP server stopped (a 30 second page wait timed out) and were rerun once it
+was restarted. With every node moving, `shapes` missed 0.4%, 0.3% and 0.2%
+of ticks and `rich` 2.4%, 1.4% and 1.5%, with `setEdges` 5.8 to 6.1 ms and a
+retarget's `apply` 14.0 to 17.1 across both modes. The still modes missed 0%
+in every run.
 
 **GPU time per frame**, from `--gpu` with the same launch, one run at each
 zoom and DPR straight after that zoom's six. The runner accepted all four,
@@ -4292,26 +4295,38 @@ passes summed, in milliseconds:
 | 2 | 1 | smooth | 1.20 / 1.21 | 1.17 / 1.23 |
 
 The longest single GPU frame was 2.04 ms. These match the `shapes` rows'
-GPU time at `fit` and at zoom 1 within 0.01 ms at the median: the overlay is
-DOM, not a GPU pass.
+GPU time at `fit` and at zoom 1 within 0.01 ms at the median (one 95th
+percentile reads higher: 0.87 against 0.53 ms for straight edges with every
+node moving at `fit` and DPR 1). The overlay is DOM, which these timestamps
+do not see.
 
 - **Straight edges hold the tick with rich nodes at both zooms.** No
   straight row missed a tick with every node moving, and the still rows
   missed at most 0.1%.
-- **Rich nodes make smooth edges with every node moving miss more.** At
-  `fit` that row missed 0.7% to 1.4% of ticks, against 0.1% to 0.8% without
-  rich nodes on 2026-10-31 (Chrome 156); at zoom 1, 1.3% to 3.6%, against
-  0.2% to 0.3% on 2026-11-13. The paired runs show the same gap in one
-  launch: 1.4% to 2.4% against 0.2% to 0.4%. The steps the two modes share
-  cost the same in those pairs, so the gap is the tiers' work.
+- **At zoom 1, rich nodes make smooth edges with every node moving miss
+  more.** That row missed 1.3% to 3.6% of ticks, against 0.2% to 0.3% without
+  rich nodes on 2026-11-13, and the paired runs show the gap in one launch:
+  1.4% to 2.4% against 0.2% to 0.4%. In those pairs the per-frame steps
+  both modes share were within 0.4 ms of each other, none more than 0.1 ms
+  higher in `rich`, and a retarget's `apply` was 1.0 ms lower to 0.5 ms
+  higher, so the gap comes with the rich mode, which ran second in every
+  launch: the timed tier steps plus whatever DOM work their labels cause.
+- **At `fit` the gap is not established.** That row missed 0.7% to 1.4%,
+  against 0.1% to 0.8% without rich nodes on 2026-10-31, on Chrome 156
+  rather than 157; the ranges overlap and no paired run was made at `fit`.
+  Today's retarget `apply` reads 1 to 3 ms above the earlier dates in both
+  node modes (14.0 to 17.1 in the pairs against 13.2 to 14.4 on 2026-11-13),
+  so cross-date comparisons carry that shift.
 - **The timed tier work is about 1.5 ms a frame, at either zoom.**
-  `richNodes` is 1.0 to 1.4 ms and the animated `sync` 0.2 to 0.4, as on
-  2026-10-18. Smooth edges with every node moving already spend about 10 to
+  `richNodes` is 1.0 to 1.4 ms, as on 2026-10-18 (1.1 to 1.3), and the
+  animated `sync` 0.2 to 0.4, a little above that date's 0.1 to 0.2. Smooth edges with every node moving already spend about 10 to
   12 ms of timed CPU between retargets without them and more than a tick on a retarget's frame, so the
   tiers' 1.5 ms lands on a frame with little room left.
-- **Zoom 1 misses more than `fit`, and the timed steps do not say why.** The
-  timed tier steps are within 0.2 ms of each other at the two zooms, and the
-  GPU frame is shorter at zoom 1. What differs is that at zoom 1 the overlay
+- **Zoom 1 misses more than `fit`, and the timed tier steps do not say
+  why.** Each is within 0.3 ms of itself at the two zooms, and the GPU frame
+  is shorter at zoom 1. A retarget's `apply` reads 16.3 to 17.0 ms at zoom 1
+  against 14.0 to 16.8 at `fit`, overlapping, and the zoom 1 runs with the
+  lowest `apply` missed the fewest ticks; not traced. What differs is that at zoom 1 the overlay
   moves 86 to 88 labels every frame, and the browser's style, layout and
   compositing of those elements runs after the frame's callback, where this
   harness does not time it. Not traced.
