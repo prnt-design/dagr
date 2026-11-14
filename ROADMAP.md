@@ -524,8 +524,8 @@ branches never enter public docs, source, npm artifacts, or job fixtures.
     JavaScript steps that do not touch the backend, not traced. No GPU time on
     WebGL2. See
     [the fallback rows](bench/browser/README.md#the-webgl2-fallback-at-10000-on-the-apple-m4-2026-11-14).
-  - The WebGL2 fallback at zoom 1 on the same Apple M4, 2026-11-14 on main
-    `e816415`: Chrome 157 headed, `renderer.backend` `webgl2`, every context
+  - The WebGL2 fallback at zoom 1 at 10,000 on the same Apple M4,
+    2026-11-14 on main `e816415`: Chrome 157 headed, `renderer.backend` `webgl2`, every context
     on ANGLE's Metal renderer for the Apple M4, not SwiftShader, DPR 1 and 2,
     three runs each. Smooth edges with every node moving miss 1.1% to 2.0% of
     ticks at DPR 1 and 1.1% to 3.9% at DPR 2, against 0.6% and 0.3% in one
