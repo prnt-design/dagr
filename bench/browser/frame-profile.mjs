@@ -11,8 +11,9 @@
  * of the nodes and the edges touching them, so the edges at rest show what
  * `setEdges` saves by copying an unchanged route. `--pick` adds GPU node picks,
  * one in flight at a time, through `Renderer.pickNode` (M4.8b), and
- * `--edge-hit` the CPU edge hit index over the drawn edges (M4.8b). Evidence,
- * not a gate: see the README.
+ * `--edge-hit` the CPU edge hit index over the drawn edges (M4.8b).
+ * `--backend=webgl2` draws through the WebGL2 fallback instead. Evidence, not
+ * a gate: see the README.
  *
  * ```
  * pnpm --filter @prnt/dagr-render --filter @prnt/dagr-react build   # the page imports from dist
@@ -23,13 +24,17 @@
  *   # [--sizes=1000,2500] [--edges=straight,dashed,smooth] [--nodes=shapes,rich]
  *   # [--zoom=fit|1] [--dpr=2] [--frames=300] [--warmup=60] [--hit] [--memory] [--headless]
  *   # [--gpu] [--parts=all,nodes,edges] [--motion=sway,springs] [--moving=1,0.1] [--pick] [--edge-hit]
+ *   # [--backend=webgpu|webgl2]
  * ```
  *
  * The page asks for `backend: 'webgpu'`, so a browser without an adapter fails
  * with `BACKEND_UNAVAILABLE` rather than measuring the WebGL2 fallback. A
  * software adapter such as SwiftShader still comes up on `webgpu`, so the
  * runner also exits non-zero when the adapter, or the one behind any device
- * the page created, reports `isFallbackAdapter`.
+ * the page created, reports `isFallbackAdapter`. With `--backend=webgl2` the
+ * page asks for `backend: 'webgl2'`, and the runner exits non-zero when no
+ * WebGL2 context names its GPU or one names a software renderer, since Chrome
+ * falls back to SwiftShader there too.
  *
  * `DAGR_CDP`, a DevTools endpoint such as `windows-chrome.mjs` prints, attaches
  * to a running Chrome instead of launching one.
@@ -120,6 +125,12 @@ const pick = process.argv.includes('--pick');
 const edgeHit = process.argv.includes('--edge-hit');
 const memory = process.argv.includes('--memory');
 const gpu = process.argv.includes('--gpu');
+const BACKENDS = ['webgpu', 'webgl2'];
+const backend = option('backend', 'webgpu');
+if (!BACKENDS.includes(backend)) throw new Error(`--backend takes ${BACKENDS.join(', ')}, got ${backend}`);
+if (backend === 'webgl2' && (gpu || memory)) {
+  throw new Error('--gpu and --memory read WebGPU timestamps and buffers, so they take only --backend=webgpu');
+}
 if (memory && (gpu || partsList.join() !== 'all' || motions.join() !== 'sway' || partialMotion)) {
   throw new Error(
     '--memory builds the whole scene and counts every buffer, so it takes none of --gpu, --parts, --motion and --moving',
@@ -247,7 +258,7 @@ const launch =
       }
     : { browserVersion: browser.version(), attached: CDP, userAgent: await page.evaluate('navigator.userAgent') };
 const adapter = await page.evaluate(() => window.adapter());
-if (adapter.adapter?.isFallbackAdapter === true) {
+if (backend === 'webgpu' && adapter.adapter?.isFallbackAdapter === true) {
   console.error(
     `the adapter is a fallback adapter (${adapter.adapter.vendor} ${adapter.adapter.architecture}), not a GPU, so this run is not a WebGPU result`,
   );
@@ -359,8 +370,8 @@ for (const size of sizes) {
           for (const moving of movingList) {
             runs.push(
               await page.evaluate(
-                ([n, w, f, z, e, m, h, p, s, v, k, g]) => window.profile(n, w, f, z, e, m, h, p, s, v, k, g),
-                [size, warmup, frames, zoom, style, nodeMode, hit, parts, motion, moving, pick, edgeHit],
+                ([n, w, f, z, e, m, h, p, s, v, k, g, b]) => window.profile(n, w, f, z, e, m, h, p, s, v, k, g, b),
+                [size, warmup, frames, zoom, style, nodeMode, hit, parts, motion, moving, pick, edgeHit, backend],
               ),
             );
           }
@@ -371,6 +382,7 @@ for (const size of sizes) {
 }
 const controlRun = await page.evaluate(([w, f]) => window.control(w, f), [warmup, frames]);
 const deviceAdapters = await page.evaluate(() => window.deviceAdapters());
+const glRenderers = await page.evaluate(() => window.glRenderers());
 await browser.close();
 
 const tickMs = summarise(controlRun.intervals).median;
@@ -417,17 +429,25 @@ const report = {
   launch,
   adapter,
   deviceAdapters,
+  ...(backend === 'webgl2' ? { glRenderers } : {}),
   viewport: { width: 1280, height: 720, devicePixelRatio: dpr },
-  plan: { warmup, frames, zoom: zoomOption, edges: edgeStyles, nodes: nodeModes, hit, pick, edgeHit, gpu, parts: partsList, motion: motions, moving: movingList },
+  plan: { backend, warmup, frames, zoom: zoomOption, edges: edgeStyles, nodes: nodeModes, hit, pick, edgeHit, gpu, parts: partsList, motion: motions, moving: movingList },
   tickMs,
   control,
   rows,
   warnings,
 };
 console.log(JSON.stringify(report, null, 1));
-if (rows.some((row) => row.backend !== 'webgpu')) process.exitCode = 1;
-if (deviceAdapters.length === 0 || deviceAdapters.some((a) => a.isFallbackAdapter !== false)) {
+if (rows.some((row) => row.backend !== backend)) process.exitCode = 1;
+if (backend === 'webgpu' && (deviceAdapters.length === 0 || deviceAdapters.some((a) => a.isFallbackAdapter !== false))) {
   console.error('a device was created on an adapter not known to be hardware, or none was created; see deviceAdapters');
+  process.exitCode = 1;
+}
+if (
+  backend === 'webgl2' &&
+  (glRenderers.length === 0 || glRenderers.some((r) => r.renderer === null || /swiftshader|llvmpipe|software/i.test(r.renderer)))
+) {
+  console.error('a WebGL2 context did not name its GPU, or named a software renderer, or none was created; see glRenderers');
   process.exitCode = 1;
 }
 if (rows.some((row) => row.pick !== null && Object.values(row.pick).some((p) => p.errors.length > 0 || p.settled === 0))) {
