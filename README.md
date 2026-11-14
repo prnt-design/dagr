@@ -84,6 +84,13 @@ install the skill, and current npm tarballs do not bundle it. The
 [learning/mobile roadmap](ROADMAP.md#explorer-learning-and-mobile-track)
 tracks version-matched npm bundling and adaptive library support.
 
+A second skill, [dagr-chart](skills/dagr-chart/SKILL.md), covers bar, line and
+combined charts with `DagrChart`, with a [typed example](skills/dagr-chart/references/chart.tsx).
+It installs the same way, with `dagr-chart` in place of
+`dagr-learning-explorer` in the commands above, and the same CSS types note
+applies. Installing the skill does not install `@prnt/dagr-chart`, which
+is not on npm yet.
+
 ## Mobile framework support
 
 Dagr's shared touch primitive, `createPinchGesture`, lives in the three.js-free
