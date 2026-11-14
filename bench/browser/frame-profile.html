@@ -513,7 +513,7 @@
       // move's own cost.
       // `parts` draws the nodes, the edges or both, so a pass's GPU time can
       // be split between them by subtraction.
-      window.profile = async (count, warmup, frames, zoom, edgeStyle, nodeMode, hit, parts, motion, moving, pick, edgeHit) => {
+      window.profile = async (count, warmup, frames, zoom, edgeStyle, nodeMode, hit, parts, motion, moving, pick, edgeHit, backend) => {
         const { group, bend } = EDGE_STYLES[edgeStyle];
         const drawNodes = parts === 'all' || parts === 'nodes';
         const drawEdges = parts === 'all' || parts === 'edges';
@@ -523,7 +523,7 @@
         const buildStart = performance.now();
         const renderer = await createRenderer({
           canvas: freshCanvas(),
-          backend: 'webgpu',
+          backend,
           nodes: drawNodes ? nodesAt(home) : [],
           edgeGroups: [{ id: 'edges', ...group }],
         });
@@ -690,7 +690,7 @@
         await picking;
         const animatedGpu = await gpuFrames();
         const heapAfter = heap();
-        const backend = renderer.backend;
+        const drewOn = renderer.backend;
         const drawnZoom = renderer.camera.zoom;
         const animatedElements = overlay === null ? null : overlay.activeCount;
         rich?.dispose();
@@ -709,7 +709,7 @@
           hit: hit ? { indexMs: hitIndexMs, hits } : null,
           edgeHit: edgeHit ? { indexMs: edgeIndexMs, hits: edgeHits } : null,
           pick: pick ? picks : null,
-          backend,
+          backend: drewOn,
           zoom: drawnZoom,
           buildMs,
           heap: { before: heapBefore, built: heapBuilt, afterAnimated: heapAfter },
@@ -926,6 +926,24 @@
         };
       }
       window.deviceAdapters = () => deviceAdapters;
+
+      // Chrome can fall back to SwiftShader for WebGL2, and this extension is
+      // the only API that names the renderer a context got.
+      const glRenderers = [];
+      const getContext = HTMLCanvasElement.prototype.getContext;
+      HTMLCanvasElement.prototype.getContext = function (type, attributes) {
+        const context = getContext.call(this, type, attributes);
+        if (type === 'webgl2' && context !== null) {
+          const info = context.getExtension('WEBGL_debug_renderer_info');
+          const seen = {
+            vendor: info === null ? null : context.getParameter(info.UNMASKED_VENDOR_WEBGL),
+            renderer: info === null ? null : context.getParameter(info.UNMASKED_RENDERER_WEBGL),
+          };
+          if (!glRenderers.some((r) => JSON.stringify(r) === JSON.stringify(seen))) glRenderers.push(seen);
+        }
+        return context;
+      };
+      window.glRenderers = () => glRenderers;
 
       window.adapter = async () => {
         if (!('gpu' in navigator)) return { navigatorGpu: false, adapter: null };

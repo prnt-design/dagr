@@ -9,7 +9,7 @@ WebGPU by graph size, edge style, node mode and node hit testing, still and
 animating, with `--memory` measure what each pass holds in GPU and heap
 memory, with `--gpu` the GPU time of each pass, and with `--motion=springs`
 animate through `createSceneMotion`, with `--moving` retargeting only a share
-of the nodes.
+of the nodes, and with `--backend=webgl2` draw through the WebGL2 fallback.
 `backend-probe.html` and `backend-probe.mjs` are the odd ones out and the
 directory name undersells them: they do not measure anything, they CHECK
 something, which is which backend `@prnt/dagr-render` comes up on and whether the
@@ -886,18 +886,18 @@ DAGR_CHROMIUM="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" \
   # [--sizes=1000,2500] [--edges=straight,dashed,smooth] [--nodes=shapes,rich]
   # [--zoom=fit|1] [--dpr=2] [--frames=300] [--warmup=60] [--hit] [--memory] [--headless]
   # [--gpu] [--parts=all,nodes,edges] [--motion=sway,springs] [--moving=1,0.1] [--pick]
-  # [--edge-hit]
+  # [--edge-hit] [--backend=webgpu|webgl2]
 ```
 
 `frame-profile.mjs` draws a grid of alternating rounded rectangles and circles
-with about 1.3 straight edges per node, through a renderer that asks for
-`backend: 'webgpu'`, so a browser without an adapter fails with
+with about 1.3 straight edges per node, through a renderer that by default asks
+for `backend: 'webgpu'`, so a browser without an adapter fails with
 `BACKEND_UNAVAILABLE` instead of measuring the fallback. A software WebGPU
 adapter, such as SwiftShader, gets past that check, because the renderer can
 come up on `webgpu` through it. So when the adapter reports
 `isFallbackAdapter` the runner says so on stderr before it measures, and exits
-non-zero even if every row then comes up on `webgpu`. Outside `--memory` it
-also exits non-zero unless every device the page created reports
+non-zero even if every row then comes up on `webgpu`. On `webgpu`, outside
+`--memory`, it also exits non-zero unless every device the page created reports
 `isFallbackAdapter: false`. Each size, edge style, node mode, part and motion runs two modes for 300 frames after 60 of warm-up. `still` calls `render()` every frame.
 `animated` also replaces every node centre and every edge route each frame
 through `setNodes` and `setEdges`, from a sway computed from the clock: the
@@ -913,6 +913,17 @@ explorer ceiling below gives. The control, measured last, is a page moving one
 is the share of intervals that rounded to two ticks or more. The runner exits
 non-zero if that tick is not within 10% of 60 or 120 Hz, since a throttled
 control would make every row look clean.
+
+`--backend=webgl2` asks for `backend: 'webgl2'` instead, so the same scene is
+drawn through the WebGL2 fallback. A WebGL2 context names its GPU only through
+`WEBGL_debug_renderer_info`, so the page records the unmasked vendor and
+renderer of every `webgl2` context it creates as `glRenderers`, and the runner
+exits non-zero unless every row came up on `webgl2` and every context named a
+renderer that does not match SwiftShader, llvmpipe, `software`, WARP or
+Microsoft Basic Render Driver. Launched
+with `--use-angle=swiftshader` on the Apple M4, `renderer.backend` still read
+`webgl2` and the runner exited 1 on the renderer string. `--gpu` and `--memory`
+read WebGPU timestamps and buffers, so they take only `--backend=webgpu`.
 
 `--edges` runs every size once per edge style, `straight` by default.
 `dashed` gives the group an 8 pixel dash at half duty, and its animated mode
@@ -4338,3 +4349,89 @@ do not see.
 Hit testing is not in these rows. Still not covered by the matrix: on the
 NVIDIA adapter, sizes below 10,000, a zoom other than `fit`, unrounded GPU
 timestamps and rich nodes; on either machine, the WebGL2 fallback.
+
+### The WebGL2 fallback at 10,000 on the Apple M4 (2026-11-14)
+
+`tsk_ad4b7ce0d93b`, the matrix's first rows on the fallback. The 10,000-node
+rows [above](#the-same-matrix-on-an-apple-m4-2026-10-31) drawn through
+`--backend=webgl2`, on main `215363d` with only the harness's `--backend`
+option added.
+
+```
+python3 -m http.server 8733 --bind 127.0.0.1    # from the repo root
+DAGR_CHROMIUM="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" \
+DAGR_CHROMIUM_ARGS=--enable-webgpu-developer-features \
+node bench/browser/frame-profile.mjs --backend=webgl2 \
+  --motion=springs --sizes=10000 --edges=straight,smooth --moving=1,0.1 --frames=1200 --dpr=1   # then --dpr=2
+```
+
+The same Apple M4 Mac mini, on Google Chrome 157.0.8103.51, headed and
+launched by the script with `--enable-webgpu-developer-features`, kept so the
+launch matches the WebGPU rows. `renderer.backend` was `webgl2` on every row
+of every run, and every WebGL2 context the page created named `ANGLE (Apple,
+ANGLE Metal Renderer: Apple M4, Unspecified Version)`, so these frames ran on
+the GPU through ANGLE's Metal backend, not SwiftShader. Viewport 1280 by 720,
+`fit` (zoom 0.0715), 13,169 edges, 60 warm-up and 1,200 measured frames per
+mode, 42 to 45 retargets per animated mode (42 in the paired WebGPU runs), control tick 16.7 ms in every run.
+Three runs at each DPR, DPR 1 and 2 alternating, one at a time, load average
+2.8 to 4.2 at the start of each (read with `uptime`), which was not
+controlled. Columns as in
+[the 2026-10-31 rows](#the-same-matrix-on-an-apple-m4-2026-10-31), the still
+rows folding both still passes of each run.
+
+| DPR | Edges | Motion | Interval p95 | Past one tick | `apply` | `advance` | `setNodes` | `setEdges` | `render` | Holds the tick |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 1 | straight | still | 18.6 to 18.7 | 0% to 0.1% | | | | | 0.3 | yes |
+| 1 | straight | all moving | 18.3 | 0%, 0%, 0% | 10.5 to 10.7 | 2.4 | 1.1 | 0.8 to 0.9 | 0.2 | yes |
+| 1 | straight | a tenth | 18.6 | 0%, 0%, 0% | 1.0 | 0.7 to 0.8 | 1.7 | 0.7 to 0.8 | 0.1 | yes |
+| 1 | smooth | still | 18.6 to 18.7 | 0% to 0.3% | | | | | 0.3 | yes |
+| 1 | smooth | all moving | 18.4 to 18.6 | 2.2%, 1.8%, 1.0% | 13.9 to 14.5 | 2.4 to 2.7 | 1.2 | 6.8 to 7.0 | 0.5 | **no** |
+| 1 | smooth | a tenth | 17.9 to 18.2 | 0%, 0%, 0% | 1.6 to 1.7 | 0.5 | 1.2 | 2.7 | 0.5 | yes |
+| 2 | straight | still | 18.6 to 18.7 | 0% to 0.2% | | | | | 0.3 | yes |
+| 2 | straight | all moving | 17.9 to 18.2 | 0%, 0%, 0% | 9.0 to 10.8 | 1.6 to 2.5 | 1.4 to 1.7 | 0.8 to 0.9 | 0.2 | yes |
+| 2 | straight | a tenth | 18.6 | 0%, 0%, 0% | 1.3 | 0.3 | 1.3 | 1.5 to 1.6 | 0.3 | yes |
+| 2 | smooth | still | 18.6 to 18.7 | 0% | | | | | 0.3 | yes |
+| 2 | smooth | all moving | 18.7 to 33.3 | 6.8%, 3.1%, 6.5% | 15.0 to 15.9 | 3.6 to 4.6 | 1.5 to 1.6 | 7.2 to 7.4 | 0.5 | **no** |
+| 2 | smooth | a tenth | 18.1 to 18.3 | 0%, 0%, 0% | 1.9 to 2.1 | 0.5 | 1.3 | 3.9 to 4.5 | 0.5 to 0.6 | yes |
+
+`input` was 0.4 to 1.0 ms on every animated row at DPR 1 and on the
+tenth-moving rows at DPR 2, and 1.5 to 2.0 ms on the all-moving rows at DPR
+2. The interval median was 16.7 ms on every row of every run. The longest
+interval in each run of the smooth all-moving rows was 35.2 to 50.0 ms; still
+modes had long single intervals in some runs too (up to 88.2 ms).
+
+**Paired with WebGPU on the same day**, so that the comparison does not
+cross dates or Chrome versions: one `--backend=webgpu` run at each DPR with
+the same command, straight after the six above, load average 3.6 and 4.2 at
+their starts. The adapter was `apple` `metal-3` (`Apple M4`), not a fallback,
+and `renderer.backend` was `webgpu` on every row. Every row held the tick
+except smooth edges with every node moving, which missed 0.8% (DPR 1) and
+0.3% (DPR 2) of ticks, with `setEdges` 7.0 and 6.9 ms, `advance` 2.5 and a
+retarget's `apply` 14.0 and 13.4. On the animated rows `render` read 0.3 ms
+with straight edges and 0.6 to 0.8 with smooth, against WebGL2's 0.1 to 0.3
+and 0.5 to 0.6.
+
+No GPU time: WebGL2 has no timestamp queries that `--gpu` reads, so the
+fallback's GPU frame is not in this table.
+
+- **The fallback holds the same rows as WebGPU.** Every row holds the tick
+  except smooth edges with every node moving, as on WebGPU. That row misses
+  more on WebGL2: 1.0% to 2.2% of ticks at DPR 1 against the paired WebGPU
+  run's 0.8%, and 3.1% to 6.8% at DPR 2 against 0.3%. At DPR 2 two of the
+  three runs' interval p95 reached 33.2 and 33.3 ms, two ticks.
+- **The DPR 2 gap is not traced.** At DPR 1 the fallback's steps on that
+  row are within 0.5 ms of the paired WebGPU run's. At DPR 2, `advance` reads
+  3.6 to 4.6 ms against 2.5, `apply` 15.0 to 15.9 against 13.4 and `input`
+  1.5 to 1.6 against 0.6, and `setEdges` is within 0.5 ms. Those steps do not
+  call the backend; where their rise comes from (garbage or main-thread
+  contention from the backend's own calls among the candidates) was not
+  traced. `render` times only the CPU side of issuing the frame, and is
+  shorter on WebGL2 at both ratios. What the browser does after the frame's
+  callback, and the GPU frame, are not timed here.
+- **A tenth moving still holds at DPR 2**, with `setEdges` 3.9 to 4.5 ms
+  against DPR 1's 2.7 and the paired WebGPU run's 2.6; not traced.
+
+Hit testing is not in these rows. Still not covered by the matrix: on the
+NVIDIA adapter, sizes below 10,000, a zoom other than `fit`, unrounded GPU
+timestamps, rich nodes and the WebGL2 fallback; on the Apple M4, the
+fallback below 10,000, at zoom 1 and with rich nodes, and its GPU time.
