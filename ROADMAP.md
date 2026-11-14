@@ -507,11 +507,11 @@ branches never enter public docs, source, npm artifacts, or job fixtures.
     `fit` and zoom 1, DPR 1 and 2, three runs each, every node moving.
     Straight edges hold the tick at both zooms. Smooth edges with every node
     moving miss 1.3% to 3.6% of ticks at zoom 1 (86 to 88 labels attached),
-    and paired runs in one launch there gave 1.4% to 2.4% against plain
+    and paired runs in one launch there (rich second) gave 1.4% to 2.4% against plain
     shapes' 0.2% to 0.4%. At `fit` that row missed 0.7% to 1.4%, against 0.1%
     to 0.8% without rich nodes on an earlier date and Chrome, unpaired. The
     timed tier work is about 1.5 ms a frame at either zoom; why zoom 1 misses
-    more is not traced. GPU time matches the plain-shape rows. See
+    more is not traced. GPU time matches the plain-shape rows at the median. See
     [rich nodes](bench/browser/README.md#rich-nodes-at-10000-on-the-apple-m4-2026-11-14).
 
   Remaining task: `tsk_ad4b7ce0d93b` (Backlog, behind the 2026-10-29 priority

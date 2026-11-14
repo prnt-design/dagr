@@ -4263,12 +4263,13 @@ placement) from
 | 2 | 1 | smooth | all moving | 18.6 to 18.7 | 1.3%, 3.6%, 2.7% | 16.3 to 16.8 | 1.8 to 2.3 | 1.2 | 5.9 to 7.2 | 1.2 to 1.3 | 0.2 to 0.4 | 0.7 | **no** |
 
 `input` was 0.4 to 0.9 ms on every animated row and the interval median was
-16.7 ms on every row of every run. The longest interval in each run of the
+16.7 ms on every row of every run. The still `sync` reads high (up to 2.4
+ms), as it did on 2026-10-18 for the reasons given there. The longest interval in each run of the
 smooth all-moving rows was 33.4 to 51.0 ms, though still modes had long
 single intervals in some runs too (up to 81 ms).
 
 **Paired with plain shapes**, to separate the tiers from the date and the
-Chrome version: three more runs after the sixteen, at zoom 1 and DPR 1 only,
+Chrome version: three more runs after the twelve timing and four GPU runs, at zoom 1 and DPR 1 only,
 with `--edges=smooth --nodes=shapes,rich`, so each launch measured both node
 modes on the same scene, shapes first in every launch. Load average 2.6 to
 4.1 at the start of each. Two first attempts exited 1 when the page's local
@@ -4294,9 +4295,11 @@ passes summed, in milliseconds:
 | 2 | 1 | straight | 1.06 / 1.07 | 1.06 / 1.43 |
 | 2 | 1 | smooth | 1.20 / 1.21 | 1.17 / 1.23 |
 
-The longest single GPU frame was 2.04 ms. These match the `shapes` rows'
+The longest single GPU frame was 2.04 ms. With timestamp queries on, the
+smooth all-moving rows missed 1.0% and 2.8% of ticks at `fit` (DPR 1 and 2)
+and 4.5% and 1.7% at zoom 1, and the straight rows none. These match the `shapes` rows'
 GPU time at `fit` and at zoom 1 within 0.01 ms at the median (one 95th
-percentile reads higher: 0.87 against 0.53 ms for straight edges with every
+percentile reads markedly higher: 0.87 against 0.53 ms for straight edges with every
 node moving at `fit` and DPR 1). The overlay is DOM, which these timestamps
 do not see.
 
@@ -4314,8 +4317,9 @@ do not see.
 - **At `fit` the gap is not established.** That row missed 0.7% to 1.4%,
   against 0.1% to 0.8% without rich nodes on 2026-10-31, on Chrome 156
   rather than 157; the ranges overlap and no paired run was made at `fit`.
-  Today's retarget `apply` reads 1 to 3 ms above the earlier dates in both
-  node modes (14.0 to 17.1 in the pairs against 13.2 to 14.4 on 2026-11-13),
+  Today's retarget `apply` reads up to about 3 ms above the earlier dates in
+  both node modes (14.0 to 17.1 in the pairs against 13.2 to 14.3 on
+  2026-11-13 and 13.4 to 14.4 on 2026-10-31),
   so cross-date comparisons carry that shift.
 - **The timed tier work is about 1.5 ms a frame, at either zoom.**
   `richNodes` is 1.0 to 1.4 ms, as on 2026-10-18 (1.1 to 1.3), and the
@@ -4327,7 +4331,7 @@ do not see.
   is shorter at zoom 1. A retarget's `apply` reads 16.3 to 17.0 ms at zoom 1
   against 14.0 to 16.8 at `fit`, overlapping, and the zoom 1 runs with the
   lowest `apply` missed the fewest ticks; not traced. What differs is that at zoom 1 the overlay
-  moves 86 to 88 labels every frame, and the browser's style, layout and
+  moves about 86 to 88 labels (the count at the end of each mode) every frame, and the browser's style, layout and
   compositing of those elements runs after the frame's callback, where this
   harness does not time it. Not traced.
 
