@@ -4435,3 +4435,96 @@ Hit testing is not in these rows. Still not covered by the matrix: on the
 NVIDIA adapter, sizes below 10,000, a zoom other than `fit`, unrounded GPU
 timestamps, rich nodes and the WebGL2 fallback; on the Apple M4, the
 fallback below 10,000, at zoom 1 and with rich nodes, and its GPU time.
+
+### The WebGL2 fallback at zoom 1 on the Apple M4 (2026-11-14)
+
+`tsk_ad4b7ce0d93b`. The [fallback rows](#the-webgl2-fallback-at-10000-on-the-apple-m4-2026-11-14)
+above at zoom 1, the zoom of the
+[WebGPU zoom 1 rows](#zoom-1-at-10000-nodes-on-the-apple-m4-2026-11-13), on
+main `e816415`, nothing changed.
+
+```
+python3 -m http.server 8733 --bind 127.0.0.1    # from the repo root
+DAGR_CHROMIUM="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" \
+DAGR_CHROMIUM_ARGS=--enable-webgpu-developer-features \
+node bench/browser/frame-profile.mjs --backend=webgl2 \
+  --motion=springs --sizes=10000 --edges=straight,smooth --moving=1,0.1 --frames=1200 --zoom=1 --dpr=1   # then --dpr=2
+```
+
+The same Apple M4 Mac mini, on Google Chrome 157.0.8103.51, headed and
+launched by the script with `--enable-webgpu-developer-features`.
+`renderer.backend` was `webgl2` on every row of every run, and every WebGL2
+context the page created named `ANGLE (Apple, ANGLE Metal Renderer: Apple M4,
+Unspecified Version)`, not SwiftShader. Viewport 1280 by 720, zoom 1 about the
+fitted view's centre, 13,169 edges, 60 warm-up and 1,200 measured frames per
+mode, 42 to 44 retargets per animated mode (42 in the paired WebGPU runs),
+control tick 16.7 ms in every run. Three runs at each DPR, DPR 1 and 2
+alternating, one at a time, load average 2.9 to 4.4 at the start of each (read
+with `uptime`), which was not controlled. Columns as in
+[the 2026-10-31 rows](#the-same-matrix-on-an-apple-m4-2026-10-31), the still
+rows folding both still passes of each run.
+
+| DPR | Edges | Motion | Interval p95 | Past one tick | `apply` | `advance` | `setNodes` | `setEdges` | `render` | Holds the tick |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 1 | straight | still | 18.7 | 0% to 0.1% | | | | | 0.3 | yes |
+| 1 | straight | all moving | 17.9 to 18.3 | 0%, 0%, 0% | 10.4 to 10.8 | 2.1 to 2.5 | 1.1 | 0.8 to 1.3 | 0.2 | yes |
+| 1 | straight | a tenth | 18.6 to 18.7 | 0%, 0%, 0% | 1.0 to 1.3 | 0.7 to 0.8 | 1.4 to 1.6 | 0.7 to 0.8 | 0.1 | yes |
+| 1 | smooth | still | 18.6 to 18.7 | 0% | | | | | 0.3 | yes |
+| 1 | smooth | all moving | 18.6 to 18.7 | 1.1%, 1.2%, 2.0% | 14.0 to 16.4 | 2.0 to 2.9 | 1.2 to 1.3 | 7.0 to 7.3 | 0.5 | **no** |
+| 1 | smooth | a tenth | 17.8 to 18.0 | 0%, 0%, 0% | 1.7 to 2.0 | 0.5 | 1.2 | 2.6 to 2.7 | 0.5 | yes |
+| 2 | straight | still | 18.6 to 18.7 | 0% to 0.1% | | | | | 0.3 | yes |
+| 2 | straight | all moving | 18.2 to 18.6 | 1.8%, 0%, 0% | 9.2 to 11.1 | 1.7 to 2.0 | 1.2 to 1.5 | 0.9 to 1.7 | 0.2 | in two runs of three |
+| 2 | straight | a tenth | 18.3 to 18.6 | 0%, 0%, 0% | 1.2 to 1.6 | 0.3 | 1.3 | 1.6 to 1.7 | 0.3 | yes |
+| 2 | smooth | still | 18.6 to 18.7 | 0% | | | | | 0.3 | yes |
+| 2 | smooth | all moving | 18.6 to 18.8 | 3.9%, 1.1%, 3.3% | 14.5 to 17.5 | 2.5 to 3.3 | 1.3 to 1.5 | 6.9 to 7.4 | 0.5 | **no** |
+| 2 | smooth | a tenth | 18.1 to 18.2 | 0%, 0.1%, 0% | 1.8 to 2.2 | 0.3 to 0.5 | 1.2 to 1.3 | 3.4 to 3.9 | 0.6 to 0.7 | yes |
+
+`input` was 0.4 to 1.1 ms on every animated row at DPR 1 and on the
+tenth-moving rows at DPR 2, and 1.2 to 2.0 ms on the all-moving rows at DPR
+2. The interval median was 16.7 ms on every row of every run. The longest
+interval in each run of the smooth all-moving rows was 33.4 to 52.0 ms; still
+modes and the control had long single intervals in some runs too (up to
+61.0 ms).
+
+**Paired with WebGPU on the same day**: one `--backend=webgpu` run at each
+DPR with the same command, straight after the six above, load average 4.4 and
+2.6 at their starts. The adapter was `apple` `metal-3` (`Apple M4`), not a
+fallback, and `renderer.backend` was `webgpu` on every row. Every row held the
+tick except smooth edges with every node moving, which missed 0.6% (DPR 1) and
+0.3% (DPR 2) of ticks, with `setEdges` 6.7 and 7.0 ms, `advance` 2.5 and 2.1,
+`input` 0.6 at both, and a retarget's `apply` 13.6 and 15.6. On the animated
+rows `render` read 0.3 ms with straight edges and 0.6 to 0.7 with smooth,
+against WebGL2's 0.1 to 0.3 and 0.5 to 0.7.
+
+No GPU time: WebGL2 has no timestamp queries that `--gpu` reads.
+
+- **Zoom 1 holds the same rows on the fallback as `fit`, with one exception
+  in one run.** Smooth edges with every node moving miss the tick, as at
+  `fit` and on WebGPU. The exception is straight edges with every node moving
+  at DPR 2, which missed 1.8% of ticks in the first run (about 22 intervals
+  of two ticks or more, the longest 148.2 ms, with a retarget's `apply`
+  reaching 125.7 ms) and none in the other two. The paired WebGPU run missed
+  none. It is one run of three, not traced, so whether it recurs is not
+  known.
+- **The fallback still misses more than WebGPU on the row that misses.**
+  Smooth edges with every node moving missed 1.1% to 2.0% of ticks at DPR 1
+  against the paired WebGPU run's 0.6%, and 1.1% to 3.9% at DPR 2 against
+  0.3%. At `fit` the fallback missed 1.0% to 2.2% and 3.1% to 6.8%, so the
+  DPR 2 misses read lower at zoom 1, though the ranges overlap (3.3% and 3.9%
+  fall in `fit`'s range), and no run's interval p95 reached two
+  ticks here, against two of three at `fit`. These are separate launches with
+  uncontrolled load, so the zoom difference is not established.
+- **On that row some of the fallback's JavaScript steps read higher: at DPR
+  2 by less than at `fit`, at DPR 1 by more.** At `fit` the DPR 1 steps were
+  within 0.5 ms of WebGPU's. `setEdges` is within 0.6 ms of the paired WebGPU
+  run's at both ratios. At DPR 1 a retarget's `apply` reads 14.0 to 16.4 ms against 13.6,
+  and `advance` 2.0 to 2.9 against 2.5. At DPR 2, `advance` reads 2.5 to 3.3
+  against 2.1, `apply` 14.5 to 17.5 against 15.6, and `input` 1.4 to 1.6
+  against 0.6; at `fit` those were 3.6 to 4.6 against 2.5, 15.0 to 15.9
+  against 13.4, and 1.5 to 1.6 against 0.6. As at `fit`, these steps do not
+  call the backend, and where the rise comes from was not traced.
+
+Hit testing is not in these rows. Still not covered by the matrix: on the
+NVIDIA adapter, sizes below 10,000, a zoom other than `fit`, unrounded GPU
+timestamps, rich nodes and the WebGL2 fallback; on the Apple M4, the
+fallback below 10,000 and with rich nodes, and its GPU time.
