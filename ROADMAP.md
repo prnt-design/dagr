@@ -531,7 +531,7 @@ branches never enter public docs, source, npm artifacts, or job fixtures.
     ticks at DPR 1 and 1.1% to 3.9% at DPR 2, against 0.6% and 0.3% in one
     WebGPU run at each DPR on the same day. Every other row holds the tick,
     except one run of straight edges with every node moving at DPR 2 (1.8%,
-    one 148 ms stall, not traced). No GPU time on WebGL2. See
+    the longest interval 148 ms, not traced). No GPU time on WebGL2. See
     [the fallback at zoom 1](bench/browser/README.md#the-webgl2-fallback-at-zoom-1-on-the-apple-m4-2026-11-14).
 
   Remaining task: `tsk_ad4b7ce0d93b` (Backlog, behind the 2026-10-29 priority

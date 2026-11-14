@@ -4483,7 +4483,8 @@ rows folding both still passes of each run.
 tenth-moving rows at DPR 2, and 1.2 to 2.0 ms on the all-moving rows at DPR
 2. The interval median was 16.7 ms on every row of every run. The longest
 interval in each run of the smooth all-moving rows was 33.4 to 52.0 ms; still
-modes had long single intervals in some runs too (up to 61.0 ms).
+modes and the control had long single intervals in some runs too (up to
+61.0 ms).
 
 **Paired with WebGPU on the same day**: one `--backend=webgpu` run at each
 DPR with the same command, straight after the six above, load average 4.4 and
@@ -4500,20 +4501,23 @@ No GPU time: WebGL2 has no timestamp queries that `--gpu` reads.
 - **Zoom 1 holds the same rows on the fallback as `fit`, with one exception
   in one run.** Smooth edges with every node moving miss the tick, as at
   `fit` and on WebGPU. The exception is straight edges with every node moving
-  at DPR 2, which missed 1.8% of ticks in the first run, with one interval of
-  148.2 ms, and none in the other two. That row was the first animated mode
-  measured after that launch's warm-up, and the paired WebGPU run missed none;
-  a one-off stall, not traced, rather than a steady miss.
+  at DPR 2, which missed 1.8% of ticks in the first run (about 22 intervals
+  of two ticks or more, the longest 148.2 ms, with a retarget's `apply`
+  reaching 125.7 ms) and none in the other two. The paired WebGPU run missed
+  none. It is one run of three, not traced, so whether it recurs is not
+  known.
 - **The fallback still misses more than WebGPU on the row that misses.**
   Smooth edges with every node moving missed 1.1% to 2.0% of ticks at DPR 1
   against the paired WebGPU run's 0.6%, and 1.1% to 3.9% at DPR 2 against
   0.3%. At `fit` the fallback missed 1.0% to 2.2% and 3.1% to 6.8%, so the
-  DPR 2 misses read lower at zoom 1, and no run's interval p95 reached two
+  DPR 2 misses read lower at zoom 1, though the ranges overlap (3.3% and 3.9%
+  fall in `fit`'s range), and no run's interval p95 reached two
   ticks here, against two of three at `fit`. These are separate launches with
   uncontrolled load, so the zoom difference is not established.
-- **On that row the fallback's JavaScript steps read higher, by less than at
-  `fit`.** `setEdges` is within 0.6 ms of the paired WebGPU run's at both
-  ratios. At DPR 1 a retarget's `apply` reads 14.0 to 16.4 ms against 13.6,
+- **On that row some of the fallback's JavaScript steps read higher: at DPR
+  2 by less than at `fit`, at DPR 1 by more.** At `fit` the DPR 1 steps were
+  within 0.5 ms of WebGPU's. `setEdges` is within 0.6 ms of the paired WebGPU
+  run's at both ratios. At DPR 1 a retarget's `apply` reads 14.0 to 16.4 ms against 13.6,
   and `advance` 2.0 to 2.9 against 2.5. At DPR 2, `advance` reads 2.5 to 3.3
   against 2.1, `apply` 14.5 to 17.5 against 15.6, and `input` 1.4 to 1.6
   against 0.6; at `fit` those were 3.6 to 4.6 against 2.5, 15.0 to 15.9
