@@ -1,9 +1,9 @@
 /**
  * Frame-time distribution of `@prnt/dagr-render` on a WebGPU adapter, or the
  * WebGL2 fallback, by graph size, edge style and node mode, optionally with
- * node hit testing, still and animating (M4.10a). With `--memory` it measures instead what each pass holds
- * in GPU buffers and textures and in the JavaScript heap, and what a moving
- * pass allocates per frame. With `--gpu` it adds the GPU time of every pass
+ * node hit testing, still and animating (M4.10a). With `--memory` it measures
+ * instead what each pass holds in GPU buffers and textures and in the
+ * JavaScript heap, and what a moving pass allocates per frame. With `--gpu` it adds the GPU time of every pass
  * from timestamp queries (M4.10), and `--parts` draws the nodes or the edges
  * alone so that time can be split between them. `--motion=springs` moves the
  * animated mode through `createSceneMotion` with every spring in flight rather
