@@ -927,8 +927,8 @@
       }
       window.deviceAdapters = () => deviceAdapters;
 
-      // A WebGL2 context names its GPU only through this extension, and
-      // Chrome falls back to SwiftShader without saying so anywhere else.
+      // Chrome can fall back to SwiftShader for WebGL2, and this extension is
+      // the only API that names the renderer a context got.
       const glRenderers = [];
       const getContext = HTMLCanvasElement.prototype.getContext;
       HTMLCanvasElement.prototype.getContext = function (type, attributes) {

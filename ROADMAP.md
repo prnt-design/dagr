@@ -529,7 +529,7 @@ branches never enter public docs, source, npm artifacts, or job fixtures.
   refresh), complete the matrix with, on the NVIDIA adapter, sizes below
   10,000, a zoom other than `fit`, unrounded GPU timestamps, rich nodes and
   WebGL2, and on the Apple M4 WebGL2 below 10,000, at zoom 1 and with rich
-  nodes. The 10k slice is merged; the whole matrix is not done.
+  nodes, and its GPU time. The 10k slice is merged; the whole matrix is not done.
   The [browser measurement record](bench/browser/README.md#springs-in-flight-on-webgpu-m410)
   preserves the optimization sequence, rejected experiments and reproduction
   details; [working notes](specs/roadmap-notes.md#m4-renderer-dagrrender)

@@ -919,7 +919,8 @@ drawn through the WebGL2 fallback. A WebGL2 context names its GPU only through
 `WEBGL_debug_renderer_info`, so the page records the unmasked vendor and
 renderer of every `webgl2` context it creates as `glRenderers`, and the runner
 exits non-zero unless every row came up on `webgl2` and every context named a
-renderer that is not SwiftShader, llvmpipe or another software one. Launched
+renderer that does not match SwiftShader, llvmpipe, `software`, WARP or
+Microsoft Basic Render Driver. Launched
 with `--use-angle=swiftshader` on the Apple M4, `renderer.backend` still read
 `webgl2` and the runner exited 1 on the renderer string. `--gpu` and `--memory`
 read WebGPU timestamps and buffers, so they take only `--backend=webgpu`.
@@ -4371,31 +4372,33 @@ of every run, and every WebGL2 context the page created named `ANGLE (Apple,
 ANGLE Metal Renderer: Apple M4, Unspecified Version)`, so these frames ran on
 the GPU through ANGLE's Metal backend, not SwiftShader. Viewport 1280 by 720,
 `fit` (zoom 0.0715), 13,169 edges, 60 warm-up and 1,200 measured frames per
-mode, 43 retargets per animated mode, control tick 16.7 ms in every run.
+mode, 42 to 45 retargets per animated mode (42 in the paired WebGPU runs), control tick 16.7 ms in every run.
 Three runs at each DPR, DPR 1 and 2 alternating, one at a time, load average
 2.8 to 4.2 at the start of each (read with `uptime`), which was not
-controlled. Columns as above.
+controlled. Columns as in
+[the 2026-10-31 rows](#the-same-matrix-on-an-apple-m4-2026-10-31), the still
+rows folding both still passes of each run.
 
 | DPR | Edges | Motion | Interval p95 | Past one tick | `apply` | `advance` | `setNodes` | `setEdges` | `render` | Holds the tick |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| 1 | straight | still | 18.6 to 18.7 | 0%, 0%, 0% | | | | | 0.3 | yes |
+| 1 | straight | still | 18.6 to 18.7 | 0% to 0.1% | | | | | 0.3 | yes |
 | 1 | straight | all moving | 18.3 | 0%, 0%, 0% | 10.5 to 10.7 | 2.4 | 1.1 | 0.8 to 0.9 | 0.2 | yes |
 | 1 | straight | a tenth | 18.6 | 0%, 0%, 0% | 1.0 | 0.7 to 0.8 | 1.7 | 0.7 to 0.8 | 0.1 | yes |
-| 1 | smooth | still | 18.7 | 0.3%, 0%, 0% | | | | | 0.3 | yes |
+| 1 | smooth | still | 18.6 to 18.7 | 0% to 0.3% | | | | | 0.3 | yes |
 | 1 | smooth | all moving | 18.4 to 18.6 | 2.2%, 1.8%, 1.0% | 13.9 to 14.5 | 2.4 to 2.7 | 1.2 | 6.8 to 7.0 | 0.5 | **no** |
 | 1 | smooth | a tenth | 17.9 to 18.2 | 0%, 0%, 0% | 1.6 to 1.7 | 0.5 | 1.2 | 2.7 | 0.5 | yes |
-| 2 | straight | still | 18.6 to 18.7 | 0%, 0%, 0% | | | | | 0.3 | yes |
+| 2 | straight | still | 18.6 to 18.7 | 0% to 0.2% | | | | | 0.3 | yes |
 | 2 | straight | all moving | 17.9 to 18.2 | 0%, 0%, 0% | 9.0 to 10.8 | 1.6 to 2.5 | 1.4 to 1.7 | 0.8 to 0.9 | 0.2 | yes |
 | 2 | straight | a tenth | 18.6 | 0%, 0%, 0% | 1.3 | 0.3 | 1.3 | 1.5 to 1.6 | 0.3 | yes |
-| 2 | smooth | still | 18.6 to 18.7 | 0%, 0%, 0% | | | | | 0.3 | yes |
+| 2 | smooth | still | 18.6 to 18.7 | 0% | | | | | 0.3 | yes |
 | 2 | smooth | all moving | 18.7 to 33.3 | 6.8%, 3.1%, 6.5% | 15.0 to 15.9 | 3.6 to 4.6 | 1.5 to 1.6 | 7.2 to 7.4 | 0.5 | **no** |
 | 2 | smooth | a tenth | 18.1 to 18.3 | 0%, 0%, 0% | 1.9 to 2.1 | 0.5 | 1.3 | 3.9 to 4.5 | 0.5 to 0.6 | yes |
 
 `input` was 0.4 to 1.0 ms on every animated row at DPR 1 and on the
 tenth-moving rows at DPR 2, and 1.5 to 2.0 ms on the all-moving rows at DPR
 2. The interval median was 16.7 ms on every row of every run. The longest
-interval in each run of the smooth all-moving rows was 35.2 to 50.0 ms; one
-still run reached 44.6 ms.
+interval in each run of the smooth all-moving rows was 35.2 to 50.0 ms; still
+modes had long single intervals in some runs too (up to 88.2 ms).
 
 **Paired with WebGPU on the same day**, so that the comparison does not
 cross dates or Chrome versions: one `--backend=webgpu` run at each DPR with
@@ -4416,15 +4419,15 @@ fallback's GPU frame is not in this table.
   more on WebGL2: 1.0% to 2.2% of ticks at DPR 1 against the paired WebGPU
   run's 0.8%, and 3.1% to 6.8% at DPR 2 against 0.3%. At DPR 2 one run's
   interval p95 reached 33.3 ms, two ticks.
-- **The CPU steps do not explain the DPR 2 gap.** At DPR 1 the fallback's
-  steps on that row are within 0.3 ms of the paired WebGPU run's. At DPR 2,
-  `advance` reads 3.6 to 4.6 ms against 2.5, `apply` 15.0 to 15.9 against
-  13.4 and `input` 1.5 to 1.6 against 0.6, and `setEdges` is within 0.5 ms;
-  those steps are JavaScript that does not touch the backend, so their rise
-  is not the backend's own work, and it was not traced. `render`, the only
-  step that talks to the backend, is shorter on WebGL2 at both ratios. What
-  the browser does after the frame's callback, and the GPU frame, are not
-  timed here.
+- **The DPR 2 gap is not traced.** At DPR 1 the fallback's steps on that
+  row are within 0.5 ms of the paired WebGPU run's. At DPR 2, `advance` reads
+  3.6 to 4.6 ms against 2.5, `apply` 15.0 to 15.9 against 13.4 and `input`
+  1.5 to 1.6 against 0.6, and `setEdges` is within 0.5 ms. Those steps do not
+  call the backend; where their rise comes from (garbage or main-thread
+  contention from the backend's own calls among the candidates) was not
+  traced. `render` times only the CPU side of issuing the frame, and is
+  shorter on WebGL2 at both ratios. What the browser does after the frame's
+  callback, and the GPU frame, are not timed here.
 - **A tenth moving still holds at DPR 2**, with `setEdges` 3.9 to 4.5 ms
   against DPR 1's 2.7 and the paired WebGPU run's 2.6; not traced.
 

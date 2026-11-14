@@ -445,7 +445,7 @@ if (backend === 'webgpu' && (deviceAdapters.length === 0 || deviceAdapters.some(
 }
 if (
   backend === 'webgl2' &&
-  (glRenderers.length === 0 || glRenderers.some((r) => r.renderer === null || /swiftshader|llvmpipe|software/i.test(r.renderer)))
+  (glRenderers.length === 0 || glRenderers.some((r) => r.renderer === null || /swiftshader|llvmpipe|software|basic render driver|warp/i.test(r.renderer)))
 ) {
   console.error('a WebGL2 context did not name its GPU, or named a software renderer, or none was created; see glRenderers');
   process.exitCode = 1;
