@@ -4211,3 +4211,111 @@ frame was 0.95 ms at DPR 1 and 1.64 ms at DPR 2.
 Hit testing is not in these rows. Still not covered by the matrix: on the
 NVIDIA adapter, sizes below 10,000, a zoom other than `fit` and unrounded GPU
 timestamps; on either machine, rich nodes and the WebGL2 fallback.
+
+### Rich nodes at 10,000 on the Apple M4 (2026-11-14)
+
+`tsk_ad4b7ce0d93b`, the matrix's first rows with rich nodes. The
+10,000-node rows [above](#the-same-matrix-on-an-apple-m4-2026-10-31) with
+`--nodes=rich`, at `fit` and at zoom 1, on main `31993d1`, nothing changed.
+The harness refuses `--moving=0.1` with rich nodes (their feed hands every
+node to the tiers each frame), so there are no tenth-moving rows.
+
+```
+python3 -m http.server 8733 --bind 127.0.0.1    # from the repo root
+DAGR_CHROMIUM="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" \
+DAGR_CHROMIUM_ARGS=--enable-webgpu-developer-features \
+node bench/browser/frame-profile.mjs \
+  --motion=springs --sizes=10000 --edges=straight,smooth --nodes=rich --moving=1 --frames=1200 --zoom=fit --dpr=1
+  # then --dpr=2, and both again with --zoom=1
+```
+
+The same Apple M4 Mac mini, on Google Chrome 157.0.8103.51, headed and
+launched by the script with `--enable-webgpu-developer-features`. The adapter,
+probed at run time, was `apple` `metal-3` (`Apple M4`), not a fallback, and
+`renderer.backend` was `webgpu` on every row of every run. Viewport 1280 by
+720, 13,169 edges, 60 warm-up and 1,200 measured frames per mode, 42 to 44
+retargets per animated mode, control tick 16.7 ms in every run. At `fit`
+(zoom 0.0715) no tier is open and the overlay holds no elements; at zoom 1 it
+held 86 to 88 labels. Three runs at each zoom and DPR, DPR 1 and 2
+alternating, one at a time, load average 2.9 to 4.7 at the start of each
+(read with `uptime`), which was not controlled. Columns as above, with
+`richNodes` (every node's `setNode`) and `sync` (the overlay's cull and
+placement) from
+[the rich-node tiers](#frame-profile-on-webgpu-m410a) of 2026-10-18.
+
+| DPR | Zoom | Edges | Motion | Interval p95 | Past one tick | `apply` | `advance` | `setNodes` | `setEdges` | `richNodes` | `sync` | `render` | Holds the tick |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 1 | fit | straight | still | 18.6 to 18.7 | 0% to 0.1% | | | | | | 0.8 | 0.4 | yes |
+| 1 | fit | straight | all moving | 18.2 to 18.6 | 0%, 0%, 0% | 8.3 to 10.5 | 1.5 to 1.6 | 1.1 to 1.3 | 1.0 to 1.4 | 1.1 | 0.2 | 0.3 | yes |
+| 1 | fit | smooth | still | 18.6 to 18.7 | 0% | | | | | | 1.0 to 1.2 | 0.3 to 0.4 | yes |
+| 1 | fit | smooth | all moving | 18.5 to 18.6 | 0.7%, 0.8%, 1.4% | 14.0 to 16.5 | 1.6 to 2.2 | 1.2 to 1.4 | 5.9 to 7.3 | 1.1 to 1.3 | 0.2 | 0.6 to 0.7 | **no** |
+| 2 | fit | straight | still | 18.7 | 0% | | | | | | 0.8 | 0.4 | yes |
+| 2 | fit | straight | all moving | 18.1 to 18.6 | 0%, 0%, 0% | 10.2 to 11.3 | 1.6 to 1.8 | 1.1 | 1.4 | 1.0 to 1.1 | 0.2 | 0.3 | yes |
+| 2 | fit | smooth | still | 18.7 | 0% | | | | | | 1.0 | 0.3 to 0.4 | yes |
+| 2 | fit | smooth | all moving | 18.6 | 1.3%, 1.3%, 1.1% | 14.6 to 16.8 | 2.2 to 2.6 | 1.2 | 6.1 to 7.3 | 1.2 | 0.2 | 0.7 | **no** |
+| 1 | 1 | straight | still | 18.6 to 18.7 | 0% to 0.1% | | | | | | 0.6 | 0.4 | yes |
+| 1 | 1 | straight | all moving | 18.3 to 18.6 | 0%, 0%, 0% | 10.3 to 11.0 | 1.6 to 1.8 | 1.1 to 1.2 | 1.4 to 1.5 | 1.1 to 1.2 | 0.2 | 0.3 | yes |
+| 1 | 1 | smooth | still | 18.7 | 0% | | | | | | 0.8 to 1.4 | 0.3 to 0.4 | yes |
+| 1 | 1 | smooth | all moving | 18.6 | 1.6%, 2.7%, 3.3% | 16.3 to 17.0 | 1.6 to 2.5 | 1.2 to 1.3 | 6.2 to 7.0 | 1.2 to 1.4 | 0.2 to 0.3 | 0.7 | **no** |
+| 2 | 1 | straight | still | 18.6 to 18.7 | 0% | | | | | | 0.6 | 0.4 | yes |
+| 2 | 1 | straight | all moving | 18.2 to 18.4 | 0%, 0%, 0% | 10.5 to 11.0 | 1.6 to 1.8 | 1.1 to 1.2 | 1.2 to 1.5 | 1.1 | 0.2 | 0.3 | yes |
+| 2 | 1 | smooth | still | 18.6 to 18.7 | 0% to 0.1% | | | | | | 0.7 to 2.4 | 0.3 to 0.4 | yes |
+| 2 | 1 | smooth | all moving | 18.6 to 18.7 | 1.3%, 3.6%, 2.7% | 16.3 to 16.8 | 1.8 to 2.3 | 1.2 | 5.9 to 7.2 | 1.2 to 1.3 | 0.2 to 0.4 | 0.7 | **no** |
+
+`input` was 0.4 to 0.9 ms on every animated row and the interval median was
+16.7 ms on every row of every run. The longest interval in each run of the
+smooth all-moving rows was 33.4 to 51.0 ms, though still modes had long
+single intervals in some runs too (up to 81 ms).
+
+**Paired with plain shapes**, to separate the tiers from the date and the
+Chrome version: three more runs straight after the twelve, at zoom 1 and DPR 1,
+with `--edges=smooth --nodes=shapes,rich`, so each launch measured both node
+modes on the same scene, shapes first. With every node moving, `shapes`
+missed 0.4%, 0.3% and 0.2% of ticks and `rich` 2.4%, 1.4% and 1.5%, with
+`setEdges` 5.8 to 6.1 ms and a retarget's `apply` 14.0 to 17.1 in both
+modes. The still modes missed 0% in every run.
+
+**GPU time per frame**, from `--gpu` with the same launch, one run at each
+zoom and DPR straight after that zoom's six. The runner accepted all four,
+with timestamps at a 1 ns grain. Medians / 95th percentiles of the frame's
+passes summed, in milliseconds:
+
+| DPR | Zoom | Edges | Still | All moving |
+| --- | --- | --- | --- | --- |
+| 1 | fit | straight | 0.50 / 0.51 | 0.52 / 0.87 |
+| 1 | fit | smooth | 0.86 / 0.87 | 0.97 / 0.99 |
+| 2 | fit | straight | 1.20 / 1.22 | 1.23 / 1.62 |
+| 2 | fit | smooth | 1.52 / 1.53 | 1.57 / 1.62 |
+| 1 | 1 | straight | 0.36 / 0.37 | 0.36 / 0.37 |
+| 1 | 1 | smooth | 0.50 / 0.50 | 0.47 / 0.51 |
+| 2 | 1 | straight | 1.06 / 1.07 | 1.06 / 1.43 |
+| 2 | 1 | smooth | 1.20 / 1.21 | 1.17 / 1.23 |
+
+The longest single GPU frame was 2.04 ms. These match the `shapes` rows'
+GPU time at `fit` and at zoom 1 within 0.01 ms at the median: the overlay is
+DOM, not a GPU pass.
+
+- **Straight edges hold the tick with rich nodes at both zooms.** No
+  straight row missed a tick with every node moving, and the still rows
+  missed at most 0.1%.
+- **Rich nodes make smooth edges with every node moving miss more.** At
+  `fit` that row missed 0.7% to 1.4% of ticks, against 0.1% to 0.8% without
+  rich nodes on 2026-10-31 (Chrome 156); at zoom 1, 1.3% to 3.6%, against
+  0.2% to 0.3% on 2026-11-13. The paired runs show the same gap in one
+  launch: 1.4% to 2.4% against 0.2% to 0.4%. The steps the two modes share
+  cost the same in those pairs, so the gap is the tiers' work.
+- **The timed tier work is about 1.5 ms a frame, at either zoom.**
+  `richNodes` is 1.0 to 1.4 ms and the animated `sync` 0.2 to 0.4, as on
+  2026-10-18. Smooth edges with every node moving already spend about 10 to
+  12 ms of timed CPU between retargets without them and more than a tick on a retarget's frame, so the
+  tiers' 1.5 ms lands on a frame with little room left.
+- **Zoom 1 misses more than `fit`, and the timed steps do not say why.** The
+  timed tier steps are within 0.2 ms of each other at the two zooms, and the
+  GPU frame is shorter at zoom 1. What differs is that at zoom 1 the overlay
+  moves 86 to 88 labels every frame, and the browser's style, layout and
+  compositing of those elements runs after the frame's callback, where this
+  harness does not time it. Not traced.
+
+Hit testing is not in these rows. Still not covered by the matrix: on the
+NVIDIA adapter, sizes below 10,000, a zoom other than `fit`, unrounded GPU
+timestamps and rich nodes; on either machine, the WebGL2 fallback.
