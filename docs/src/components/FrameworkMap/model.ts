@@ -280,17 +280,25 @@ export const frameworkViews: readonly ExplorerView<
     groups: packageGroups,
     description:
       'Arrows: dependent → dependency. Solid: dependency; dashed: required peer (VDSL is types-only). Umbrella edges also forward exports. External peers are explained in details.',
-    layout: { nodeSize: { width: 216, height: 96 }, nodeSep: 56, rankSep: 80 },
+    layout: { nodeSize: { width: 216, height: 128 }, nodeSep: 56, rankSep: 80 },
   },
   {
     id: 'features',
     label: 'Features',
-    nodes: [...packages, ...features],
+    nodes: [...features, ...packages],
     edges: featureEdges,
     groups: packageGroups,
     description:
       'Arrows: package → feature it provides or uses. These are capability relationships, not manifest dependencies. Search API names, inspect a node, then follow a connection.',
-    layout: { nodeSize: { width: 216, height: 96 }, nodeSep: 56, rankSep: 80 },
+    layout: {
+      direction: 'down',
+      nodeSize: (node) =>
+        node.kind === 'feature'
+          ? { width: 340, height: 180 }
+          : { width: 216, height: 128 },
+      nodeSep: 56,
+      rankSep: 100,
+    },
   },
 ];
 export const searchText = (node: FrameworkNode): string =>

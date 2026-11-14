@@ -11,7 +11,10 @@ status and current-source limits are explained in details.
 
 Group boundaries are member annotations, repeated per package to avoid enclosing
 unrelated nodes. They are not nested layout. Search, outline, details and
-connection following share Explorer state. An expandable server-rendered guide
+connection following share Explorer state. The server starts with Outline; host
+measurement selects Map only at 960px or wider. Explicit Map/Outline choices
+persist across host resizing. Feature cards wrap their full titles in a wider,
+top-down overview. An expandable server-rendered guide
 keeps package explanations and dependency directions readable without JavaScript.
 The historical commerce SystemAtlas fixture remains available but is not mounted
 on the homepage. Model tests check package relationships against workspace manifests.
