@@ -86,7 +86,10 @@ tracks version-matched npm bundling and adaptive library support.
 
 A second skill, [dagr-chart](skills/dagr-chart/SKILL.md), covers bar, line and
 combined charts with `DagrChart`, with a [typed example](skills/dagr-chart/references/chart.tsx).
-It installs the same way under the name `dagr-chart`.
+It installs the same way, with `dagr-chart` in place of
+`dagr-learning-explorer` in the commands above, and the same CSS types note
+applies. Installing the skill does not install `@prnt/dagr-chart`, which
+is not on npm yet.
 
 ## Mobile framework support
 

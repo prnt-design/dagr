@@ -16,6 +16,8 @@ const series: readonly ChartSeries[] = [
   },
 ];
 
+const cssVars = { orders: '--chart-orders', total: '--chart-total' } as const;
+
 const whole = new Intl.NumberFormat('en', { maximumFractionDigits: 0 });
 
 export function OrdersChart() {
@@ -27,7 +29,7 @@ export function OrdersChart() {
           categories={months}
           series={series}
           formatValue={(value) => whole.format(value)}
-          cssColors={{ series: { orders: '--chart-orders', total: '--chart-total' } }}
+          cssColors={{ series: cssVars }}
         />
       </div>
       <figcaption>
@@ -41,7 +43,7 @@ export function OrdersChart() {
                 height: mark === 'line' ? 2 : 12,
                 marginInlineEnd: 6,
                 verticalAlign: 'middle',
-                background: `var(--chart-${id}, #${color.toString(16).padStart(6, '0')})`,
+                background: `var(${cssVars[id as keyof typeof cssVars]}, #${color.toString(16).padStart(6, '0')})`,
               }}
             />
             {label} ({axis === 'right' ? 'right' : 'left'} axis)
