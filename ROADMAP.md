@@ -538,7 +538,7 @@ branches never enter public docs, source, npm artifacts, or job fixtures.
     context on ANGLE's Metal renderer for the Apple M4, not SwiftShader,
     `fit`, DPR 1 and 2, three runs each, at 1,000, 2,500 and 5,000 nodes.
     Every row holds the tick, smooth edges with every node moving included:
-    animated rows missed 0% to 0.3% of ticks, level with the still rows' and
+    animated rows missed 0% to 0.3% of ticks, close to the still rows' and
     controls' 0% to 0.2%, and one WebGPU run at each DPR on the same day held
     every row too. On the heaviest row, smooth all moving at 5,000, a
     retarget's `apply` reads 6.8 to 8.2 ms against WebGPU's 5.2 and 5.4, not

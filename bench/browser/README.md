@@ -4611,22 +4611,25 @@ No GPU time: WebGL2 has no timestamp queries that `--gpu` reads.
 
 - **Every row holds the tick on the fallback at all three sizes**, smooth
   edges with every node moving included, at both ratios. The animated rows'
-  0% to 0.3% of ticks past one is level with the still rows' and the
-  control's 0% to 0.2%. The row that misses on the
-  fallback at 10,000 holds at 5,000 and below, as it does on WebGPU.
-- **A retarget's `apply` reads higher on the fallback on the heaviest row.**
-  Smooth edges with every node moving at 5,000: 6.8 to 7.0 ms at DPR 1 and
-  8.0 to 8.2 at DPR 2, against the paired WebGPU run's 5.2 and 5.4, and the
-  2026-11-13 WebGPU rows' 4.9 to 5.9. With straight edges and every node
-  moving at DPR 1, `advance` also reads higher (1.7 to 1.8 ms at 2,500 and
-  2.3 to 2.4 at 5,000, against 1.3 and 1.8), but not at DPR 2. `setEdges` on
-  the heaviest row is not higher (2.7 to 3.1 against 3.4 and 2.8). As at
+  0% to 0.3% of ticks past one is close to the still rows' and the control's
+  0% to 0.2%. The row that misses on the fallback at 10,000 holds at 5,000
+  and below, as it does on WebGPU.
+- **Some JavaScript steps read higher on the fallback on the heaviest row.**
+  Smooth edges with every node moving at 5,000: a retarget's `apply` is 6.8
+  to 7.0 ms at DPR 1 and 8.0 to 8.2 at DPR 2, against the paired WebGPU run's
+  5.2 and 5.4 and the 2026-11-13 WebGPU rows' 4.9 to 5.9, and `advance` is
+  1.2 to 1.3 and 1.2 to 1.6, against 0.8 and 0.7. `setEdges` there is lower
+  at DPR 1 (2.7 against 3.4) and within 0.3 ms at DPR 2 (3.0 to 3.1 against
+  2.8). With straight edges and every node moving, `advance` also reads
+  higher at DPR 1 (1.7 to 1.8 ms at 2,500 and 2.3 to 2.4 at 5,000, against
+  1.3 and 1.8) and at DPR 2 only at 2,500 (1.1 to 1.4 against 0.9). As at
   10,000, these steps do not call the backend, and where the rise comes from
-  was not traced. On a retarget frame of that row at DPR 2 the largest step
-  medians, `input` included, sum to about 15.3 ms, inside one tick but with
-  less room than WebGPU's.
-- **`render` is level with WebGPU's.** On the animated rows it reads 0.1 to
-  0.8 ms on the fallback against 0.2 to 0.5 in the paired WebGPU runs.
+  was not traced. On the heaviest row at DPR 2 the step medians, `input`
+  included, sum to 14.2 to 15.3 ms, inside one tick, against about 10.1 in
+  the paired WebGPU run.
+- **`render` stays within 0.3 ms of WebGPU's.** On the animated rows it reads
+  0.1 to 0.8 ms on the fallback against 0.2 to 0.5 in the paired WebGPU runs,
+  higher at 1,000 nodes at DPR 2 and lower on several other rows.
 
 Hit testing is not in these rows. Still not covered by the matrix: on the
 NVIDIA adapter, sizes below 10,000, a zoom other than `fit`, unrounded GPU
