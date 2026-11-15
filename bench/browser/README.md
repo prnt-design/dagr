@@ -922,8 +922,9 @@ exits non-zero unless every row came up on `webgl2` and every context named a
 renderer that does not match SwiftShader, llvmpipe, `software`, WARP or
 Microsoft Basic Render Driver. Launched
 with `--use-angle=swiftshader` on the Apple M4, `renderer.backend` still read
-`webgl2` and the runner exited 1 on the renderer string. `--gpu` and `--memory`
-read WebGPU timestamps and buffers, so they take only `--backend=webgpu`.
+`webgl2` and the runner exited 1 on the renderer string. `--memory` counts
+WebGPU buffers and textures, so it takes only `--backend=webgpu`; `--gpu` on
+the fallback is described [below](#gpu-time-per-frame-on-the-webgl2-fallback).
 
 `--edges` runs every size once per edge style, `straight` by default.
 `dashed` gives the group an 8 pixel dash at half duty, and its animated mode
@@ -1319,6 +1320,29 @@ what the page uses and when the runner fails.
 It also exits non-zero if a pass ran without timestamps (`untimed`, with the
 reason). Time spent between passes, and the queue's buffer writes from
 `setNodes` and `setEdges`, are outside every pass and not counted.
+
+### GPU time per frame on the WebGL2 fallback
+
+```
+node bench/browser/frame-profile.mjs --backend=webgl2 --gpu   # with the launch above
+```
+
+WebGL2 has no passes to put timestamps in, so with `--backend=webgl2` the
+page reads `EXT_disjoint_timer_query_webgl2` instead. It brackets each sampled
+frame's callback with one `TIME_ELAPSED_EXT` query on the context the renderer
+created, collects finished queries at the start of later frames, and files
+each as a single pass of kind `frame`, so `passes` has one entry and `sum`
+equals it. That covers every GL command the callback issues, buffer uploads
+from `setNodes` and `setEdges` included, which the WebGPU passes leave out;
+the compositor's work after the callback is outside both. Reading
+`GPU_DISJOINT_EXT` clears it, so once it reads true every query then in
+flight on that context is kept as `noReading`, and the runner exits non-zero
+as it does for a WebGPU pass without a reading. A context without the
+extension is reported as `untimed`. `grainNs` is the largest power of two
+dividing every elapsed time.
+
+Chrome 157 on the Apple M4 exposed the extension with no flags, headed and
+headless, through ANGLE's Metal backend, with 64 counter bits.
 
 **What it found on 2026-10-19**, Apple M4 Mac mini, Google Chrome
 155.0.8059.82 headed with `--enable-webgpu-developer-features`, adapter `apple`
@@ -4745,3 +4769,91 @@ Hit testing is not in these rows. Still not covered by the matrix: on the
 NVIDIA adapter, sizes below 10,000, a zoom other than `fit`, unrounded GPU
 timestamps, rich nodes and the WebGL2 fallback; on the Apple M4, the
 fallback's GPU time.
+
+### The WebGL2 fallback's GPU time at 10,000 on the Apple M4 (2026-11-15)
+
+`tsk_ad4b7ce0d93b`, the last Apple M4 cell of the matrix: the fallback rows
+[at `fit`](#the-webgl2-fallback-at-10000-on-the-apple-m4-2026-11-14) again,
+with `--gpu` reading
+[a timer query per frame](#gpu-time-per-frame-on-the-webgl2-fallback), on main
+`20f461d` with only that harness change added.
+
+```
+python3 -m http.server 8733 --bind 127.0.0.1    # from the repo root
+DAGR_CHROMIUM="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" \
+DAGR_CHROMIUM_ARGS=--enable-webgpu-developer-features \
+node bench/browser/frame-profile.mjs --backend=webgl2 --gpu \
+  --motion=springs --sizes=10000 --edges=straight,smooth --moving=1,0.1 --frames=1200 --dpr=1   # then --dpr=2
+```
+
+The same Apple M4 Mac mini, on Google Chrome 157.0.8103.51, headed and
+launched by the script with `--enable-webgpu-developer-features`.
+`renderer.backend` was `webgl2` on every row of every run, and every WebGL2
+context named `ANGLE (Apple, ANGLE Metal Renderer: Apple M4, Unspecified
+Version)`, not SwiftShader. Viewport 1280 by 720, `fit`, 13,169 edges, 60
+warm-up and 1,200 measured frames per mode, every one with a reading:
+`grainNs` 1, no `noReading`, no `untimed`, no frame with another pass count.
+42 to 44 retargets per animated mode, control tick 16.7 ms in every run. Two
+runs at each DPR, DPR 1 and 2 alternating, then one `--backend=webgpu --gpu`
+run at each DPR with the same command (adapter `apple` `metal-3`, `Apple M4`,
+not a fallback, `renderer.backend` `webgpu` on every row), one at a time, load
+average 3.1 to 3.9 at the start of each (read with `uptime`), which was not
+controlled.
+
+GPU time per frame in milliseconds, median (95th percentile), the fallback's
+two runs as a range and WebGPU's two passes summed. The still rows fold both
+still passes of each run.
+
+| DPR | Edges | Mode | WebGL2 frame | WebGPU passes |
+| --- | --- | --- | --- | --- |
+| 1 | straight | still | 1.14 to 1.15 (1.32 to 1.97) | 0.50 (0.51) |
+| 1 | straight | all moving | 1.65 to 1.66 (1.94 to 1.97) | 0.52 (0.53) |
+| 1 | straight | a tenth | 1.59 (1.75 to 1.81) | 0.51 (0.51) |
+| 1 | smooth | still | 1.53 to 1.54 (2.07 to 2.25) | 0.86 (0.86 to 0.87) |
+| 1 | smooth | all moving | 2.30 to 2.31 (2.52 to 2.55) | 0.97 (0.98) |
+| 1 | smooth | a tenth | 2.20 (2.33 to 2.37) | 0.87 (1.31) |
+| 2 | straight | still | 3.90 to 3.93 (6.51 to 6.78) | 1.20 (1.21 to 1.22) |
+| 2 | straight | all moving | 5.92 to 6.17 (7.55 to 7.79) | 1.23 (1.48) |
+| 2 | straight | a tenth | 6.60 to 6.68 (7.29 to 7.37) | 1.21 (1.23) |
+| 2 | smooth | still | 4.15 to 4.16 (7.14 to 7.34) | 1.51 (1.52 to 1.53) |
+| 2 | smooth | all moving | 6.41 to 6.43 (7.09 to 7.26) | 1.56 (1.60) |
+| 2 | smooth | a tenth | 6.26 to 6.36 (6.94 to 6.99) | 1.52 (1.96) |
+
+The longest single GL frame was 13.32 ms, on smooth edges with every node
+moving at DPR 2. Every row held the tick except smooth edges with every node
+moving: 1.6% and 0.8% of ticks missed at DPR 1 and 1.8% and 3.4% at DPR 2,
+against WebGPU's 0.9% and 0.6%; the still rows missed at most 0.2%. The WebGPU
+passes match the 2026-11-14 `shapes` rows within 0.01 ms at the median, and the
+fallback's timed steps read within about 1 ms of its 2026-11-14 runs without
+`--gpu` (smooth all moving: `setEdges` 6.2 to 7.1 against 6.8 to 7.0, a
+retarget's `apply` 14.2 to 16.6 against 13.9 to 15.9), so the query costs
+little CPU, across dates.
+
+- **The fallback's GPU frame is about two to five and a half times WebGPU's.** At DPR 1 the
+  still frame is 1.1 to 1.5 ms against 0.5 to 0.9, and an animated one 1.6 to
+  2.3 against 0.5 to 1.0. At DPR 2 the still frame is 3.9 to 4.2 ms against
+  1.2 to 1.5, and an animated one 5.9 to 6.7 against 1.2 to 1.6. Its spread is
+  wider too: still frames at DPR 2 have a 95th percentile 2.6 to 3.2 ms above
+  the median, where WebGPU's is within 0.02 ms.
+- **The fallback's GPU frame still fits in the tick.** Even the slowest
+  median, 6.7 ms, and the longest frame, 13.3 ms, are under 16.7, and the
+  straight rows at DPR 2 hold the tick at 6 to 7 ms. So the GPU frame alone
+  does not explain why smooth edges with every node moving miss more on the
+  fallback. Whether GPU and CPU work overlap less there was not measured.
+- **The animated frame's extra GPU time follows the canvas size.** From
+  still to animated, the fallback's frame grows by about 0.4 to 0.8 ms at DPR
+  1 and 2.0 to 2.8 ms at DPR 2, and a tenth moving grows about as much as all
+  moving, though far fewer edges are rebuilt. WebGPU's grows by about 0.1 ms at
+  most at the median. Why was not traced.
+- **The reading is ANGLE's.** `TIME_ELAPSED_EXT` covers everything between
+  the query's begin and end on ANGLE's Metal timeline, buffer uploads included,
+  which WebGPU's pass timestamps leave out. Whether it also counts idle time
+  between ANGLE's own Metal command buffers was not established, so treat it
+  as an upper bound on the GPU's busy time. A 1,000-node smoke run read about
+  1.0 ms with the nodes alone, the edges alone or both, so about 1 ms at DPR 1
+  is a fixed per-frame floor on this path.
+
+Hit testing is not in these rows. That leaves the matrix's Apple M4 cells
+done. Still not covered, all on the NVIDIA adapter: sizes below 10,000, a zoom
+other than `fit`, unrounded GPU timestamps, rich nodes and the WebGL2
+fallback.
