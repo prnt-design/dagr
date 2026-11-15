@@ -798,6 +798,32 @@ export function createLayout(options: LayoutEngineOptions = {}): LayoutEngine {
     return { next: runPrepared(graph, prepared), ran: EVERY_STAGE };
   };
 
+  /**
+   * Drops the retained pipeline state, for a relayout that leaves the held
+   * graph ahead of it: one that threw, or one posted to the worker and not yet
+   * settled. The resize path reuses that state's ranks and layers as the held
+   * graph's, so once the graph has moved past it, it has to go.
+   */
+  const forget = (): void => {
+    warm = undefined;
+    measured = undefined;
+  };
+
+  /** A relayout served on this thread. */
+  const relayoutHere = (graph: Graph, patch: Patch, previous: LayoutResult): RelayoutResult => {
+    try {
+      const prepared = prepare(graph, config, nodeSize, warm);
+      const skipped = unchanged(patch, previous, prepared.sizes);
+      if (skipped !== undefined) return skipped;
+      const region = regionFor(graph, patch, previous, prepared.sizes);
+      const { next, ran } = runChanged(graph, patch, prepared);
+      return report(graph, next, region, ran);
+    } catch (error) {
+      forget();
+      throw error;
+    }
+  };
+
   const runHere = (graph: Graph, previous: PreviousLayout | undefined): LayoutResult =>
     runPrepared(graph, prepare(graph, config, nodeSize, previous));
 
@@ -1031,36 +1057,34 @@ export function createLayout(options: LayoutEngineOptions = {}): LayoutEngine {
 
     relayout(patch) {
       const { graph, previous } = forRelayout(patch);
-      const prepared = prepare(graph, config, nodeSize, warm);
-      const skipped = unchanged(patch, previous, prepared.sizes);
-      if (skipped !== undefined) return skipped;
-      const region = regionFor(graph, patch, previous, prepared.sizes);
-      const { next, ran } = runChanged(graph, patch, prepared);
-      return report(graph, next, region, ran);
+      return relayoutHere(graph, patch, previous);
     },
 
     async relayoutAsync(patch) {
       const { graph, previous } = forRelayout(patch);
-      if (worker === undefined) {
-        const prepared = prepare(graph, config, nodeSize, warm);
-        const skipped = unchanged(patch, previous, prepared.sizes);
-        if (skipped !== undefined) return skipped;
-        const region = regionFor(graph, patch, previous, prepared.sizes);
-        const { next, ran } = runChanged(graph, patch, prepared);
-        return report(graph, next, region, ran);
-      }
+      if (worker === undefined) return relayoutHere(graph, patch, previous);
       // The warm start does not cross, so the run over there is prepared
       // without one, exactly as it was before this method had a region to
       // compute. Both the region and the state it reads are taken before the
       // await, since the pipeline state this engine holds belongs to whichever
       // run settled last and the patch was described against the one it holds
       // now.
-      const prepared = prepare(graph, config, nodeSize);
-      // Before the post, so an inert patch never leaves this thread. It only
-      // reaches here at all when the last run happened here: see `unchanged`.
-      const skipped = unchanged(patch, previous, prepared.sizes);
-      if (skipped !== undefined) return skipped;
-      const region = regionFor(graph, patch, previous, prepared.sizes);
+      let prepared: PreparedState;
+      let region: InfluenceSet;
+      try {
+        prepared = prepare(graph, config, nodeSize);
+        // Before the post, so an inert patch never leaves this thread. It only
+        // reaches here at all when the last run happened here: see `unchanged`.
+        const skipped = unchanged(patch, previous, prepared.sizes);
+        if (skipped !== undefined) return skipped;
+        region = regionFor(graph, patch, previous, prepared.sizes);
+      } catch (error) {
+        forget();
+        throw error;
+      }
+      // A relayout called while this one is in flight would otherwise take the
+      // resize path over the graph as it was before this patch.
+      forget();
       const next = await runThere(graph, prepared, worker);
       return report(graph, next, region, EVERY_STAGE);
     },

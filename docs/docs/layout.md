@@ -2017,7 +2017,8 @@ resizes.** For a patch that adds or removes a node or an edge the whole pipeline
 runs again, and the tests hold it to landing the same geometry a cold run of the
 same graph does. A resize runs only position and route: see
 [the resize that keeps its ranks and order](#the-resize-that-keeps-its-ranks-and-order).
-That is the point of shipping it in this shape first: it makes the delta
+Running the whole pipeline for a structural edit is the point of shipping it in
+this shape first: it makes the delta
 contract, the engine lifetime and the retained state testable before any
 incremental algorithm exists, and it gives the stages that become incremental
 later a correct baseline to be measured against rather than nothing. The patch
@@ -2140,14 +2141,17 @@ engine.relayout(patch).ran; // ['position', 'route']
 The answer is the one a full run gives, because run again over an unchanged
 graph the longest-path ranker returns the ranks it was seeded with and the order
 stage's warm start holds every pair of a layer whose members did not change.
-The tests check it against an engine that cannot skip, with each order and
-position stage this package builds. `networkSimplexRank` does not qualify: a
+The tests check it against an engine that cannot skip, with the default order
+and position stages, `insertionOrderStage` and `brandesKoepfPositionStage`. `networkSimplexRank` does not qualify: a
 warm run takes the previous ranks as a floor rather than an answer and can land
 on different ranks, so with it a resize runs all four stages. On the 10k-node
 corpus a resize drops from about 700ms to about 120ms; see
 [What a relayout costs](./incremental-layout.md#what-a-relayout-costs). It is
 also refused in the same two cases as the patch that runs no stage, and a
-`relayoutAsync` on an engine with a worker posts the run there. `region` is
+`relayoutAsync` on an engine with a worker posts the run there. A relayout that
+throws, or one posted to the worker, drops the held ranks and layers, so the
+next resize runs all four stages rather than placing the graph over a roster it
+has moved past. `region` is
 still computed and `influence` is still the whole roster, since the position
 stage is entitled to move any node.
 

@@ -298,6 +298,14 @@ describe('the relayout that skips rank and order', () => {
             }),
         ],
         [resized, (graph) => graph.updateNodeAttrs(middle, { big: false })],
+        [
+          resized,
+          (graph) =>
+            graph.batch(() => {
+              graph.updateNodeAttrs(first, { big: false });
+              graph.addPort(first, { id: 'spare' });
+            }),
+        ],
       ];
       for (const [ran, edit] of edits) {
         edit(skipping.graph);
@@ -335,6 +343,51 @@ describe('the relayout that skips rank and order', () => {
     graph.updateNodeAttrs('a', { big: true });
 
     expect(laid.relayout(last(patches)).ran).toEqual(ALL_STAGES);
+    stop();
+    channel.port1.close();
+    channel.port2.close();
+  });
+
+  it('runs all four for a resize after a relayout that threw', () => {
+    const { graph, patches } = watched(diamond());
+    const sizeOrThrow = (node: Node): { width: number; height: number } | undefined => {
+      if (node.attrs['broken'] === true) throw new Error('no size for a broken node');
+      return nodeSize(node);
+    };
+    const laid = engine({ config: { nodeSize: sizeOrThrow } });
+    laid.run(graph);
+
+    graph.batch(() => {
+      graph.addNode({ id: 'e', attrs: { broken: true } });
+      graph.addEdge('d', 'e', 'de');
+    });
+    expect(() => laid.relayout(last(patches))).toThrow('no size for a broken node');
+    graph.updateNodeAttrs('e', { broken: false, big: true });
+    const relaid = laid.relayout(last(patches));
+    const cold = engine({ config: { nodeSize: sizeOrThrow } }).run(graph);
+
+    expect(relaid.ran).toEqual(ALL_STAGES);
+    expect(boxes(relaid.result)).toEqual(boxes(cold));
+    expect(routes(relaid.result)).toEqual(routes(cold));
+  });
+
+  it('runs all four for a resize while a worker relayout is in flight', async () => {
+    const channel = new MessageChannel();
+    const stop = serveLayout(channel.port2 as unknown as LayoutPort);
+    const { graph, patches } = watched(diamond());
+    const laid = engine({ config: { nodeSize }, worker: channel.port1 as unknown as LayoutPort });
+    laid.run(graph);
+
+    graph.addEdge('a', 'd', 'ad');
+    const inFlight = laid.relayoutAsync(last(patches));
+    graph.updateNodeAttrs('a', { big: true });
+    const relaid = laid.relayout(last(patches));
+    const cold = engine({ config: { nodeSize } }).run(graph);
+
+    expect(relaid.ran).toEqual(ALL_STAGES);
+    expect(boxes(relaid.result)).toEqual(boxes(cold));
+    expect(routes(relaid.result)).toEqual(routes(cold));
+    await inFlight;
     stop();
     channel.port1.close();
     channel.port2.close();

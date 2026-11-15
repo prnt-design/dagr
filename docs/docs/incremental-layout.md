@@ -196,7 +196,7 @@ fires there without a re-measure fails it.
 Every relayout in the session corpus is a full pipeline run, with one exception
 noted below; no session resizes a node, so the resize path above never fires
 there. The stability above comes from what the stages are handed rather than
-from work they skip, so a patch that moves nothing still costs a cold layout in
+from work they skip, so a structural patch still costs about a cold layout in
 time.
 
 This page predicted that the incremental ranking, the stable coordinate
