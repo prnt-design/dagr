@@ -422,9 +422,67 @@
         };
       };
 
+      // WebGL2 has no passes to time, so on the fallback one TIME_ELAPSED
+      // query brackets all the GL work a sampled frame's callback issues,
+      // filed as a single `frame` pass. Reading GPU_DISJOINT_EXT clears it,
+      // so once it is seen every query then in flight on that context is
+      // kept as null rather than only those already available.
+      const glTiming = { on: false, context: null, ext: null, inFlight: [], seq: 0 };
+      window.timeGlFrames = () => {
+        glTiming.on = true;
+      };
+      const beginGlFrame = () => {
+        if (!glTiming.on || gpuTiming.frame < 0) return null;
+        const { context: gl, ext } = glTiming;
+        if (gl === null) return null;
+        if (ext === null) {
+          gpuTiming.untimed.push({ kind: 'frame', why: 'context has no EXT_disjoint_timer_query_webgl2' });
+          return null;
+        }
+        const query = gl.createQuery();
+        gl.beginQuery(ext.TIME_ELAPSED_EXT, query);
+        return { gl, ext, query, frame: gpuTiming.frame, order: glTiming.seq++, disjoint: false };
+      };
+      const endGlFrame = (timed) => {
+        if (timed === null) return;
+        timed.gl.endQuery(timed.ext.TIME_ELAPSED_EXT);
+        glTiming.inFlight.push(timed);
+      };
+      const fileGlFrame = ({ frame, order }, elapsedNs) =>
+        gpuTiming.readings.push({ kind: 'frame', encoder: '', resolves: false, depth: false, order, frame, elapsedNs });
+      const collectGlFrames = () => {
+        const waiting = [];
+        const ready = [];
+        for (const timed of glTiming.inFlight) {
+          // A lost context never reports a query available.
+          if (timed.gl.isContextLost()) {
+            fileGlFrame(timed, null);
+            continue;
+          }
+          (timed.gl.getQueryParameter(timed.query, timed.gl.QUERY_RESULT_AVAILABLE) ? ready : waiting).push(timed);
+        }
+        glTiming.inFlight = [...ready, ...waiting];
+        if (ready.length === 0) return;
+        const contexts = new Map(glTiming.inFlight.map(({ gl, ext }) => [gl, ext]));
+        for (const [gl, ext] of contexts) {
+          if (!gl.getParameter(ext.GPU_DISJOINT_EXT)) continue;
+          for (const timed of glTiming.inFlight) if (timed.gl === gl) timed.disjoint = true;
+        }
+        for (const timed of ready) {
+          const ns = timed.gl.getQueryParameter(timed.query, timed.gl.QUERY_RESULT);
+          timed.gl.deleteQuery(timed.query);
+          fileGlFrame(timed, timed.disjoint ? null : BigInt(ns));
+        }
+        glTiming.inFlight = waiting;
+      };
+
       // The frames `sample` timed, each as its passes in submission order.
       const gpuFrames = async () => {
         while (gpuTiming.pending.size > 0) await Promise.all([...gpuTiming.pending]);
+        while (glTiming.inFlight.length > 0) {
+          await new Promise((resolve) => requestAnimationFrame(resolve));
+          collectGlFrames();
+        }
         const frames = new Map();
         for (const reading of gpuTiming.readings) {
           if (reading.frame < 0) continue;
@@ -434,9 +492,9 @@
         // Chrome rounds timestamps unless WebGPU developer features are on,
         // so the largest power of two dividing every tick is the resolution.
         let grainNs = null;
-        for (const { beginNs, endNs } of gpuTiming.readings) {
-          for (const t of [beginNs, endNs]) {
-            if (t <= 0n) continue;
+        for (const { beginNs, endNs, elapsedNs } of gpuTiming.readings) {
+          for (const t of elapsedNs === undefined ? [beginNs, endNs] : [elapsedNs]) {
+            if (t === null || t <= 0n) continue;
             const grain = t & -t;
             if (grainNs === null || grain < grainNs) grainNs = grain;
           }
@@ -451,12 +509,15 @@
           frames: [...frames.values()].map((passes) =>
             passes
               .sort((a, b) => a.order - b.order)
-              .map(({ kind, encoder, resolves, depth, beginNs, endNs }) => ({
+              .map(({ kind, encoder, resolves, depth, beginNs, endNs, elapsedNs }) => ({
                 kind,
                 encoder,
                 resolves,
                 depth,
-                ms: endNs > beginNs && beginNs > 0n ? Number(endNs - beginNs) / 1e6 : null,
+                ms:
+                  elapsedNs !== undefined
+                    ? elapsedNs === null ? null : Number(elapsedNs) / 1e6
+                    : endNs > beginNs && beginNs > 0n ? Number(endNs - beginNs) / 1e6 : null,
               })),
           ),
         };
@@ -484,7 +545,10 @@
             if (previous !== null && seen >= warmup) intervals.push(ts - previous);
             previous = ts;
             gpuTiming.frame = seen >= warmup ? seen : -1;
+            collectGlFrames();
+            const timed = beginGlFrame();
             const timings = work(ts);
+            endGlFrame(timed);
             gpuTiming.frame = -1;
             if (seen >= warmup) {
               for (const [name, ms] of Object.entries(timings)) (steps[name] ??= []).push(ms);
@@ -689,6 +753,7 @@
         });
         await picking;
         const animatedGpu = await gpuFrames();
+        glTiming.context = null;
         const heapAfter = heap();
         const drewOn = renderer.backend;
         const drawnZoom = renderer.camera.zoom;
@@ -940,6 +1005,9 @@
             renderer: info === null ? null : context.getParameter(info.UNMASKED_RENDERER_WEBGL),
           };
           if (!glRenderers.some((r) => JSON.stringify(r) === JSON.stringify(seen))) glRenderers.push(seen);
+          glTiming.context = context;
+          glTiming.ext = context.getExtension('EXT_disjoint_timer_query_webgl2');
+          if (glTiming.ext !== null) context.getParameter(glTiming.ext.GPU_DISJOINT_EXT);
         }
         return context;
       };

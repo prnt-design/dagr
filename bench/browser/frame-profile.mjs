@@ -4,7 +4,8 @@
  * node hit testing, still and animating (M4.10a). With `--memory` it measures
  * instead what each pass holds in GPU buffers and textures and in the
  * JavaScript heap, and what a moving pass allocates per frame. With `--gpu` it adds the GPU time of every pass
- * from timestamp queries (M4.10), and `--parts` draws the nodes or the edges
+ * from timestamp queries (M4.10), or on the WebGL2 fallback the GPU time of
+ * each frame's GL work from a timer query, and `--parts` draws the nodes or the edges
  * alone so that time can be split between them. `--motion=springs` moves the
  * animated mode through `createSceneMotion` with every spring in flight rather
  * than a sway computed from the clock, and `--moving` retargets only that share
@@ -128,8 +129,8 @@ const gpu = process.argv.includes('--gpu');
 const BACKENDS = ['webgpu', 'webgl2'];
 const backend = option('backend', 'webgpu');
 if (!BACKENDS.includes(backend)) throw new Error(`--backend takes ${BACKENDS.join(', ')}, got ${backend}`);
-if (backend === 'webgl2' && (gpu || memory)) {
-  throw new Error('--gpu and --memory read WebGPU timestamps and buffers, so they take only --backend=webgpu');
+if (backend === 'webgl2' && memory) {
+  throw new Error('--memory counts WebGPU buffers and textures, so it takes only --backend=webgpu');
 }
 if (memory && (gpu || partsList.join() !== 'all' || motions.join() !== 'sway' || partialMotion)) {
   throw new Error(
@@ -184,8 +185,8 @@ function intervals(values, tickMs) {
 // Each frame's passes in submission order, summarised by position. A frame
 // whose pass count differs from the most common one is counted, not summarised,
 // so a pass is never compared with a different pass. A pass without a usable
-// pair of timestamps is counted as `noReading`, and a frame with one is left
-// out of `sum`.
+// reading is counted as `noReading`, and a frame with one is left out of
+// `sum`.
 function gpuPasses({ frames: perFrame, untimed, grainNs }) {
   const why = {};
   for (const { kind, why: reason } of untimed) why[`${kind}: ${reason}`] = (why[`${kind}: ${reason}`] ?? 0) + 1;
@@ -360,7 +361,7 @@ if (memory) {
   process.exit();
 }
 
-if (gpu) await page.evaluate(() => window.timeGpuPasses());
+if (gpu) await page.evaluate((b) => (b === 'webgl2' ? window.timeGlFrames() : window.timeGpuPasses()), backend);
 const runs = [];
 for (const size of sizes) {
   for (const style of edgeStyles) {
@@ -467,7 +468,9 @@ if (gpu) {
   const coarsest = Math.max(...modes.map((m) => m.gpu.grainNs ?? 0));
   if (coarsest >= 1000) {
     console.error(
-      `timestamps are rounded to ${coarsest} ns; DAGR_CHROMIUM_ARGS=--enable-webgpu-developer-features turns that off`,
+      backend === 'webgpu'
+        ? `timestamps are rounded to ${coarsest} ns; DAGR_CHROMIUM_ARGS=--enable-webgpu-developer-features turns that off`
+        : `timer query readings are rounded to ${coarsest} ns`,
     );
     process.exitCode = 1;
   }
