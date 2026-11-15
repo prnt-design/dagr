@@ -548,10 +548,12 @@ branches never enter public docs, source, npm artifacts, or job fixtures.
     2026-11-15 on main `fe07d06`: Chrome 157 headed, `renderer.backend`
     `webgl2`, every context on ANGLE's Metal renderer for the Apple M4, not
     SwiftShader, `fit` and zoom 1, DPR 1 and 2, three runs each, every node
-    moving. Straight edges hold the tick. Smooth edges miss 2.3% to 3.9% of
-    ticks at DPR 1, and at DPR 2 7.7% to 9.7% at `fit` and 11.8% to 12.6% at
-    zoom 1, against 0.5% and 1.3% in one WebGPU run at each zoom on the same
-    day, with `advance` 2.0 to 3.1 ms higher on the fallback, not traced.
+    moving. Straight edges hold the tick. Smooth edges with every node moving
+    miss 2.8% to 3.2% of ticks at `fit` and 2.3% to 3.9% at zoom 1 at DPR 1,
+    against 0.4% and 3.0% in one WebGPU run at each zoom on the same day
+    (overlapping at zoom 1), and at DPR 2 7.7% to 9.7% and 11.8% to 12.6%,
+    against 0.5% and 1.3%, with `advance` 2.0 to 2.7 ms higher on the
+    fallback there, not traced.
     Above the fallback's plain-shape rows of 2026-11-14 at every zoom and
     ratio, but unpaired. No GPU time on WebGL2. See
     [the fallback with rich nodes](bench/browser/README.md#the-webgl2-fallback-with-rich-nodes-at-10000-on-the-apple-m4-2026-11-15).
@@ -559,7 +561,8 @@ branches never enter public docs, source, npm artifacts, or job fixtures.
   Remaining task: `tsk_ad4b7ce0d93b` (Backlog, behind the 2026-10-29 priority
   refresh), complete the matrix with, on the NVIDIA adapter, sizes below
   10,000, a zoom other than `fit`, unrounded GPU timestamps, rich nodes and
-  WebGL2, and on the Apple M4 the fallback's GPU time. The 10k slice is merged; the whole matrix is not done.
+  WebGL2, and on the Apple M4 the fallback's GPU time. The 10k slice is
+  merged; the whole matrix is not done.
   The [browser measurement record](bench/browser/README.md#springs-in-flight-on-webgpu-m410)
   preserves the optimization sequence, rejected experiments and reproduction
   details; [working notes](specs/roadmap-notes.md#m4-renderer-dagrrender)

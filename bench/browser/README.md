@@ -4723,15 +4723,18 @@ No GPU time: WebGL2 has no timestamp queries that `--gpu` reads.
   nodes.** On that row `advance` reads 4.1 to 4.7 ms against the paired
   WebGPU run's 1.6 and 2.1, and `input` 1.0 to 1.2 against 0.6 and 0.9, as
   [without rich nodes at `fit`](#the-webgl2-fallback-at-10000-on-the-apple-m4-2026-11-14)
-  (3.6 to 4.6 against 2.5, and 1.5 to 1.6 against 0.6). The tier steps
-  (`richNodes` 1.2 to 1.4, `sync` 0.2 to 0.4) are within 0.2 ms of the paired
-  run's. `setEdges` reads 7.0 to 7.4 against 6.0 and 5.8, and a retarget's
-  `apply` 16.4 to 18.1 against 16.5 at `fit` and 16.9 to 17.1 against 14.1 at
-  zoom 1, but the 2026-11-14 WebGPU rich-node rows at DPR 2 read 5.9 to 7.3
-  and 14.6 to 16.8 there, so the paired zoom 1 run reads low on both. These
+  (3.6 to 4.6 against 2.5, and 1.5 to 1.6 against 0.6) and, less so,
+  [at zoom 1](#the-webgl2-fallback-at-zoom-1-on-the-apple-m4-2026-11-14)
+  (`advance` 2.5 to 3.3 against 2.1). The tier steps (`richNodes` 1.2 to 1.4,
+  `sync` 0.2 to 0.4) are within 0.3 ms of the paired run's. `setEdges` reads
+  6.9 to 7.4 against 6.0 and 5.8, and a retarget's `apply` 16.4 to 18.1
+  against 16.5 at `fit` and 16.9 to 17.1 against 14.1 at zoom 1, but the
+  2026-11-14 WebGPU rich-node row at zoom 1 and DPR 2 read 5.9 to 7.2 and
+  16.3 to 16.8, so the paired zoom 1 run reads low on both. These
   steps do not call the backend, and where the rise comes from was not
   traced. `render` is shorter on the fallback.
-- **Rich nodes add to the fallback's misses, but not established.** Without
+- **The fallback misses more with rich nodes than without, but the tiers are
+  not established as the cause.** Without
   rich nodes on 2026-11-14, the same row on the fallback missed 3.1% to 6.8%
   at `fit` and 1.1% to 3.9% at zoom 1 at DPR 2, and 1.0% to 2.2% and 1.1% to
   2.0% at DPR 1. Every rich range here is above those, without overlap at
