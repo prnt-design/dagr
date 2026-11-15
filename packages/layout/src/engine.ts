@@ -799,10 +799,10 @@ export function createLayout(options: LayoutEngineOptions = {}): LayoutEngine {
   };
 
   /**
-   * Drops the retained pipeline state, for a relayout that leaves the held
-   * graph ahead of it: one that threw, or one posted to the worker and not yet
-   * settled. The resize path reuses that state's ranks and layers as the held
-   * graph's, so once the graph has moved past it, it has to go.
+   * Drops the retained pipeline state, for a call that leaves the held graph
+   * ahead of it: a run or relayout that threw, or one posted to the worker and
+   * not yet settled. The resize path reuses that state's ranks and layers as
+   * the held graph's, so once the graph has moved past it, it has to go.
    */
   const forget = (): void => {
     warm = undefined;
@@ -810,8 +810,9 @@ export function createLayout(options: LayoutEngineOptions = {}): LayoutEngine {
   };
 
   /** A relayout served on this thread. */
-  const relayoutHere = (graph: Graph, patch: Patch, previous: LayoutResult): RelayoutResult => {
+  const relayoutHere = (patch: Patch): RelayoutResult => {
     try {
+      const { graph, previous } = forRelayout(patch);
       const prepared = prepare(graph, config, nodeSize, warm);
       const skipped = unchanged(patch, previous, prepared.sizes);
       if (skipped !== undefined) return skipped;
@@ -1042,12 +1043,14 @@ export function createLayout(options: LayoutEngineOptions = {}): LayoutEngine {
   return {
     run(graph) {
       requireLive();
+      forget();
       reported = runHere(graph, undefined);
       return reported;
     },
 
     async runAsync(graph) {
       requireLive();
+      forget();
       reported =
         worker === undefined
           ? runHere(graph, undefined)
@@ -1056,22 +1059,23 @@ export function createLayout(options: LayoutEngineOptions = {}): LayoutEngine {
     },
 
     relayout(patch) {
-      const { graph, previous } = forRelayout(patch);
-      return relayoutHere(graph, patch, previous);
+      return relayoutHere(patch);
     },
 
     async relayoutAsync(patch) {
-      const { graph, previous } = forRelayout(patch);
-      if (worker === undefined) return relayoutHere(graph, patch, previous);
+      if (worker === undefined) return relayoutHere(patch);
       // The warm start does not cross, so the run over there is prepared
       // without one, exactly as it was before this method had a region to
       // compute. Both the region and the state it reads are taken before the
       // await, since the pipeline state this engine holds belongs to whichever
       // run settled last and the patch was described against the one it holds
       // now.
+      let graph: Graph;
       let prepared: PreparedState;
       let region: InfluenceSet;
       try {
+        let previous: LayoutResult;
+        ({ graph, previous } = forRelayout(patch));
         prepared = prepare(graph, config, nodeSize);
         // Before the post, so an inert patch never leaves this thread. It only
         // reaches here at all when the last run happened here: see `unchanged`.

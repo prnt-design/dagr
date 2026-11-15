@@ -393,6 +393,52 @@ describe('the relayout that skips rank and order', () => {
     channel.port2.close();
   });
 
+  it('runs all four for a resize after a relayout refused its patch', () => {
+    const { graph, patches } = watched(diamond());
+    const laid = engine({ config: { nodeSize } });
+    laid.run(graph);
+    const elsewhere = watched(new Graph());
+    elsewhere.graph.addNode('absent');
+
+    graph.batch(() => {
+      graph.addNode('e');
+      graph.addEdge('d', 'e', 'de');
+    });
+    expect(() => laid.relayout(last(elsewhere.patches))).toThrow();
+    graph.updateNodeAttrs('e', { big: true });
+    const relaid = laid.relayout(last(patches));
+    const cold = engine({ config: { nodeSize } }).run(graph);
+
+    expect(relaid.ran).toEqual(ALL_STAGES);
+    expect(boxes(relaid.result)).toEqual(boxes(cold));
+    expect(routes(relaid.result)).toEqual(routes(cold));
+  });
+
+  it('runs all four for a resize while a worker run is in flight', async () => {
+    const channel = new MessageChannel();
+    const stop = serveLayout(channel.port2 as unknown as LayoutPort);
+    const { graph, patches } = watched(diamond());
+    const laid = engine({ config: { nodeSize }, worker: channel.port1 as unknown as LayoutPort });
+    laid.run(graph);
+
+    graph.batch(() => {
+      graph.addNode('e');
+      graph.addEdge('d', 'e', 'de');
+    });
+    const inFlight = laid.runAsync(graph);
+    graph.updateNodeAttrs('a', { big: true });
+    const relaid = laid.relayout(last(patches));
+    const cold = engine({ config: { nodeSize } }).run(graph);
+
+    expect(relaid.ran).toEqual(ALL_STAGES);
+    expect(boxes(relaid.result)).toEqual(boxes(cold));
+    expect(routes(relaid.result)).toEqual(routes(cold));
+    await inFlight;
+    stop();
+    channel.port1.close();
+    channel.port2.close();
+  });
+
   it('runs only position and route on this thread when the engine has no worker', async () => {
     const { graph, patches } = watched(diamond());
     const laid = engine({ config: { nodeSize } });

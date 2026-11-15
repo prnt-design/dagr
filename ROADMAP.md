@@ -259,7 +259,7 @@ branches never enter public docs, source, npm artifacts, or job fixtures.
   four stages, 677ms to 702ms against a 779ms cold run; the order stage is over
   half of each and the work outside the stages is about 11 frames; see
   "What a relayout costs" in `docs/docs/incremental-layout.md`. The resize
-  path, re-measured the same day: neither rank nor order reads a size, so a
+  path followed the same day: neither rank nor order reads a size, so a
   size-only patch positions and routes over the held ranks and layers, with
   the full path's answer, at 116ms (678ms to 704ms for the leaf kinds in the
   same re-measure). The simplex ranker keeps all four stages, since a warm run
