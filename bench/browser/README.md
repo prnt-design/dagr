@@ -4706,7 +4706,7 @@ edges with every node moving missed 0.4% (DPR 1) and 0.5% (DPR 2) of ticks at
 `advance` 1.9, 1.6, 2.2 and 2.1, `input` 0.6 to 0.9, and a retarget's `apply`
 16.4, 16.5, 16.6 and 14.1. On the animated rows `render` read 0.3 ms with
 straight edges and 0.6 to 0.7 with smooth, against WebGL2's 0.2 and 0.5. These
-fall within the 2026-11-14 WebGPU rich-node rows (0.7% to 1.4% at `fit` and
+missed-tick shares fall within the 2026-11-14 WebGPU rich-node rows (0.7% to 1.4% at `fit` and
 1.3% to 3.6% at zoom 1 on that row) or below them.
 
 No GPU time: WebGL2 has no timestamp queries that `--gpu` reads.
