@@ -185,8 +185,8 @@ function intervals(values, tickMs) {
 // Each frame's passes in submission order, summarised by position. A frame
 // whose pass count differs from the most common one is counted, not summarised,
 // so a pass is never compared with a different pass. A pass without a usable
-// pair of timestamps is counted as `noReading`, and a frame with one is left
-// out of `sum`.
+// reading is counted as `noReading`, and a frame with one is left out of
+// `sum`.
 function gpuPasses({ frames: perFrame, untimed, grainNs }) {
   const why = {};
   for (const { kind, why: reason } of untimed) why[`${kind}: ${reason}`] = (why[`${kind}: ${reason}`] ?? 0) + 1;
@@ -468,7 +468,9 @@ if (gpu) {
   const coarsest = Math.max(...modes.map((m) => m.gpu.grainNs ?? 0));
   if (coarsest >= 1000) {
     console.error(
-      `timestamps are rounded to ${coarsest} ns; DAGR_CHROMIUM_ARGS=--enable-webgpu-developer-features turns that off`,
+      backend === 'webgpu'
+        ? `timestamps are rounded to ${coarsest} ns; DAGR_CHROMIUM_ARGS=--enable-webgpu-developer-features turns that off`
+        : `timer query readings are rounded to ${coarsest} ns`,
     );
     process.exitCode = 1;
   }

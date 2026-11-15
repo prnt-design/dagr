@@ -448,30 +448,30 @@
         timed.gl.endQuery(timed.ext.TIME_ELAPSED_EXT);
         glTiming.inFlight.push(timed);
       };
+      const fileGlFrame = ({ frame, order }, elapsedNs) =>
+        gpuTiming.readings.push({ kind: 'frame', encoder: '', resolves: false, depth: false, order, frame, elapsedNs });
       const collectGlFrames = () => {
         const waiting = [];
         const ready = [];
         for (const timed of glTiming.inFlight) {
+          // A lost context never reports a query available.
+          if (timed.gl.isContextLost()) {
+            fileGlFrame(timed, null);
+            continue;
+          }
           (timed.gl.getQueryParameter(timed.query, timed.gl.QUERY_RESULT_AVAILABLE) ? ready : waiting).push(timed);
         }
+        glTiming.inFlight = [...ready, ...waiting];
         if (ready.length === 0) return;
         const contexts = new Map(glTiming.inFlight.map(({ gl, ext }) => [gl, ext]));
         for (const [gl, ext] of contexts) {
           if (!gl.getParameter(ext.GPU_DISJOINT_EXT)) continue;
           for (const timed of glTiming.inFlight) if (timed.gl === gl) timed.disjoint = true;
         }
-        for (const { gl, query, frame, order, disjoint } of ready) {
-          const ns = gl.getQueryParameter(query, gl.QUERY_RESULT);
-          gl.deleteQuery(query);
-          gpuTiming.readings.push({
-            kind: 'frame',
-            encoder: '',
-            resolves: false,
-            depth: false,
-            order,
-            frame,
-            elapsedNs: disjoint ? null : BigInt(ns),
-          });
+        for (const timed of ready) {
+          const ns = timed.gl.getQueryParameter(timed.query, timed.gl.QUERY_RESULT);
+          timed.gl.deleteQuery(timed.query);
+          fileGlFrame(timed, timed.disjoint ? null : BigInt(ns));
         }
         glTiming.inFlight = waiting;
       };
@@ -753,6 +753,7 @@
         });
         await picking;
         const animatedGpu = await gpuFrames();
+        glTiming.context = null;
         const heapAfter = heap();
         const drewOn = renderer.backend;
         const drawnZoom = renderer.camera.zoom;

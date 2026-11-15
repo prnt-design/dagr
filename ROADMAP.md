@@ -522,7 +522,7 @@ branches never enter public docs, source, npm artifacts, or job fixtures.
     against 0.8% and 0.3% in one WebGPU run at each DPR on the same day.
     `render` is shorter on WebGL2; the DPR 2 gap comes with higher readings in
     JavaScript steps that do not touch the backend, not traced. No GPU time on
-    WebGL2. See
+    WebGL2 in these runs (timed 2026-11-15, below). See
     [the fallback rows](bench/browser/README.md#the-webgl2-fallback-at-10000-on-the-apple-m4-2026-11-14).
   - The WebGL2 fallback at zoom 1 at 10,000 on the same Apple M4,
     2026-11-14 on main `e816415`: Chrome 157 headed, `renderer.backend` `webgl2`, every context
@@ -565,9 +565,9 @@ branches never enter public docs, source, npm artifacts, or job fixtures.
     one WebGPU `--gpu` run at each DPR. The fallback's GPU frame is 1.1 to 2.3
     ms at DPR 1 and 3.9 to 6.7 ms at DPR 2 at the median, about two to five
     and a half times WebGPU's passes, and it fits in the tick on every row
-    (longest frame 13.3 ms), so it does not alone explain the fallback's extra
-    missed ticks on smooth edges with every node moving. The reading is an
-    upper bound on GPU busy time. See
+    (longest frame 13.3 ms); whether it adds to the fallback's extra missed
+    ticks on smooth edges with every node moving at DPR 2 was not measured.
+    The reading is an upper bound on GPU busy time. See
     [the fallback's GPU time](bench/browser/README.md#the-webgl2-fallbacks-gpu-time-at-10000-on-the-apple-m4-2026-11-15).
 
   Remaining task: `tsk_ad4b7ce0d93b` (Backlog, behind the 2026-10-29 priority
