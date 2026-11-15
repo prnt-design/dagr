@@ -2124,7 +2124,8 @@ path. The other case is a drawing that came back from a worker: the stages over
 there are the worker's and this side cannot name them, so the relayout after a
 `runAsync` served by a worker runs the pipeline. An engine that has run on this
 thread since keeps the fast path, and its inert patches never reach the port at
-all.
+all. A run or relayout that threw, or one still in flight in a worker, leaves
+nothing to skip against either, so the patch after it runs the pipeline.
 
 ### The resize that keeps its ranks and order
 
@@ -2148,12 +2149,13 @@ floor rather than an answer and can land on different ranks, so with it a resize
 runs all four stages. On the 10k-node corpus a resize drops from about 700ms to
 about 120ms; see
 [What a relayout costs](./incremental-layout.md#what-a-relayout-costs). It is
-also refused in the same two cases as the patch that runs no stage, and a `relayoutAsync` on an
-engine with a worker posts the run there. A run or relayout that throws, or one
-posted to the worker, drops the held ranks and layers, so the next resize or
-inert patch runs all four stages rather than trusting state from a roster the
-graph has moved past. `region` is still computed and `influence` is still the
-whole roster, since the position stage is entitled to move any node.
+also refused in the same two cases as the patch that runs no stage, and a
+`relayoutAsync` on an engine with a worker posts the run there. A run or
+relayout that throws, or one posted to the worker, drops the held ranks and
+layers, so the next resize or inert patch runs all four stages rather than
+trusting state from a roster the graph has moved past. `region` is still
+computed and `influence` is still the whole roster, since the position stage is
+entitled to move any node.
 
 ### The tolerance, on the engine
 

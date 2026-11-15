@@ -245,9 +245,10 @@ export interface RelayoutResult {
    * the one beside it. See {@link influenceRegion}.
    *
    * A relayout the engine cannot bound reports the whole roster here too, and
-   * there is one way to be in that state: the run before it was served by a
-   * worker, so it left no pipeline state on this side and there are no ranks to
-   * build a band out of. That is the same absence that makes such a relayout
+   * the usual way to be in that state is a run before it served by a worker, so
+   * it left no pipeline state on this side and there are no ranks to build a
+   * band out of. A run or relayout that threw, or one still in flight in the
+   * worker, leaves the same absence: see `forget` in the engine. That is the same absence that makes such a relayout
    * cold, and M3.6 decided what to do about it: the worker retains the state
    * and the patch crosses, which is a protocol M3.9b owns. See
    * {@link LayoutEngine.relayoutAsync}.
@@ -635,7 +636,8 @@ export function createLayout(options: LayoutEngineOptions = {}): LayoutEngine {
    * three different reasons and are not always all present. `held` is the graph
    * a relayout re-runs, kept by reference and never mutated here. `warm` is the
    * previous run's pipeline state, absent after a run that happened in a worker
-   * because that is where it stayed. `reported` is the geometry the caller was
+   * because that is where it stayed, and dropped by `forget` whenever the graph
+   * may have moved past it. `reported` is the geometry the caller was
    * last told about, which is what a delta is measured against and is NOT the
    * same object as the last computed result once `epsilon` is nonzero.
    *
@@ -662,9 +664,9 @@ export function createLayout(options: LayoutEngineOptions = {}): LayoutEngine {
    * alone and the fast path would never fire on any graph with a long edge in
    * it. These are `prepare`'s own, before any stage saw them.
    *
-   * Absent for the same reason `warm` is absent and at exactly the same
+   * Absent for the same reasons `warm` is absent and at exactly the same
    * moments: the last run happened in a worker, so it left nothing on this
-   * side. See {@link unchanged} for why that is the condition the fast path
+   * side, or `forget` dropped both. See {@link unchanged} for why that is the condition the fast path
    * needs rather than an inconvenience it works around.
    */
   let measured: ReadonlyMap<NodeId, Size> | undefined;
@@ -841,7 +843,7 @@ export function createLayout(options: LayoutEngineOptions = {}): LayoutEngine {
    * is a prediction, and a prediction read after the fact is a measurement.
    *
    * No retained pipeline state means no ranks, which is the state an engine is
-   * in after a run served by a worker. The honest answer there is the whole
+   * in after a run served by a worker, or after `forget`. The honest answer there is the whole
    * roster, and it is the same answer that engine's warm start gives.
    */
   const regionFor = (
@@ -871,8 +873,9 @@ export function createLayout(options: LayoutEngineOptions = {}): LayoutEngine {
    *
    * A RUN ON THIS THREAD IS REQUIRED, which is what `measured` being present
    * means and what `warm` being present means at the same moments. It is
-   * required because its absence means one thing, that the run this engine is
-   * holding a drawing from happened in a WORKER, and the stages over there are
+   * required because its absence means this side holds no state it can vouch
+   * for. Usually the run this engine is holding a drawing from happened in a
+   * WORKER (the rest of the cases are `forget`'s), and the stages over there are
    * not this side's to know: "the stages are this side's, and the config is
    * not" is `serveLayout`'s protocol in one sentence. So a drawing that came
    * back across the wire was made by stages `ownStages` says nothing about, and
