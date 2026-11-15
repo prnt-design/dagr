@@ -4625,11 +4625,12 @@ No GPU time: WebGL2 has no timestamp queries that `--gpu` reads.
   1.3 and 1.8) and at DPR 2 only at 2,500 (1.1 to 1.4 against 0.9). As at
   10,000, these steps do not call the backend, and where the rise comes from
   was not traced. On the heaviest row at DPR 2 the step medians, `input`
-  included, sum to 14.2 to 15.3 ms, inside one tick, against about 10.1 in
-  the paired WebGPU run.
+  included, sum to 14.7 to 14.8 ms in each run, inside one tick, against 10.1
+  in the paired WebGPU run.
 - **`render` stays within 0.3 ms of WebGPU's.** On the animated rows it reads
   0.1 to 0.8 ms on the fallback against 0.2 to 0.5 in the paired WebGPU runs,
-  higher at 1,000 nodes at DPR 2 and lower on several other rows.
+  higher on most DPR 2 rows at 1,000 nodes and on some other DPR 2 rows, and
+  lower on several at DPR 1.
 
 Hit testing is not in these rows. Still not covered by the matrix: on the
 NVIDIA adapter, sizes below 10,000, a zoom other than `fit`, unrounded GPU
