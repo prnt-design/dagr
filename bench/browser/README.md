@@ -4528,3 +4528,107 @@ Hit testing is not in these rows. Still not covered by the matrix: on the
 NVIDIA adapter, sizes below 10,000, a zoom other than `fit`, unrounded GPU
 timestamps, rich nodes and the WebGL2 fallback; on the Apple M4, the
 fallback below 10,000 and with rich nodes, and its GPU time.
+
+### The WebGL2 fallback below 10,000 on the Apple M4 (2026-11-14)
+
+`tsk_ad4b7ce0d93b`. The [smaller sizes](#sizes-below-10000-on-the-apple-m4-2026-11-13)
+drawn through `--backend=webgl2`, at `fit`, on main `a24dd45`, nothing
+changed.
+
+```
+python3 -m http.server 8733 --bind 127.0.0.1    # from the repo root
+DAGR_CHROMIUM="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" \
+DAGR_CHROMIUM_ARGS=--enable-webgpu-developer-features \
+node bench/browser/frame-profile.mjs --backend=webgl2 \
+  --motion=springs --sizes=1000,2500,5000 --edges=straight,smooth --moving=1,0.1 --frames=1200 --dpr=1   # then --dpr=2
+```
+
+The same Apple M4 Mac mini, on Google Chrome 157.0.8103.51, headed and
+launched by the script with `--enable-webgpu-developer-features`.
+`renderer.backend` was `webgl2` on every row of every run, and every WebGL2
+context the page created named `ANGLE (Apple, ANGLE Metal Renderer: Apple M4,
+Unspecified Version)`, not SwiftShader. Viewport 1280 by 720, `fit` (zoom
+0.2215, 0.1407 and 0.1007 at the three sizes), 1,281, 3,238 and 6,551 edges,
+60 warm-up and 1,200 measured frames per mode, 42 retargets per animated mode
+in every run, control tick 16.7 ms in every run. Three runs at each DPR, DPR 1
+and 2 alternating, one at a time, load average 2.7 to 4.2 at the start of each
+(read with `uptime`), which was not controlled. Columns as in
+[the 2026-10-31 rows](#the-same-matrix-on-an-apple-m4-2026-10-31), the still
+rows folding both still passes of each run.
+
+| DPR | Nodes | Edges | Motion | Interval p95 | Past one tick | `apply` | `advance` | `setNodes` | `setEdges` | `render` | Holds the tick |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 1 | 1,000 | straight | still | 18.7 | 0% to 0.1% | | | | | 0.3 | yes |
+| 1 | 1,000 | straight | all moving | 18.7 | 0%, 0%, 0% | 3.4 | 0.9 | 0.7 | 0.5 to 0.6 | 0.4 | yes |
+| 1 | 1,000 | straight | a tenth | 18.7 | 0.1%, 0%, 0% | 0.6 | 0.2 | 0.6 | 0.4 to 0.5 | 0.4 | yes |
+| 1 | 1,000 | smooth | still | 18.6 to 18.7 | 0% to 0.1% | | | | | 0.3 | yes |
+| 1 | 1,000 | smooth | all moving | 18.7 | 0%, 0%, 0% | 4.2 to 4.5 | 0.8 | 0.4 to 0.6 | 2.0 to 2.1 | 0.3 | yes |
+| 1 | 1,000 | smooth | a tenth | 18.7 | 0.1%, 0%, 0% | 0.9 to 1.1 | 0.2 | 0.6 | 1.3 | 0.5 | yes |
+| 1 | 2,500 | straight | still | 18.7 | 0% to 0.2% | | | | | 0.3 | yes |
+| 1 | 2,500 | straight | all moving | 18.7 | 0%, 0%, 0.1% | 5.7 to 5.9 | 1.7 to 1.8 | 1.0 | 0.9 | 0.3 | yes |
+| 1 | 2,500 | straight | a tenth | 18.6 to 18.7 | 0%, 0%, 0% | 0.9 | 0.4 | 1.4 to 1.5 | 0.7 to 0.8 | 0.3 | yes |
+| 1 | 2,500 | smooth | still | 18.7 | 0% to 0.2% | | | | | 0.3 | yes |
+| 1 | 2,500 | smooth | all moving | 18.6 to 18.7 | 0%, 0%, 0.1% | 3.9 to 4.5 | 1.3 to 1.4 | 0.5 | 1.5 | 0.1 | yes |
+| 1 | 2,500 | smooth | a tenth | 18.7 | 0%, 0%, 0% | 1.3 to 1.4 | 0.3 | 0.9 to 1.0 | 1.8 | 0.4 | yes |
+| 1 | 5,000 | straight | still | 18.6 to 18.7 | 0% to 0.1% | | | | | 0.3 | yes |
+| 1 | 5,000 | straight | all moving | 18.7 | 0%, 0.1%, 0% | 4.6 to 4.9 | 2.3 to 2.4 | 0.7 | 0.5 | 0.1 | yes |
+| 1 | 5,000 | straight | a tenth | 18.7 | 0%, 0%, 0% | 1.4 to 1.5 | 0.5 to 0.6 | 1.9 | 1.1 | 0.3 | yes |
+| 1 | 5,000 | smooth | still | 18.6 to 18.7 | 0% to 0.1% | | | | | 0.2 to 0.3 | yes |
+| 1 | 5,000 | smooth | all moving | 18.0 to 18.2 | 0%, 0%, 0% | 6.8 to 7.0 | 1.2 to 1.3 | 0.7 | 2.7 | 0.2 | yes |
+| 1 | 5,000 | smooth | a tenth | 18.6 | 0%, 0%, 0% | 0.8 to 1.2 | 0.2 to 0.4 | 0.6 to 1.3 | 1.3 to 1.8 | 0.2 to 0.3 | yes |
+| 2 | 1,000 | straight | still | 18.6 to 18.7 | 0% to 0.2% | | | | | 0.3 | yes |
+| 2 | 1,000 | straight | all moving | 18.7 | 0%, 0%, 0% | 3.7 to 3.9 | 0.7 to 0.9 | 0.7 | 0.7 to 0.8 | 0.6 | yes |
+| 2 | 1,000 | straight | a tenth | 18.6 to 18.7 | 0.1%, 0.1%, 0.1% | 0.5 to 0.6 | 0.2 | 0.6 | 0.4 to 0.5 | 0.4 | yes |
+| 2 | 1,000 | smooth | still | 18.6 to 18.7 | 0% | | | | | 0.3 | yes |
+| 2 | 1,000 | smooth | all moving | 18.6 to 18.7 | 0%, 0%, 0% | 4.7 to 4.8 | 0.6 to 0.7 | 0.4 to 0.5 | 2.2 to 2.3 | 0.5 | yes |
+| 2 | 1,000 | smooth | a tenth | 18.6 to 18.7 | 0.1%, 0.3%, 0% | 1.0 to 1.1 | 0.2 | 0.6 | 1.3 to 1.4 | 0.7 to 0.8 | yes |
+| 2 | 2,500 | straight | still | 18.6 to 18.7 | 0% | | | | | 0.3 | yes |
+| 2 | 2,500 | straight | all moving | 18.6 to 18.7 | 0.3%, 0%, 0% | 5.1 to 5.9 | 1.1 to 1.4 | 0.9 to 1.0 | 0.8 to 1.0 | 0.3 to 0.4 | yes |
+| 2 | 2,500 | straight | a tenth | 18.7 | 0%, 0%, 0% | 1.2 to 1.4 | 0.3 to 0.4 | 1.4 | 1.1 to 1.2 | 0.5 | yes |
+| 2 | 2,500 | smooth | still | 18.6 to 18.7 | 0% to 0.1% | | | | | 0.2 to 0.3 | yes |
+| 2 | 2,500 | smooth | all moving | 18.6 | 0%, 0%, 0% | 4.3 to 4.8 | 0.6 | 0.4 | 1.9 | 0.3 | yes |
+| 2 | 2,500 | smooth | a tenth | 18.6 to 18.7 | 0%, 0%, 0.2% | 0.9 to 1.4 | 0.2 | 0.7 | 1.3 to 2.1 | 0.3 to 0.6 | yes |
+| 2 | 5,000 | straight | still | 18.6 to 18.7 | 0% to 0.1% | | | | | 0.2 to 0.3 | yes |
+| 2 | 5,000 | straight | all moving | 18.5 to 18.6 | 0%, 0%, 0% | 5.1 to 5.4 | 1.1 to 1.2 | 0.8 to 0.9 | 0.7 | 0.2 | yes |
+| 2 | 5,000 | straight | a tenth | 18.6 to 18.7 | 0%, 0.1%, 0% | 1.7 to 1.8 | 0.4 | 1.6 to 1.7 | 1.4 | 0.4 | yes |
+| 2 | 5,000 | smooth | still | 18.6 to 18.7 | 0% to 0.1% | | | | | 0.3 | yes |
+| 2 | 5,000 | smooth | all moving | 17.9 | 0%, 0%, 0% | 8.0 to 8.2 | 1.2 to 1.6 | 0.8 to 1.0 | 3.0 to 3.1 | 0.2 | yes |
+| 2 | 5,000 | smooth | a tenth | 18.2 to 18.4 | 0%, 0%, 0% | 1.0 to 1.1 | 0.2 | 0.6 | 2.2 to 2.3 | 0.5 | yes |
+
+`input` was 0.2 to 1.3 ms on every animated row and the interval median was
+16.7 ms on every row of every run. The longest single interval was 106.2 ms
+on an animated row, 111.1 ms on a still one and 91.1 ms in a control.
+
+**Paired with WebGPU on the same day**: one `--backend=webgpu` run at each
+DPR with the same command, straight after the six above, load average 3.1 and
+5.6 at their starts. The adapter was `apple` `metal-3` (`Apple M4`), not a
+fallback, and `renderer.backend` was `webgpu` on every row. Every row held the
+tick, missing 0% to 0.2% of ticks. On smooth edges with every node moving at
+5,000 nodes, a retarget's `apply` was 5.2 ms (DPR 1) and 5.4 (DPR 2),
+`setEdges` 3.4 and 2.8, and `advance` 0.8 and 0.7.
+
+No GPU time: WebGL2 has no timestamp queries that `--gpu` reads.
+
+- **Every row holds the tick on the fallback at all three sizes**, smooth
+  edges with every node moving included, at both ratios. The animated rows'
+  0% to 0.3% of ticks past one is level with the still rows' and the
+  control's 0% to 0.2%. The row that misses on the
+  fallback at 10,000 holds at 5,000 and below, as it does on WebGPU.
+- **A retarget's `apply` reads higher on the fallback on the heaviest row.**
+  Smooth edges with every node moving at 5,000: 6.8 to 7.0 ms at DPR 1 and
+  8.0 to 8.2 at DPR 2, against the paired WebGPU run's 5.2 and 5.4, and the
+  2026-11-13 WebGPU rows' 4.9 to 5.9. With straight edges and every node
+  moving at DPR 1, `advance` also reads higher (1.7 to 1.8 ms at 2,500 and
+  2.3 to 2.4 at 5,000, against 1.3 and 1.8), but not at DPR 2. `setEdges` on
+  the heaviest row is not higher (2.7 to 3.1 against 3.4 and 2.8). As at
+  10,000, these steps do not call the backend, and where the rise comes from
+  was not traced. On a retarget frame of that row at DPR 2 the largest step
+  medians, `input` included, sum to about 15.3 ms, inside one tick but with
+  less room than WebGPU's.
+- **`render` is level with WebGPU's.** On the animated rows it reads 0.1 to
+  0.8 ms on the fallback against 0.2 to 0.5 in the paired WebGPU runs.
+
+Hit testing is not in these rows. Still not covered by the matrix: on the
+NVIDIA adapter, sizes below 10,000, a zoom other than `fit`, unrounded GPU
+timestamps, rich nodes and the WebGL2 fallback; on the Apple M4, the
+fallback with rich nodes, and its GPU time.
