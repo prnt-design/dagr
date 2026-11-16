@@ -76,6 +76,15 @@ describe('control normalisation', () => {
 });
 
 describe('guards against measuring nothing', () => {
+  it('still requires a control for the diagnostic rectangle scan report', () => {
+    const groups = { 'CPU rectangle pointer query': [benchmark('1k nodes', 1), benchmark('10k nodes', 10)] };
+    const missing = normalisePackageRun(run('@prnt/dagr-react', report('bench/interaction.bench.ts', groups)));
+    expect(missing.errors.join(' ')).toMatch(/registers no control/);
+    const valid = normalisePackageRun(run('@prnt/dagr-react', report('bench/interaction.bench.ts', groups, { control: 0.5 })));
+    expect(valid.errors).toEqual([]);
+    expect(valid.benchmarks[benchKey('@prnt/dagr-react', 'bench/interaction.bench.ts > CPU rectangle pointer query', '10k nodes')]?.ratio).toBe(20);
+  });
+
   it('rejects a bench file with no control', () => {
     const normalised = normalisePackageRun(
       run('@prnt/dagr-graph', report('graph.bench.ts', { attrs: [benchmark('update', 2)] })),

@@ -219,6 +219,22 @@ provider. It is not the M5.2b shape-aware `DagrCanvas` adapter, a frame-time
 claim, an edge or port measurement, or GPU evidence. M5.2b repeats these sizes
 against displayed animated node geometry and explains any regression.
 
+Since 2026-11-16, all three M5.2a sizes are diagnostic, using explicit
+`gate: "off"` exemptions. The maintainer authorized the 1,000 and 10,000-node
+exemptions as a separate policy decision after the version-only classifier PR's
+required gate failed twice on the 10,000-node scan (about 34% on the corrected
+head). Those failures remain evidence: the decision neither establishes that
+they were noise nor disproves a causal regression. The benchmark's provider is
+test-owned and deliberately scans every rectangle in worst draw order. It does
+not measure the indexed M5.2b adapter used by `DagrCanvas`.
+
+The recorded statistics and machine identity are unchanged. The scan still runs
+in the benchmark suite, reports still require a valid control, and interaction
+correctness tests remain mandatory. React and ungated dependency changes still
+select benchmark smoke when no timing-gated entry covers them; dependencies
+also reached by another gated family still require timing measurements. This
+policy adds no timing gate for M5.2b, which remains report-only below.
+
 ## M5.2b shape-aware node hit
 
 Measured 2026-10-03 on the same Apple M4 and Node `v25.6.1`, with

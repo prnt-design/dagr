@@ -102,3 +102,23 @@ it.each(['exports', 'imports'])('measures reordered %s conditions with a version
   write(path, manifest('1.1.0', { [field]: { [key]: { default: './default.js', node: './node.js' } } }));
   expect(run()).toContain('MEASURE SENTINEL');
 });
+
+it.each(['packages/react/src/interaction.ts', 'packages/render/src/index.ts'])('smokes diagnostic React benchmarks for %s while retaining mixed gated reach', (path) => {
+  write('packages/react/package.json', JSON.stringify({ name: 'react', version: '1.0.0', dependencies: { render: 'workspace:*', graph: 'workspace:*' }, scripts: { bench: 'node -e "console.log(67890)"' } }));
+  write('packages/render/package.json', JSON.stringify({ name: 'render', version: '1.0.0' }));
+  write('bench/baseline.json', JSON.stringify({ benchmarks: {
+    'graph > case': {},
+    'react > bench/interaction.bench.ts > CPU rectangle pointer query > 1k nodes': { gate: 'off', reason: 'diagnostic scan' },
+    'react > bench/interaction.bench.ts > CPU rectangle pointer query > 10k nodes': { gate: 'off', reason: 'diagnostic scan' },
+  } }));
+  git('add', '.');
+  git('commit', '-qm', 'diagnostic React baseline');
+  git('update-ref', 'refs/remotes/origin/main', 'HEAD');
+  write(path, 'export {};');
+  const output = run();
+  expect(output).toContain('ungated benchmarks run');
+  expect(output).toContain('67890');
+  expect(output).not.toContain('MEASURE SENTINEL');
+  write('packages/graph/src/index.ts', 'export {};');
+  expect(run()).toContain('MEASURE SENTINEL');
+});

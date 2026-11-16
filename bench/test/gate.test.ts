@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
 import { GATE_DEFAULTS, compareReports } from '../src/gate.mjs';
@@ -199,6 +200,17 @@ describe('the no-op guards', () => {
 });
 
 describe('the exemption path', () => {
+  it('keeps the committed synthetic rectangle family diagnostic even at extreme timings', () => {
+    const committed = JSON.parse(readFileSync(new URL('../baseline.json', import.meta.url), 'utf8')) as BaselineReport;
+    const entries = Object.fromEntries(Object.entries(committed.benchmarks).filter(([key]) => key.includes('CPU rectangle pointer query')));
+    expect(Object.keys(entries)).toHaveLength(3);
+    const measured = Object.fromEntries(Object.keys(entries).map((key) => [key, stat(1_000_000, 100)]));
+    const report = compareReports(baseline({ a: stat(4), ...entries }), current({ a: stat(4), ...measured }));
+    expect(report.ok).toBe(true);
+    for (const key of Object.keys(entries)) expect(statusOf(report, key)).toBe('exempt');
+    expect(compareReports(baseline({ a: stat(4), ...entries }), current({ a: stat(8), ...measured })).ok).toBe(false);
+  });
+
   it('skips a benchmark that is explicitly exempt', () => {
     const report = compareReports(
       baseline({ a: stat(4), gpu: { gate: 'off', reason: 'measured by hand on one GPU' } }),
