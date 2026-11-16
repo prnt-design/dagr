@@ -176,7 +176,7 @@ they are, so the engine positions and routes over the ranks and layers it
 already holds, and the answer is the one a full run gives. An added
 or removed leaf still runs all four stages and costs about what a cold layout
 does: a cold run of the same graph, measured in the same session, takes 771ms,
-and the relayouts take between 7 and 42 frames at 60 Hz, against M3.9b's budget
+and the leaf relayouts take 41 to 42 frames at 60 Hz, against M3.9b's budget
 of one. The order stage is 55% of an added leaf, so a fast path for a leaf that
 still sweeps every rank cannot meet that budget. Neither can one that only skips
 stages: "everything else", the work outside them, is about 11 frames on its own
