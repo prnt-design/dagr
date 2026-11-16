@@ -187,7 +187,7 @@ if (cliArgs.includes('--pick')) {
   for (const backend of ['webgpu', 'webgl2']) {
     for (const ratio of [1, 2]) {
       const run = await page.evaluate(([value, dpr]) => window.pickCheck(value, dpr), [backend, ratio]);
-      pick.push({ devicePixelRatio: ratio, ...run });
+      pick.push(run.devicePixelRatio === undefined ? { ...run, devicePixelRatio: ratio } : run);
     }
   }
   for (const run of pick.filter((each) => !each.pass)) {

@@ -506,11 +506,12 @@ DAGR_CHROMIUM="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" \
 ```
 
 `--parity` draws the probe scene through `'webgpu'` and through `'webgl2'` and
-compares the two frames pixel by pixel. It exits non-zero, saying which on
-stderr, unless both backends came up as named, the comparison passes, and a
-control fails. It also exits non-zero, saying why on stderr before it compares,
-when the adapter reports `isFallbackAdapter`, because a software adapter such
-as SwiftShader comes up on `'webgpu'` too and its frame is not a GPU's.
+compares the two frames pixel by pixel. It exits non-zero unless both backends
+came up as named, the comparison passes, and a control fails, and says on
+stderr which of these did not hold. It also exits non-zero, saying why on
+stderr before it compares, when the adapter reports `isFallbackAdapter`,
+because a software adapter such as SwiftShader comes up on `'webgpu'` too and
+its frame is not a GPU's.
 
 **The tolerance comes from the antialiasing ramp.** `fillCoverage` and
 `outlineCoverage` in `sdf.ts` are smoothsteps one `aaWidth` wide, centred on
