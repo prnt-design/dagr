@@ -148,6 +148,7 @@
     },
     "@prnt/dagr-react > bench/interaction.bench.ts > CPU rectangle pointer query > 100 nodes": {
       "gate": "off",
+      "required": true,
       "reason": "The median is a few clock ticks, and every capture so far has reported it quantized: 0.000125 ms in all five runs on the Apple M4, 0.00009 or 0.00010 ms on the WSL2 machine. A one-tick movement would look like an 11% to 33% regression, so this entry remains evidence rather than a gate.",
       "note": "Exempted 2026-10-01 on the Apple M4; the stats below are run 4 of the 2026-10-26 capture on the WSL2 machine. One pointer-down event performs one provider call, one displayed-revision check, and 100 reverse draw-order rectangle checks.",
       "medianMs": 0.00009000000000014552,
@@ -157,6 +158,9 @@
       "ratio": 0.0023467445438241146
     },
     "@prnt/dagr-react > bench/interaction.bench.ts > CPU rectangle pointer query > 10k nodes": {
+      "gate": "off",
+      "required": true,
+      "reason": "Diagnostic by explicit maintainer authorization on 2026-11-16: this test-owned provider deliberately scans every rectangle in reverse draw order, rather than exercising the grid-indexed, silhouette-exact DagrCanvas adapter. Keep the synthetic workload executable and its interaction correctness tests mandatory, but do not use its timing as a production adapter merge gate. Prior 10k gate failures remain evidence; this policy decision does not establish that they were noise or disprove a regression. Recorded capture statistics are unchanged.",
       "medianMs": 0.005979999999908614,
       "meanMs": 0.006294142373392367,
       "rme": 2.3667143439073843,
@@ -164,6 +168,9 @@
       "ratio": 0.15592813746478948
     },
     "@prnt/dagr-react > bench/interaction.bench.ts > CPU rectangle pointer query > 1k nodes": {
+      "gate": "off",
+      "required": true,
+      "reason": "Diagnostic by explicit maintainer authorization on 2026-11-16: this test-owned provider deliberately scans every rectangle in reverse draw order, rather than exercising the grid-indexed, silhouette-exact DagrCanvas adapter. Keep the synthetic workload executable and its interaction correctness tests mandatory, but do not use its timing as a production adapter merge gate. Prior 10k gate failures remain evidence; this policy decision does not establish that they were noise or disprove a regression. Recorded capture statistics are unchanged.",
       "medianMs": 0.0006600000001526496,
       "meanMs": 0.0006432493541780316,
       "rme": 0.21644247162709818,

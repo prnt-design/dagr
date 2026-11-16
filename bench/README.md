@@ -16,6 +16,15 @@ printed by that command is a pass; agents never skip it by hand. When the
 diff reaches gated code it runs `bench:ci`, whose regression verdict still
 blocks a merge. CI does not run machine-matched performance measurements.
 
+A root, `packages/*`, or `apps/*` `package.json` change is excluded only when both manifests
+have valid SemVer versions, the versions differ, and every other parsed field
+is identical. Object key order is ignored except within `exports` and `imports`,
+where condition order affects runtime resolution. Array order is preserved. The CLI
+compares the merge-base manifest with the actual working file, covering committed,
+staged and unstaged edits together. Missing or unreadable manifests fail closed.
+Version-only changes with docs therefore print a skip; dependency, script,
+export, configuration, lockfile and source changes retain their existing scope.
+
 The gate lives here rather than on CI because the baseline is machine-matched.
 `bench/baseline.json` records the machine it was captured on, and a comparison
 is only meaningful against the same one. Since 2026-08-18 that is enforced
@@ -209,6 +218,28 @@ This is the contract overhead plus a deliberately simple worst-order rectangle
 provider. It is not the M5.2b shape-aware `DagrCanvas` adapter, a frame-time
 claim, an edge or port measurement, or GPU evidence. M5.2b repeats these sizes
 against displayed animated node geometry and explains any regression.
+
+Since 2026-11-16, all three M5.2a sizes are diagnostic, using explicit
+`gate: "off"` exemptions. The maintainer authorized the 1,000 and 10,000-node
+exemptions as a separate policy decision after the version-only classifier PR's
+required gate failed twice on the 10,000-node scan (about 34% on the corrected
+head). Those failures remain evidence: the decision neither establishes that
+they were noise nor disproves a causal regression. The benchmark's provider is
+test-owned and deliberately scans every rectangle in worst draw order. It does
+not measure the indexed M5.2b adapter used by `DagrCanvas`.
+
+The recorded statistics and machine identity are unchanged. The scan still runs
+in the benchmark suite, reports still require a valid control, and interaction
+correctness tests remain mandatory. React and ungated dependency changes still
+select benchmark smoke when no timing-gated entry covers them; dependencies
+also reached by another gated family still require timing measurements. This
+policy adds no timing gate for M5.2b, which remains report-only below.
+
+The three executable scan entries also carry `required: true`: missing cases
+fail report validation even though their timing cannot fail the gate. Smoke
+removes the previous report before running and validates the fresh, nonempty
+output with the same control normalizer and required-entry checks as the full
+run. A successful command that writes no report is a harness failure.
 
 ## M5.2b shape-aware node hit
 

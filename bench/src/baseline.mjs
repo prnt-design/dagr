@@ -67,7 +67,7 @@ export function machineInfo() {
  * key the run never produces keeps its whole entry: some are measured by hand
  * and only ever live here, ROADMAP M4.10's GPU frame time being the first,
  * and a naive overwrite would delete it on the next capture. A key the run
- * DID produce keeps its `gate` and `reason` while the stats beneath refresh,
+ * DID produce keeps its `gate`, `reason` and required-execution flag while the stats refresh,
  * because an exemption is a decision someone wrote down and lifting it should
  * take a hand edit, not be a side effect of the next capture: the first
  * produced-and-exempt entry (`2.5k successors` on the dispatch box) flakes on
@@ -110,6 +110,7 @@ export function mergeBaseline(previous, benchmarks, capturedAt, machineProfile) 
             gate: entry.gate,
             ...('reason' in entry ? { reason: entry.reason } : {}),
             ...('note' in entry ? { note: entry.note } : {}),
+            ...('required' in entry ? { required: entry.required } : {}),
             ...fresh,
           };
   }

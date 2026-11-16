@@ -57,6 +57,7 @@
  * no automated way to re-measure it, even on that same machine.
  *
  * @typedef {object} ExemptEntry
+ * @property {boolean} [required] Whether this diagnostic must still execute.
  * @property {'off'} gate
  * @property {string} reason Why this benchmark cannot be gated. Required.
  * @property {string} [note] Anything a later reader needs, such as the machine.
@@ -278,6 +279,18 @@ function machineDifferences(baselineMachine, currentMachine) {
 }
 
 /**
+ * Required execution is independent of an exemption from timing comparisons.
+ * @param {Record<string, BaselineEntry>} baseline
+ * @param {Record<string, BenchStat>} current
+ * @returns {string[]}
+ */
+export function requiredDiagnosticErrors(baseline, current) {
+  return Object.entries(baseline)
+    .filter(([key, entry]) => isExempt(entry) && entry.required === true && current[key] === undefined)
+    .map(([key]) => `${key} is a required diagnostic benchmark but is missing from this run`);
+}
+
+/**
  * Compare a run against the committed baseline.
  *
  * Returns a report rather than throwing or printing, so the same logic backs
@@ -336,6 +349,7 @@ export function compareReports(baselineReport, currentReport, overrides = {}) {
     }
   }
 
+  errors.push(...requiredDiagnosticErrors(baselineReport.benchmarks, currentReport.benchmarks));
   const baselineEntries = Object.entries(baselineReport.benchmarks);
   const currentKeys = Object.keys(currentReport.benchmarks);
 
@@ -362,8 +376,8 @@ export function compareReports(baselineReport, currentReport, overrides = {}) {
       if (typeof entry.reason !== 'string' || entry.reason.trim() === '') {
         errors.push(`${key} is exempt from the gate but records no reason`);
       }
-      // An exempt benchmark is not required to appear in the run: some are
-      // measured by hand and only recorded here.
+      // Hand-measured exemptions may be absent; executable diagnostics can
+      // require presence without turning their timings into a merge verdict.
       results.push({ key, status: 'exempt', detail: entry.reason });
       continue;
     }

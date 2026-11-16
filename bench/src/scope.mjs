@@ -21,6 +21,8 @@
  * Pure functions, like `gate.mjs` and `repeat.mjs`: the CLI does the reading.
  */
 
+import { isDeepStrictEqual } from 'node:util';
+
 import { WORKSPACE_DIRS } from './names.mjs';
 
 /**
@@ -36,6 +38,46 @@ import { WORKSPACE_DIRS } from './names.mjs';
  * @property {string[]} measure The changed paths a gated entry runs. Any at all means the gate runs.
  * @property {string[]} smoke The ungated, benched package directories the diff reaches, sorted.
  */
+
+/** @param {string} path */
+export function isManifestPath(path) {
+  const parts = path.split('/');
+  return path === 'package.json' ||
+    (parts.length === 3 && WORKSPACE_DIRS.includes(parts[0] ?? '') && parts[2] === 'package.json');
+}
+
+// SemVer 2.0.0: numeric prerelease identifiers cannot have leading zeroes.
+const NUMBER = '(?:0|[1-9][0-9]*)';
+const PRE = `(?:${NUMBER}|[0-9]*[A-Za-z-][0-9A-Za-z-]*)`;
+const VERSION = new RegExp(`^${NUMBER}\\.${NUMBER}\\.${NUMBER}(?:-${PRE}(?:\\.${PRE})*)?(?:\\+[0-9A-Za-z-]+(?:\\.[0-9A-Za-z-]+)*)?(?![\\s\\S])`);
+
+/**
+ * Compare complete parsed manifests, preserving conditional resolution order.
+ * Invalid or absent versions never earn an exemption.
+ * @param {string} before
+ * @param {string} after
+ * @returns {boolean}
+ */
+export function versionOnlyManifest(before, after) {
+  try {
+    const oldManifest = JSON.parse(before);
+    const newManifest = JSON.parse(after);
+    for (const manifest of [oldManifest, newManifest]) {
+      if (manifest === null || typeof manifest !== 'object' || Array.isArray(manifest) ||
+          typeof manifest.version !== 'string' || !VERSION.test(manifest.version)) return false;
+    }
+    if (oldManifest.version === newManifest.version) return false;
+    // Conditional resolution uses the first matching key, including nested conditions.
+    for (const field of ['exports', 'imports']) {
+      if (JSON.stringify(oldManifest[field]) !== JSON.stringify(newManifest[field])) return false;
+    }
+    delete oldManifest.version;
+    delete newManifest.version;
+    return isDeepStrictEqual(oldManifest, newManifest);
+  } catch {
+    return false;
+  }
+}
 
 /** Root files that change what every package is built or run with. */
 const ROOT_FILES = new Set([
@@ -109,13 +151,15 @@ export function smokeReach(manifests, gated) {
  * @param {readonly string[]} paths Every path the branch changes, repo-relative.
  * @param {ReadonlySet<string>} gated From {@link gatedDirs}.
  * @param {ReadonlyMap<string, ReadonlySet<string>>} smoke From {@link smokeReach}.
+ * @param {ReadonlySet<string>} [versionOnly] Manifest paths verified by the CLI.
  * @returns {Scope}
  */
-export function scopeOf(paths, gated, smoke) {
+export function scopeOf(paths, gated, smoke, versionOnly = new Set()) {
   const measure = [];
   const smoked = new Set();
   for (const path of paths) {
     if (path.endsWith('.md')) continue;
+    if (isManifestPath(path) && versionOnly.has(path)) continue;
     if (ROOT_FILES.has(path) || path.startsWith('patches/')) {
       measure.push(path);
       continue;
