@@ -1201,9 +1201,9 @@ loading and compiling what every later one reuses. After each step the runner re
   and the same step differed between runs by up to 0.8 MB, so it is noise at
   this scale.
 
-The runner exits non-zero if a row did not come up on WebGPU, if the adapter
-is a fallback adapter, or if a texture format has no byte size in the page's
-table.
+The runner exits non-zero, saying why on stderr, if a row did not come up on
+WebGPU, if the adapter is a fallback adapter, or if a texture format has no
+byte size in the page's table.
 
 Same machine, browser and adapter as above, headed, `renderer.backend`
 `webgpu` on every row, viewport 1280 by 720 at DPR 1, zoom `fit`, 301 frames
