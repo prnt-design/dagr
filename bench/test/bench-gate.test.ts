@@ -91,3 +91,14 @@ it('does not hide an unstaged dependency edit behind a staged version bump', () 
   write('packages/graph/package.json', manifest('1.1.0', { dependencies: { foo: '2' } }));
   expect(run()).toContain('MEASURE SENTINEL');
 });
+
+it.each(['exports', 'imports'])('measures reordered %s conditions with a version bump', (field) => {
+  const path = 'packages/graph/package.json';
+  const key = field === 'exports' ? '.' : '#entry';
+  write(path, manifest('1.0.0', { [field]: { [key]: { node: './node.js', default: './default.js' } } }));
+  git('add', '.');
+  git('commit', '-qm', 'conditional entry');
+  git('update-ref', 'refs/remotes/origin/main', 'HEAD');
+  write(path, manifest('1.1.0', { [field]: { [key]: { default: './default.js', node: './node.js' } } }));
+  expect(run()).toContain('MEASURE SENTINEL');
+});

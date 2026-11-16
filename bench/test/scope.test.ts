@@ -155,6 +155,12 @@ describe('version-only manifest comparison', () => {
     expect(versionOnlyManifest(before, after)).toBe(false);
     expect(versionOnlyManifest(after, before)).toBe(false);
   });
+  it.each(['exports', 'imports'])('preserves nested %s condition order', (field) => {
+    const before = JSON.stringify({ version: '1.0.0', [field]: { '.': [{ node: './node.js', default: './default.js' }] } });
+    const after = JSON.stringify({ version: '1.1.0', [field]: { '.': [{ default: './default.js', node: './node.js' }] } });
+    expect(versionOnlyManifest(before, after)).toBe(false);
+    expect(versionOnlyManifest(before, before.replace('1.0.0', '1.1.0'))).toBe(true);
+  });
   it('requires an actual version difference', () => {
     expect(versionOnlyManifest(before, before)).toBe(false);
   });

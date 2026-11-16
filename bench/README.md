@@ -16,9 +16,10 @@ printed by that command is a pass; agents never skip it by hand. When the
 diff reaches gated code it runs `bench:ci`, whose regression verdict still
 blocks a merge. CI does not run machine-matched performance measurements.
 
-A root or workspace `package.json` change is excluded only when both manifests
+A root, `packages/*`, or `apps/*` `package.json` change is excluded only when both manifests
 have valid SemVer versions, the versions differ, and every other parsed field
-is identical (object key order is ignored, array order is preserved). The CLI
+is identical. Object key order is ignored except within `exports` and `imports`,
+where condition order affects runtime resolution. Array order is preserved. The CLI
 compares the merge-base manifest with the actual working file, covering committed,
 staged and unstaged edits together. Missing or unreadable manifests fail closed.
 Version-only changes with docs therefore print a skip; dependency, script,

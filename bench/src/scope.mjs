@@ -52,7 +52,7 @@ const PRE = `(?:${NUMBER}|[0-9]*[A-Za-z-][0-9A-Za-z-]*)`;
 const VERSION = new RegExp(`^${NUMBER}\\.${NUMBER}\\.${NUMBER}(?:-${PRE}(?:\\.${PRE})*)?(?:\\+[0-9A-Za-z-]+(?:\\.[0-9A-Za-z-]+)*)?(?![\\s\\S])`);
 
 /**
- * Compare complete parsed manifests, ignoring object key order only.
+ * Compare complete parsed manifests, preserving conditional resolution order.
  * Invalid or absent versions never earn an exemption.
  * @param {string} before
  * @param {string} after
@@ -67,6 +67,10 @@ export function versionOnlyManifest(before, after) {
           typeof manifest.version !== 'string' || !VERSION.test(manifest.version)) return false;
     }
     if (oldManifest.version === newManifest.version) return false;
+    // Conditional resolution uses the first matching key, including nested conditions.
+    for (const field of ['exports', 'imports']) {
+      if (JSON.stringify(oldManifest[field]) !== JSON.stringify(newManifest[field])) return false;
+    }
     delete oldManifest.version;
     delete newManifest.version;
     return isDeepStrictEqual(oldManifest, newManifest);
