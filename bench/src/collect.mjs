@@ -124,8 +124,8 @@ export function normalisePackageRun(run) {
         );
         continue;
       }
-      if (control.median <= 0) {
-        errors.push(`${run.packageName} > ${fileName} measured a control median of zero`);
+      if (!Number.isFinite(control.median) || control.median <= 0) {
+        errors.push(`${run.packageName} > ${fileName} measured a control median of zero or an invalid value`);
         continue;
       }
 
@@ -162,6 +162,11 @@ export function normalisePackageRun(run) {
       for (const group of groups) {
         if (group === controlGroup || group === machineGroup) continue;
         for (const bench of group.benchmarks) {
+          if (![bench.median, bench.mean, bench.rme].every((value) => Number.isFinite(value) && value >= 0)
+            || !Number.isInteger(bench.sampleCount) || bench.sampleCount <= 0) {
+            errors.push(`${benchKey(run.packageName, group.fullName, bench.name)} has invalid benchmark statistics`);
+            continue;
+          }
           benchmarks[benchKey(run.packageName, group.fullName, bench.name)] = {
             medianMs: bench.median,
             meanMs: bench.mean,

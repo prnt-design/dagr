@@ -15,13 +15,24 @@ function write(path: string, value: string): void {
   mkdirSync(dirname(join(root, path)), { recursive: true });
   writeFileSync(join(root, path), value);
 }
+function report(names = ['1k nodes', '10k nodes'], control = true): object {
+  const stat = (name: string) => ({ name, mean: 1_000_000, median: 1_000_000, rme: 1, sampleCount: 10 });
+  return { files: [{ filepath: 'bench/interaction.bench.ts', groups: [
+    ...(control ? [{ fullName: 'bench/interaction.bench.ts > control', benchmarks: [{ ...stat('mixed'), mean: 1, median: 1 }] }] : []),
+    { fullName: 'bench/interaction.bench.ts > CPU rectangle pointer query', benchmarks: names.map(stat) },
+  ] }] };
+}
+function reportingScript(value: object, sentinel: number): string {
+  write('report-fixture.json', JSON.stringify(value));
+  return `node -e "require('node:fs').copyFileSync('../../report-fixture.json', 'bench-report.json'); console.log(${String(sentinel)})"`;
+}
 function manifest(version = '1.0.0', extra = {}): string {
   return JSON.stringify({ name: 'graph', version, scripts: { bench: 'unused' }, ...extra });
 }
-function run(): string {
+function run(status = 0): string {
   const result = spawnSync(process.execPath, ['bench/bin/bench-gate.mjs'], { cwd: root, encoding: 'utf8' });
-  expect(result.status).toBe(0);
-  return result.stdout;
+  expect(result.status).toBe(status);
+  return result.stdout + result.stderr;
 }
 beforeEach(() => {
   root = mkdtempSync(join(tmpdir(), 'dagr-scope-'));
@@ -33,7 +44,7 @@ beforeEach(() => {
   write('bench/baseline.json', JSON.stringify({ benchmarks: { 'graph > case': {} } }));
   write('package.json', manifest());
   write('packages/graph/package.json', manifest());
-  write('packages/explorer/package.json', JSON.stringify({ name: 'explorer', version: '1.0.0', scripts: { bench: 'node -e "console.log(12345)"' } }));
+  write('packages/explorer/package.json', JSON.stringify({ name: 'explorer', version: '1.0.0', scripts: { bench: reportingScript(report(), 12345) } }));
   write('pnpm-workspace.yaml', 'packages:\n  - packages/*\n');
   git('init', '-q');
   git('config', 'user.name', 'Fixture');
@@ -46,7 +57,7 @@ afterEach(() => { rmSync(root, { recursive: true, force: true }); });
 
 it.each(['committed', 'staged', 'unstaged'])('skips %s version-only manifests and docs', (state) => {
   for (const path of ['package.json', 'packages/graph/package.json']) write(path, manifest('1.1.0-rc.1+build.2'));
-  write('packages/explorer/package.json', JSON.stringify({ name: 'explorer', version: '1.1.0', scripts: { bench: 'node -e "console.log(12345)"' } }));
+  write('packages/explorer/package.json', JSON.stringify({ name: 'explorer', version: '1.1.0', scripts: { bench: reportingScript(report(), 12345) } }));
   write('CHANGELOG.md', 'release');
   if (state !== 'unstaged') git('add', '.');
   if (state === 'committed') git('commit', '-qm', 'versions');
@@ -104,12 +115,12 @@ it.each(['exports', 'imports'])('measures reordered %s conditions with a version
 });
 
 it.each(['packages/react/src/interaction.ts', 'packages/render/src/index.ts'])('smokes diagnostic React benchmarks for %s while retaining mixed gated reach', (path) => {
-  write('packages/react/package.json', JSON.stringify({ name: 'react', version: '1.0.0', dependencies: { render: 'workspace:*', graph: 'workspace:*' }, scripts: { bench: 'node -e "console.log(67890)"' } }));
+  write('packages/react/package.json', JSON.stringify({ name: 'react', version: '1.0.0', dependencies: { render: 'workspace:*', graph: 'workspace:*' }, scripts: { bench: reportingScript(report(), 67890) } }));
   write('packages/render/package.json', JSON.stringify({ name: 'render', version: '1.0.0' }));
   write('bench/baseline.json', JSON.stringify({ benchmarks: {
     'graph > case': {},
-    'react > bench/interaction.bench.ts > CPU rectangle pointer query > 1k nodes': { gate: 'off', reason: 'diagnostic scan' },
-    'react > bench/interaction.bench.ts > CPU rectangle pointer query > 10k nodes': { gate: 'off', reason: 'diagnostic scan' },
+    'react > bench/interaction.bench.ts > CPU rectangle pointer query > 1k nodes': { gate: 'off', required: true, reason: 'diagnostic scan' },
+    'react > bench/interaction.bench.ts > CPU rectangle pointer query > 10k nodes': { gate: 'off', required: true, reason: 'diagnostic scan' },
   } }));
   git('add', '.');
   git('commit', '-qm', 'diagnostic React baseline');
@@ -121,4 +132,26 @@ it.each(['packages/react/src/interaction.ts', 'packages/render/src/index.ts'])('
   expect(output).not.toContain('MEASURE SENTINEL');
   write('packages/graph/src/index.ts', 'export {};');
   expect(run()).toContain('MEASURE SENTINEL');
+});
+
+it.each(['missing', 'stale', 'empty', 'malformed', 'no-control', 'missing-case', 'invalid-stats'])('rejects %s diagnostic smoke output', (kind) => {
+  let value = report();
+  if (kind === 'empty') value = { files: [] };
+  if (kind === 'no-control') value = report(undefined, false);
+  if (kind === 'missing-case') value = report(['1k nodes']);
+  if (kind === 'invalid-stats') value = { files: [{ groups: [{ fullName: 'bench/interaction.bench.ts > control', benchmarks: [{ name: 'mixed' }] }] }] };
+  const script = kind === 'missing' || kind === 'stale' ? 'node -e "console.log(67890)"' : reportingScript(value, 67890);
+  if (kind === 'malformed') write('report-fixture.json', '{');
+  write('packages/react/package.json', JSON.stringify({ name: 'react', version: '1.0.0', scripts: { bench: script } }));
+  write('bench/baseline.json', JSON.stringify({ benchmarks: {
+    'graph > case': {},
+    'react > bench/interaction.bench.ts > CPU rectangle pointer query > 1k nodes': { gate: 'off', required: true, reason: 'diagnostic' },
+    'react > bench/interaction.bench.ts > CPU rectangle pointer query > 10k nodes': { gate: 'off', required: true, reason: 'diagnostic' },
+  } }));
+  git('add', '.');
+  git('commit', '-qm', 'diagnostic baseline');
+  git('update-ref', 'refs/remotes/origin/main', 'HEAD');
+  if (kind === 'stale') write('packages/react/bench-report.json', JSON.stringify(report()));
+  write('packages/react/src/interaction.ts', 'export {};');
+  expect(run(1)).toContain('fresh benchmark report is invalid');
 });

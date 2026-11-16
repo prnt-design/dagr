@@ -42,12 +42,13 @@ describe('recording a baseline', () => {
     const previous: BaselineReport = {
       schema: 1,
       benchmarks: {
-        a: { gate: 'off', reason: 'was unmeasurable', note: 'dispatch box, 2026-08-14' },
+        a: { gate: 'off', required: true, reason: 'was unmeasurable', note: 'dispatch box, 2026-08-14' },
       },
     };
     const merged = mergeBaseline(previous, { a: stat(3) }, AT);
     expect(merged.benchmarks['a']).toEqual({
       gate: 'off',
+      required: true,
       reason: 'was unmeasurable',
       note: 'dispatch box, 2026-08-14',
       ...stat(3),

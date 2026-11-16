@@ -235,6 +235,12 @@ select benchmark smoke when no timing-gated entry covers them; dependencies
 also reached by another gated family still require timing measurements. This
 policy adds no timing gate for M5.2b, which remains report-only below.
 
+The three executable scan entries also carry `required: true`: missing cases
+fail report validation even though their timing cannot fail the gate. Smoke
+removes the previous report before running and validates the fresh, nonempty
+output with the same control normalizer and required-entry checks as the full
+run. A successful command that writes no report is a harness failure.
+
 ## M5.2b shape-aware node hit
 
 Measured 2026-10-03 on the same Apple M4 and Node `v25.6.1`, with

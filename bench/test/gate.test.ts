@@ -211,6 +211,19 @@ describe('the exemption path', () => {
     expect(compareReports(baseline({ a: stat(4), ...entries }), current({ a: stat(8), ...measured })).ok).toBe(false);
   });
 
+  it('rejects a missing required diagnostic family even when other packages ran', () => {
+    const committed = JSON.parse(readFileSync(new URL('../baseline.json', import.meta.url), 'utf8')) as BaselineReport;
+    const entries = Object.fromEntries(Object.entries(committed.benchmarks).filter(([key]) => key.includes('CPU rectangle pointer query')));
+    const missing = compareReports(baseline({ a: stat(4), ...entries }), current({ a: stat(4) }));
+    expect(missing.ok).toBe(false);
+    expect(missing.errors).toHaveLength(3);
+    expect(missing.errors.every((error) => error.includes('required diagnostic benchmark'))).toBe(true);
+    expect(missing.measuredNothing).toBe(false);
+    const measured = Object.fromEntries(Object.keys(entries).map((key) => [key, stat(1_000_000)]));
+    delete measured[Object.keys(entries)[0]!];
+    expect(compareReports(baseline({ a: stat(4), ...entries }), current({ a: stat(4), ...measured })).errors).toHaveLength(1);
+  });
+
   it('skips a benchmark that is explicitly exempt', () => {
     const report = compareReports(
       baseline({ a: stat(4), gpu: { gate: 'off', reason: 'measured by hand on one GPU' } }),

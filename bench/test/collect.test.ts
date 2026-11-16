@@ -76,6 +76,15 @@ describe('control normalisation', () => {
 });
 
 describe('guards against measuring nothing', () => {
+  it.each([['median', NaN], ['mean', Infinity], ['rme', -1], ['sampleCount', 0]])('rejects malformed diagnostic %s statistics', (field, value) => {
+    const measured = { ...benchmark('10k nodes', 10), [field]: value };
+    const normalised = normalisePackageRun(run('@prnt/dagr-react', report('bench/interaction.bench.ts', {
+      'CPU rectangle pointer query': [measured],
+    }, { control: 0.5 })));
+    expect(normalised.errors.join(' ')).toMatch(/invalid benchmark statistics/);
+    expect(normalised.benchmarks).toEqual({});
+  });
+
   it('still requires a control for the diagnostic rectangle scan report', () => {
     const groups = { 'CPU rectangle pointer query': [benchmark('1k nodes', 1), benchmark('10k nodes', 10)] };
     const missing = normalisePackageRun(run('@prnt/dagr-react', report('bench/interaction.bench.ts', groups)));

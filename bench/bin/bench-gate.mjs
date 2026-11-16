@@ -10,11 +10,13 @@
  */
 
 import { spawnSync } from 'node:child_process';
-import { existsSync, readFileSync, readdirSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { WORKSPACE_DIRS } from '../src/names.mjs';
+import { normaliseRuns } from '../src/collect.mjs';
+import { requiredDiagnosticErrors } from '../src/gate.mjs';
+import { REPORT_NAME, WORKSPACE_DIRS } from '../src/names.mjs';
 import { gatedDirs, isManifestPath, scopeOf, smokeReach, versionOnlyManifest } from '../src/scope.mjs';
 
 const BASE = 'origin/main';
@@ -132,9 +134,30 @@ console.log(
 
 for (const dir of scope.smoke) {
   console.log(`\nThe branch changes what ${dir}'s ungated benchmarks run, so running them once to show they still do.\n`);
+  const reportPath = join(root, dir, REPORT_NAME);
+  rmSync(reportPath, { force: true });
   const result = spawnSync('pnpm', ['--filter', `./${dir}`, 'bench'], { cwd: root, stdio: 'inherit' });
   if (result.status !== 0) {
     console.error(`\n${dir}'s benchmarks no longer run, which would fail the gate for every branch after this one.`);
     process.exit(result.status ?? 1);
+  }
+  try {
+    const manifest = JSON.parse(readFileSync(join(root, dir, 'package.json'), 'utf8'));
+    const normalised = normaliseRuns([{
+      packageName: String(manifest.name),
+      report: JSON.parse(readFileSync(reportPath, 'utf8')),
+    }]);
+    const baseline = /** @type {import('../src/gate.mjs').BaselineReport} */ (
+      JSON.parse(readFileSync(join(root, 'bench/baseline.json'), 'utf8'))
+    );
+    const entries = Object.fromEntries(Object.entries(baseline.benchmarks).filter(
+      ([key]) => key.startsWith(`${String(manifest.name)} > `),
+    ));
+    const errors = [...normalised.errors, ...requiredDiagnosticErrors(entries, normalised.benchmarks)];
+    if (Object.keys(normalised.benchmarks).length === 0) errors.push('no benchmarks were collected');
+    if (errors.length > 0) throw new Error(errors.join('; '));
+  } catch (cause) {
+    console.error(`${dir}'s fresh benchmark report is invalid: ${cause instanceof Error ? cause.message : String(cause)}`);
+    process.exit(1);
   }
 }
