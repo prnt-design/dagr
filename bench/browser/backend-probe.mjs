@@ -86,6 +86,32 @@ function pageHtml() {
     .replace('__THREE_TSL__', served('three/tsl'));
 }
 
+function parityFailure(check) {
+  if (check.error !== undefined) return check.error;
+  const reasons = [];
+  if (check.backends.webgpu !== 'webgpu' || check.backends.webgl2 !== 'webgl2') {
+    reasons.push(`the frames drew on ${check.backends.webgpu} and ${check.backends.webgl2}, not webgpu and webgl2`);
+  }
+  if (check.interior.maxDelta > check.tolerance.interiorMaxDelta) {
+    reasons.push(
+      `${check.interior.differing} interior pixels differ, by up to ${check.interior.maxDelta} against a tolerance of ${check.tolerance.interiorMaxDelta}`,
+    );
+  }
+  return reasons.length === 0 ? 'the two frames are different sizes' : reasons.join('; ');
+}
+
+function pickFailure(run) {
+  if (run.error !== undefined) return run.error;
+  const reasons = [];
+  if (run.reported !== run.backend) reasons.push(`the renderer came up on ${run.reported}`);
+  if (run.mismatchCount > 0) reasons.push(`${run.mismatchCount} of ${run.checked} picks disagree`);
+  const missed = Object.entries(run.hits)
+    .filter(([id, count]) => id !== 'background' && count === 0)
+    .map(([id]) => id);
+  if (missed.length > 0) reasons.push(`no pick hit ${missed.join(', ')}`);
+  return reasons.join('; ');
+}
+
 const cliArgs = process.argv.slice(2);
 const headless = !cliArgs.includes('--headed');
 if (!headless && CDP !== undefined) {
@@ -138,7 +164,16 @@ if (cliArgs.includes('--parity')) {
     check: await page.evaluate(() => window.parity()),
     control: await page.evaluate(() => window.parity(1 / 3)),
   };
-  if (!parity.check.pass || parity.control.pass) process.exitCode = 1;
+  if (!parity.check.pass) {
+    console.error(`the parity check failed: ${parityFailure(parity.check)}`);
+    process.exitCode = 1;
+  }
+  if (parity.control.pass) {
+    console.error(
+      `the parity control passed with one shape shifted by ${Number(parity.control.shiftX.toPrecision(3))} px, so the check cannot see a misplaced shape`,
+    );
+    process.exitCode = 1;
+  }
 }
 let pick;
 if (cliArgs.includes('--pick')) {
@@ -151,10 +186,14 @@ if (cliArgs.includes('--pick')) {
   pick = [];
   for (const backend of ['webgpu', 'webgl2']) {
     for (const ratio of [1, 2]) {
-      pick.push(await page.evaluate(([value, dpr]) => window.pickCheck(value, dpr), [backend, ratio]));
+      const run = await page.evaluate(([value, dpr]) => window.pickCheck(value, dpr), [backend, ratio]);
+      pick.push(run.devicePixelRatio === undefined ? { ...run, devicePixelRatio: ratio } : run);
     }
   }
-  if (pick.some((run) => !run.pass)) process.exitCode = 1;
+  for (const run of pick.filter((each) => !each.pass)) {
+    console.error(`the pick check failed on ${run.backend} at DPR ${run.devicePixelRatio}: ${pickFailure(run)}`);
+    process.exitCode = 1;
+  }
 }
 if (screenshotPath !== undefined) {
   // `keep` matters: a disposed renderer releases its context and the canvas
