@@ -366,6 +366,9 @@ if (memory) {
     console.error('a pick failed in the memory step');
     process.exitCode = 1;
   }
+  // A pipe on macOS takes writes asynchronously, so exiting at once cuts a
+  // piped report at 64 KiB.
+  await Promise.all([process.stdout, process.stderr].map((stream) => new Promise((done) => stream.write('', done))));
   process.exit();
 }
 
