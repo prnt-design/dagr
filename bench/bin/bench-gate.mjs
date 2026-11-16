@@ -15,7 +15,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { WORKSPACE_DIRS } from '../src/names.mjs';
-import { gatedDirs, scopeOf, smokeReach } from '../src/scope.mjs';
+import { gatedDirs, isManifestPath, scopeOf, smokeReach, versionOnlyManifest } from '../src/scope.mjs';
 
 const BASE = 'origin/main';
 const SHOWN = 5;
@@ -40,7 +40,7 @@ function git(args, separator = '\n') {
  * a move, so a file moved out of scope still counts, and `-z` keeps git from
  * quoting a path into something no rule would recognise.
  *
- * @returns {string[] | null}
+ * @returns {{ paths: string[], mergeBase: string } | null}
  */
 function changedPaths() {
   const mergeBase = git(['merge-base', 'HEAD', BASE])?.[0];
@@ -48,7 +48,7 @@ function changedPaths() {
   const tracked = git(['diff', '--name-only', '--no-renames', '-z', mergeBase], '\0');
   const untracked = git(['ls-files', '--others', '--exclude-standard', '-z'], '\0');
   if (tracked === null || untracked === null) return null;
-  return [...new Set([...tracked, ...untracked])];
+  return { paths: [...new Set([...tracked, ...untracked])], mergeBase };
 }
 
 /** @returns {import('../src/scope.mjs').Manifest[]} */
@@ -102,9 +102,19 @@ function reach() {
   }
 }
 
-const paths = changedPaths() ?? measure(`could not read this branch's diff against ${BASE}`);
+const { paths, mergeBase } = changedPaths() ?? measure(`could not read this branch's diff against ${BASE}`);
+const versionOnly = new Set();
+for (const path of paths.filter(isManifestPath)) {
+  const before = spawnSync('git', ['show', `${mergeBase}:${path}`], { cwd: root, encoding: 'utf8' });
+  if (before.status !== 0) measure(`could not read base manifest ${path}`);
+  try {
+    if (versionOnlyManifest(before.stdout, readFileSync(join(root, path), 'utf8'))) versionOnly.add(path);
+  } catch {
+    measure(`could not read working manifest ${path}`);
+  }
+}
 const { gated, smoke } = reach();
-const scope = scopeOf(paths, gated, smoke);
+const scope = scopeOf(paths, gated, smoke, versionOnly);
 
 if (scope.measure.length > 0) {
   const more = scope.measure.length - SHOWN;

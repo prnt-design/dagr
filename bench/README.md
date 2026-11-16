@@ -16,6 +16,14 @@ printed by that command is a pass; agents never skip it by hand. When the
 diff reaches gated code it runs `bench:ci`, whose regression verdict still
 blocks a merge. CI does not run machine-matched performance measurements.
 
+A root or workspace `package.json` change is excluded only when both manifests
+have valid SemVer versions, the versions differ, and every other parsed field
+is identical (object key order is ignored, array order is preserved). The CLI
+compares the merge-base manifest with the actual working file, covering committed,
+staged and unstaged edits together. Missing or unreadable manifests fail closed.
+Version-only changes with docs therefore print a skip; dependency, script,
+export, configuration, lockfile and source changes retain their existing scope.
+
 The gate lives here rather than on CI because the baseline is machine-matched.
 `bench/baseline.json` records the machine it was captured on, and a comparison
 is only meaningful against the same one. Since 2026-08-18 that is enforced

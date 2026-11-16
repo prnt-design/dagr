@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { gatedDirs, scopeOf, smokeReach } from '../src/scope.mjs';
+import { gatedDirs, scopeOf, smokeReach, versionOnlyManifest } from '../src/scope.mjs';
 import type { Manifest } from '../src/scope.mjs';
 
 function manifest(dir: string, name: string, workspaceDeps: string[] = [], benched = false): Manifest {
@@ -136,5 +136,36 @@ describe('reading a diff', () => {
       measure: ['packages/graph/src/graph.ts', 'bench/baseline.json'],
       smoke: ['packages/explorer'],
     });
+  });
+});
+
+
+describe('version-only manifest comparison', () => {
+  const before = JSON.stringify({ version: '1.0.0', exports: { a: ['x', 'y'] }, private: true });
+  it('ignores object key order while comparing every other field', () => {
+    expect(versionOnlyManifest(before, '{"private":true,"exports":{"a":["x","y"]},"version":"2.0.0-rc.1+abc"}')).toBe(true);
+  });
+  it.each([
+    '{}', 'null', '[]', '{', JSON.stringify({ version: '2.0.0\n', exports: { a: ['x', 'y'] }, private: true }), '{"version":1}', '{"version":""}',
+    '{"version":"01.0.0"}', '{"version":"1.0.0-01"}',
+    '{"version":"2.0.0","exports":{"a":["y","x"]},"private":true}',
+    '{"version":"2.0.0","exports":{"a":["x","y"]}}',
+    '{"version":"2.0.0","exports":{"a":["x","y"]},"private":true,"extra":null}',
+  ])('rejects invalid or mixed content %s', (after) => {
+    expect(versionOnlyManifest(before, after)).toBe(false);
+    expect(versionOnlyManifest(after, before)).toBe(false);
+  });
+  it('requires an actual version difference', () => {
+    expect(versionOnlyManifest(before, before)).toBe(false);
+  });
+  it('exempts only verified manifest paths and retains mixed source and smoke', () => {
+    const gated = new Set(['packages/graph']);
+    const smoke = new Map([['packages/explorer', new Set(['packages/explorer'])]]);
+    const paths = ['package.json', 'packages/graph/package.json', 'packages/explorer/package.json'];
+    expect(scopeOf(paths, gated, smoke, new Set(paths))).toEqual({ measure: [], smoke: [] });
+    expect(scopeOf([...paths, 'packages/graph/src/a.ts', 'packages/explorer/src/a.ts'], gated, smoke, new Set(paths))).toEqual({
+      measure: ['packages/graph/src/a.ts'], smoke: ['packages/explorer'],
+    });
+    expect(scopeOf(['pnpm-lock.yaml'], gated, smoke, new Set(['pnpm-lock.yaml']))).toEqual({ measure: ['pnpm-lock.yaml'], smoke: [] });
   });
 });
