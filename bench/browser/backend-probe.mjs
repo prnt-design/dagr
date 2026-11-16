@@ -52,6 +52,7 @@ const ORIGIN = 'http://127.0.0.1:8733';
 const EXECUTABLE = process.env.DAGR_CHROMIUM;
 const LAUNCH_ARGS = (process.env.DAGR_CHROMIUM_ARGS ?? '').split(' ').filter(Boolean);
 const CDP = process.env.DAGR_CDP;
+const CONTROL_SHIFT_PX = 1 / 3;
 
 /**
  * The page's import map, filled in from this process's own module resolution.
@@ -92,12 +93,30 @@ function parityFailure(check) {
   if (check.backends.webgpu !== 'webgpu' || check.backends.webgl2 !== 'webgl2') {
     reasons.push(`the frames drew on ${check.backends.webgpu} and ${check.backends.webgl2}, not webgpu and webgl2`);
   }
+  if (!check.sameSize) reasons.push('the two frames are different sizes');
   if (check.interior.maxDelta > check.tolerance.interiorMaxDelta) {
     reasons.push(
       `${check.interior.differing} interior pixels differ, by up to ${check.interior.maxDelta} against a tolerance of ${check.tolerance.interiorMaxDelta}`,
     );
   }
-  return reasons.length === 0 ? 'the two frames are different sizes' : reasons.join('; ');
+  return reasons.join('; ');
+}
+
+/**
+ * Why the control did not fail the way it must, or undefined when it did. A
+ * control that threw, drew on the wrong backend or compared frames of different
+ * sizes also reports `pass: false`, but says nothing about whether the check
+ * can see a shifted shape.
+ */
+function controlFailure(control) {
+  if (control.pass) return 'it passed, so the check cannot see a misplaced shape';
+  const failedOnShift =
+    control.error === undefined &&
+    control.backends.webgpu === 'webgpu' &&
+    control.backends.webgl2 === 'webgl2' &&
+    control.sameSize &&
+    control.interior.maxDelta > control.tolerance.interiorMaxDelta;
+  return failedOnShift ? undefined : `it failed for another reason: ${parityFailure(control)}`;
 }
 
 function pickFailure(run) {
@@ -162,15 +181,16 @@ if (cliArgs.includes('--parity')) {
   }
   parity = {
     check: await page.evaluate(() => window.parity()),
-    control: await page.evaluate(() => window.parity(1 / 3)),
+    control: await page.evaluate((shift) => window.parity(shift), CONTROL_SHIFT_PX),
   };
   if (!parity.check.pass) {
     console.error(`the parity check failed: ${parityFailure(parity.check)}`);
     process.exitCode = 1;
   }
-  if (parity.control.pass) {
+  const control = controlFailure(parity.control);
+  if (control !== undefined) {
     console.error(
-      `the parity control passed with one shape shifted by ${Number(parity.control.shiftX.toPrecision(3))} px, so the check cannot see a misplaced shape`,
+      `the parity control, with one shape shifted by ${Number(CONTROL_SHIFT_PX.toPrecision(3))} px, did not fail on that shift: ${control}`,
     );
     process.exitCode = 1;
   }

@@ -530,7 +530,9 @@ same node records the renderer draws.
 with the rectangle moved a third of a device pixel on the WebGL2 side only. If
 that passes, the check cannot see a real geometry error, and the run fails. It
 fails through the glow: a sub-pixel shift moves the fill and outline edges only
-inside the band, so a shape without glow shifted the same way would pass.
+inside the band, so a shape without glow shifted the same way would pass. It
+has to fail on that shift: a control that threw, drew on the wrong backend or
+compared frames of different sizes fails the run too.
 
 **What it found on 2026-10-17**, on the Apple M4 Mac mini in Google Chrome
 155.0.8059.82, headless, no flags: the two frames are byte-identical. Of
