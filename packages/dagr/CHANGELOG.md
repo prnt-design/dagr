@@ -11,7 +11,7 @@
   migration. The candidate proposes a first public scoped chart package at 0.2.0,
   conditional on its release blockers and human configuration changes. Chart
   remains private in this tree and is not exposed by this umbrella.
-  See [release candidate](../../packaging/release-candidate.md).
+  See [release candidate](https://github.com/prnt-design/dagr/blob/main/packaging/release-candidate.md).
 
 ## 0.1.4
 

@@ -10,7 +10,7 @@
   configuration remains pending. Proposed first public version: 0.2.0,
   conditional on the GPU combo fix in PR #222 and maintainer approval.
   This candidate uses the scoped package, with no umbrella entry.
-  See [release candidate](../../packaging/release-candidate.md).
+  See [release candidate](https://github.com/prnt-design/dagr/blob/main/packaging/release-candidate.md).
   `DagrChart` draws bar and line series over a category axis with
   `@prnt/dagr-render`: one or two y-axes scaled by `d3-scale`, marks matched
   across renders by id so a change glides, grows in or shrinks out on the

@@ -33,8 +33,8 @@ This supports that baseline, without claiming an unavailable registry git SHA.
 Registry timestamps and integrity values are preserved in the shared provenance
 artifact. Graph and VDSL source have no changes since that baseline. Layout
 now includes
-the size-changing attribute fast path from #240. The November 16 refresh checks
-registry versions and integrity against that record; it does not claim a new
+the size-changing attribute fast path from #240. The November 16 refresh records
+live registry versions and integrity; it does not claim a new
 byte-by-byte registry source comparison.
 
 ## Package inventory and migration
@@ -49,6 +49,14 @@ byte-by-byte registry source comparison.
 | explorer | Shared touch lifecycle and capture-transfer fix; compact details and larger controls; visual-viewport framing; outline part and map/outline mode with retained state, camera, scroll and focus | Full `ExplorerLabels` values/mocks add `outline`, `presentation`, `mapMode`, `outlineMode`; partial overrides inherit defaults; account for the additional controls and changed narrow-screen layout |
 | umbrella | Existing forwarding modules expose the updated scoped APIs | React 19 remains required; React 18 applications use scoped Explorer; no chart entry exists |
 | chart (first public, conditional) | Category bars, lines, dual y-axes, SVG/GPU selection, animated updates, CSS/theme bindings, table and pointer/touch tooltips | React 19, Three and strict consumer Three types; import scoped CSS and set height; GPU combinations blocked by #222 |
+
+For custom renderers, `pickNode(pointer: Vec2): Promise<string | null>` takes
+CSS pixels relative to the canvas top-left. Empty-scene test mocks can return
+`Promise.resolve(null)`; production implementations must honor silhouettes,
+topmost ordering and stale asynchronous results. `createRenderer` consumers
+receive the implementation automatically. For `GraphHitTarget`, narrow all
+three variants (`nodeId`, `portId`, `edgeId`) before reading a variant's field;
+default Canvas edge handling remains opt-in through the edge handlers.
 
 Renderer additions include `createPinchGesture`, `PinchGesture`, `PinchDelta`,
 `visibleFrame`, `clipInset`, `coverInset`, `visualViewportInset`, `FrameInset`,
@@ -155,9 +163,13 @@ release preparation.
 
 1. Close #222 with reviewed implementation, the full local gate and concluded
    green CI, then rebase this candidate onto the resulting `origin/main`.
-   Reconcile the older metadata PR #236, which excludes chart, rather than
-   applying two competing metadata changes. That PR previously failed a local
-   benchmark gate; green CI alone did not authorize its merge.
+   Resolve the reproduced benchmark blocker described below before release
+   approval. Use one replacement human metadata PR for the eight-package patch
+   after this preparation, superseding the seven-package PR #236. Do not merge
+   or apply #236 as-is and then apply this patch: its finalized notes and
+   seven-package handoff would compete with this complete candidate. Preserve
+   its review/evidence links in the replacement PR, and close it as superseded
+   only when the replacement is reviewable.
 2. Review the separate proposed patch artifact. It sets **all eight** versions
    to **0.2.0**, removes chart's private flag and sets its publish access public.
    It does not add umbrella chart exposure. Only Nii may apply these existing
@@ -202,3 +214,33 @@ does not remove installed 0.2.0 versions or roll back consumers. Chart has no
 previous public version; remove its new tag or deprecate the failed release as
 appropriate. Do not automate unpublish, delete tags or imply atomic multi-package
 rollback. Hold promotion until all eight staged packages are verified.
+
+
+## November 16 preparation evidence and benchmark blocker
+
+The preparation at `152c13b29e76b5d5764ff4294d121a9500a07376` passed
+`pnpm typecheck`, `pnpm test`, `pnpm lint`, `pnpm build` and the selected
+`pnpm bench:gate`, which explicitly skipped the ten changed packaging/docs
+paths. The external verifier passed 28 checks including eight publint/attw
+artifacts, chart dual-axis mixed-series layout and SVG SSR, strict Explorer
+authoring types and React 18/19 map/outline switching with lifecycle cleanup.
+CI concluded success for that head. Build emitted CSS minifier warnings, not
+a failing exit. Preserved source-version tarballs retain 0.1.4; final release
+metadata still requires a fresh build, pack, gate and installed-consumer run.
+
+PR #236's exact historical failure was
+`@prnt/dagr-react > bench/interaction.bench.ts > CPU rectangle pointer query > 10k nodes`:
++32.0% versus +17.7% allowed, a passing middle run, then +30.5% versus +17.5%.
+The preparation's selected-gate skip does not test that entry. To assess it on
+the current candidate, one separate `pnpm bench:ci` invocation ran under the
+exclusive compute wrapper on November 16. It exited 1 after **two of two
+measurements failed the same entry**, +31.4% versus +17.6% allowed and +33.2%
+versus +17.5% allowed. The historical blocker therefore reproduces. No baseline,
+benchmark policy or runtime changes were made, and no manual retry followed.
+React runtime/benchmark implementation and the baseline match PR #236; its
+React index header differs only in documentation. This is not evidence that
+the release preparation introduced the regression, nor is it permission to
+ignore it. Keep this preparation PR unmerged despite green CI until the
+benchmark owner resolves the blocker and the required final gate is green.
+The existing workboard dependency is `tsk_1048e2545110`; benchmark repair is a
+separate task. The full log is retained with the preparation artifacts.
