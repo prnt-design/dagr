@@ -30,8 +30,9 @@
  * Chrome instead of launching one. The output
  * records the browser, mode and flags, because a backend result without them
  * cannot be reproduced. `--parity` adds M4.9b's backend comparison and exits
- * non-zero unless it passes and its control fails. It also exits non-zero when
- * the adapter reports `isFallbackAdapter`: a software adapter such as
+ * non-zero unless it passes and its control fails on the shift it is given. It
+ * also exits non-zero when the adapter reports `isFallbackAdapter`: a software
+ * adapter such as
  * SwiftShader still comes up on `webgpu`, so its side of the comparison would
  * not be a GPU's. `--pick` adds M4.8b's check of `pickNode` on both backends at
  * device pixel ratios 1 and 2, and exits non-zero on the same adapter terms or
@@ -109,14 +110,14 @@ function parityFailure(check) {
  * can see a shifted shape.
  */
 function controlFailure(control) {
-  if (control.pass) return 'it passed, so the check cannot see a misplaced shape';
+  if (control.pass) return 'passed, so the check cannot see a misplaced shape';
   const failedOnShift =
     control.error === undefined &&
     control.backends.webgpu === 'webgpu' &&
     control.backends.webgl2 === 'webgl2' &&
     control.sameSize &&
     control.interior.maxDelta > control.tolerance.interiorMaxDelta;
-  return failedOnShift ? undefined : `it failed for another reason: ${parityFailure(control)}`;
+  return failedOnShift ? undefined : `failed, but not on the shift: ${parityFailure(control)}`;
 }
 
 function pickFailure(run) {
@@ -190,7 +191,7 @@ if (cliArgs.includes('--parity')) {
   const control = controlFailure(parity.control);
   if (control !== undefined) {
     console.error(
-      `the parity control, with one shape shifted by ${Number(CONTROL_SHIFT_PX.toPrecision(3))} px, did not fail on that shift: ${control}`,
+      `the parity control, with one shape shifted by ${Number(CONTROL_SHIFT_PX.toPrecision(3))} px, ${control}`,
     );
     process.exitCode = 1;
   }

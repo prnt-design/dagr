@@ -507,7 +507,7 @@ DAGR_CHROMIUM="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" \
 
 `--parity` draws the probe scene through `'webgpu'` and through `'webgl2'` and
 compares the two frames pixel by pixel. It exits non-zero unless both backends
-came up as named, the comparison passes, and a control fails, and says on
+came up as named, the comparison passes, and a control fails on its shift, and says on
 stderr which of these did not hold. It also exits non-zero, saying why on
 stderr before it compares, when the adapter reports `isFallbackAdapter`,
 because a software adapter such as SwiftShader comes up on `'webgpu'` too and
