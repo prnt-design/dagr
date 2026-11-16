@@ -132,7 +132,8 @@ consumer.
 The server runs in a separate DOM-free process. The client hydrates its HTML,
 checks that React preserves the viewport element without warnings, measures a
 synthetic 390 by 480 CSS-pixel viewport, changes search through the public API,
-unmounts and mounts again. Both unmounts must clear the API ref, observers and
+switches map/outline while retaining query and viewport identity, unmounts and
+mounts again. Both unmounts must clear the API ref, observers and
 pending animation frames. `consumer.tsx` compiles under NodeNext with
 `skipLibCheck` off, matching React types and no three types installed.
 It resolves and reads the public CSS subpath and exercises the public core
@@ -159,8 +160,9 @@ also packs chart during the test suite, checking rewritten dependencies,
 entries, source maps, CSS, README, changelog and repository license.
 `verify:tools` runs publint and arethetypeswrong over chart too, and installs
 all eight tarballs in a separate npm consumer. That fixture compiles chart JSX
-and layout under NodeNext with `skipLibCheck: false`, then checks DOM-free SVG
-SSR, public CSS and the absence of an umbrella chart export. Required React 19,
+and layout under NodeNext with `skipLibCheck: false`, then checks mixed bar/line
+dual-axis layout, negative values, empty/invalid data, DOM-free SVG SSR with all
+table values, public CSS and the absence of an umbrella chart export. Required React 19,
 Three and their types are installed explicitly. This does not certify GPU
 rendering or make chart public. See the [release candidate](release-candidate.md)
 for remaining blockers and the proposed package set.

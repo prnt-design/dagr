@@ -9,6 +9,13 @@ types did not" is the category this file has a heading for, so that the v0.1
 release notes do not have to be reconstructed by diffing five milestones' worth
 of doc prose.
 
+## Unreleased
+
+- Size-changing attribute patches can reuse held ranks and layers and run only
+  position and route with the default longest-path ranker and eligible built-in
+  stages. Custom stages, simplex ranking and missing retained state keep the
+  full pipeline. `RelayoutResult.ran` reports the stages actually run.
+
 ## 0.1.4
 
 - Lockstep release with the explorer's drawer-aware camera and icon controls. No runtime API changes in this package.

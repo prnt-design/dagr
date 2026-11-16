@@ -3,7 +3,10 @@ import type { ChartData, DagrChartProps } from '@prnt/dagr-chart';
 
 const data: ChartData = {
   categories: ['A', 'B'],
-  series: [{ id: 'orders', label: 'Orders', color: 0x6366f1, values: [3, 7] }],
+  series: [
+    { id: 'orders', label: 'Orders', color: 0x6366f1, values: [-3, 7] },
+    { id: 'total', label: 'Running total', color: 0xff6600, values: [30, 70], mark: 'line', axis: 'right' },
+  ],
 };
 const props: DagrChartProps = { ...data, label: 'Orders', rendering: 'svg', animate: false };
 void layoutChart(data, { width: 640, height: 360 });

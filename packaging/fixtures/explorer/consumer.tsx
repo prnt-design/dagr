@@ -1,6 +1,6 @@
 import { createRef } from 'react';
 import { DagrExplorer } from '@prnt/dagr-explorer';
-import type { ExplorerApi, ExplorerView } from '@prnt/dagr-explorer';
+import type { ExplorerApi, ExplorerView, DagrExplorerMode } from '@prnt/dagr-explorer';
 import { Camera2D, createPinchGesture, visibleFrame, visualViewportInset } from '@prnt/dagr-render/core';
 import type { FrameInset, PinchDelta, PinchGesture, VisibleFrame, VisualViewportBox } from '@prnt/dagr-render/core';
 
@@ -8,7 +8,10 @@ const view: ExplorerView = {
   id: 'v', label: 'View', nodes: [{ id: 'a', label: 'Alpha' }], edges: [],
 };
 const apiRef = createRef<ExplorerApi>();
-export const map = <DagrExplorer label="Consumer map" views={[view]} apiRef={apiRef} />;
+export const map = <DagrExplorer label="Consumer map" views={[view]} apiRef={apiRef} defaultMode="outline" onModeChange={(mode: DagrExplorerMode) => { void mode; }}
+  renderNode={(node, { tier }) => <span>{node.label}: {tier}</span>}
+  renderDetails={({ node, connections, follow }) => <div>{node.label}{connections.map((connection) => <button key={connection.edge.id} onClick={() => follow(connection.node.id)}>{connection.node.label}</button>)}</div>}
+/>;
 const gesture: PinchGesture = createPinchGesture();
 gesture.down(1, { x: 0, y: 0 });
 gesture.down(2, { x: 100, y: 0 });
