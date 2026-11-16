@@ -295,14 +295,11 @@
           }
         }
         const backends = { webgpu: gpu.reported, webgl2: gl.reported };
+        const sameSize = gl.width === gpu.width && gl.height === gpu.height;
         return {
-          pass:
-            gpu.reported === 'webgpu' &&
-            gl.reported === 'webgl2' &&
-            gl.width === gpu.width &&
-            gl.height === gpu.height &&
-            interior.maxDelta <= ROUNDING,
+          pass: gpu.reported === 'webgpu' && gl.reported === 'webgl2' && sameSize && interior.maxDelta <= ROUNDING,
           backends,
+          sameSize,
           tolerance: { edgeBandDevicePx: EDGE_BAND_DEVICE_PX, interiorMaxDelta: ROUNDING },
           shiftX,
           band,
