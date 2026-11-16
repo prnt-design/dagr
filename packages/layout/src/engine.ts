@@ -4,7 +4,7 @@
  */
 
 import type { EdgeId, Graph, NodeId, Patch } from '@prnt/dagr-graph';
-import { isAuthored } from './authorship.js';
+import { isAuthored, keepsItsSeed } from './authorship.js';
 import { resolveConfig } from './config.js';
 import { applyDelta, diffLayout, requireEpsilon } from './delta.js';
 import type { LayoutDelta } from './delta.js';
@@ -12,7 +12,8 @@ import { DagrLayoutError, EngineStateError, WorkerTransportError } from './error
 import type { InfluenceSet } from './influence.js';
 import { influenceRegion, wholeRoster } from './influence.js';
 import { movesNothing, sameSizes } from './inert.js';
-import { prepare, runPipeline } from './pipeline.js';
+import { prepare, runPipeline, runPlaced } from './pipeline.js';
+import { defaultStages } from './stages.js';
 import type {
   LayoutConfig,
   LayoutResult,
@@ -52,6 +53,7 @@ const EVERY_STAGE: readonly LayoutStageName[] = Object.freeze([
   'position',
   'route',
 ]);
+const PLACED_STAGES: readonly LayoutStageName[] = Object.freeze(['position', 'route']);
 const NO_STAGE: readonly LayoutStageName[] = Object.freeze([]);
 
 /**
@@ -243,9 +245,10 @@ export interface RelayoutResult {
    * the one beside it. See {@link influenceRegion}.
    *
    * A relayout the engine cannot bound reports the whole roster here too, and
-   * there is one way to be in that state: the run before it was served by a
-   * worker, so it left no pipeline state on this side and there are no ranks to
-   * build a band out of. That is the same absence that makes such a relayout
+   * the usual way to be in that state is a run before it served by a worker, so
+   * it left no pipeline state on this side and there are no ranks to build a
+   * band out of. A run or relayout that threw, or one still in flight in the
+   * worker, leaves the same absence: see `forget` in the engine. That is the same absence that makes such a relayout
    * cold, and M3.6 decided what to do about it: the worker retains the state
    * and the patch crosses, which is a protocol M3.9b owns. See
    * {@link LayoutEngine.relayoutAsync}.
@@ -259,16 +262,13 @@ export interface RelayoutResult {
    * relayout names all four; the path this milestone shipped first names none,
    * because a patch that changes nothing the pipeline reads has nothing for a
    * stage to do and the drawing the caller is holding is already the answer.
+   * An attribute edit that changes a size names `position` and `route`, which
+   * run over the held ranks and layers.
    *
-   * A LIST RATHER THAN THE BOOLEAN IT IS TODAY, and the reason is that the
-   * boolean is an accident of which fast path landed first. The one here skips
-   * every stage; the entry's other two do not. An add-leaf patch attached to an
-   * existing rank needs no cycle pass and no re-rank and still has to position
-   * and route, and an attribute edit that DOES change a size is a
-   * position-and-route-only run, so both of those name two of the four. A
-   * boolean would have to be replaced on the day either lands, and a consumer
-   * reading it would have to be told that `false` had stopped meaning what it
-   * meant.
+   * A LIST RATHER THAN A BOOLEAN, because a boolean was an accident of which
+   * fast path landed first: the resize path runs two of the four, and an
+   * add-leaf patch attached to an existing rank will need no re-rank and still
+   * have to position and route.
    *
    * IT IS NOT A PERFORMANCE HINT AND IT IS NOT ADVISORY: it says what ran, so a
    * test can assert that a patch cost nothing rather than assert that it was
@@ -480,9 +480,9 @@ export interface LayoutEngine {
    * node still gets a rank and a position. A batch emits the whole edit as one
    * patch, so the engine sees the one graph state you meant.
    *
-   * IT IS NO FASTER THAN A COLD RUN, on purpose, and the tests hold it to
-   * landing the same geometry a cold run of the same graph does. The whole
-   * pipeline runs again. That is what makes the delta contract, the engine
+   * A STRUCTURAL EDIT IS NO FASTER THAN A COLD RUN, on purpose, and the tests
+   * hold it to landing the same geometry a cold run of the same graph does. The
+   * whole pipeline runs again. That is what makes the delta contract, the engine
    * lifetime and the retained state testable before any incremental algorithm
    * exists, and it gives M3.6 through M3.9 a correct baseline to be measured
    * against rather than nothing. The patch is read for three things today:
@@ -499,7 +499,9 @@ export interface LayoutEngine {
    * take, and M3.8b and M3.9b are still what change that. M3.9a is the first
    * thing here that costs LESS, and it does it by not running rather than by
    * running less: a patch that changes nothing the pipeline reads is answered
-   * from the drawing already in hand. See {@link RelayoutResult.ran}.
+   * from the drawing already in hand. M3.9b's resize path runs less: a patch
+   * that only changes sizes runs position and route over the held ranks and
+   * layers. See {@link RelayoutResult.ran}.
    *
    * The delta is measured against the geometry this engine last REPORTED rather
    * than against its last computed run, which is what makes a nonzero
@@ -625,6 +627,7 @@ export function createLayout(options: LayoutEngineOptions = {}): LayoutEngine {
     (stages?.order === undefined || isAuthored(stages.order)) &&
     (stages?.position === undefined || isAuthored(stages.position)) &&
     (stages?.route === undefined || isAuthored(stages.route));
+  const rankKeepsItsSeed = keepsItsSeed(stages?.rank ?? defaultStages.rank);
 
   /**
    * What the engine retains between runs, which is what M3.2 built it for.
@@ -633,7 +636,8 @@ export function createLayout(options: LayoutEngineOptions = {}): LayoutEngine {
    * three different reasons and are not always all present. `held` is the graph
    * a relayout re-runs, kept by reference and never mutated here. `warm` is the
    * previous run's pipeline state, absent after a run that happened in a worker
-   * because that is where it stayed. `reported` is the geometry the caller was
+   * because that is where it stayed, and dropped by `forget` whenever the graph
+   * may have moved past it. `reported` is the geometry the caller was
    * last told about, which is what a delta is measured against and is NOT the
    * same object as the last computed result once `epsilon` is nonzero.
    *
@@ -660,9 +664,9 @@ export function createLayout(options: LayoutEngineOptions = {}): LayoutEngine {
    * alone and the fast path would never fire on any graph with a long edge in
    * it. These are `prepare`'s own, before any stage saw them.
    *
-   * Absent for the same reason `warm` is absent and at exactly the same
+   * Absent for the same reasons `warm` is absent and at exactly the same
    * moments: the last run happened in a worker, so it left nothing on this
-   * side. See {@link unchanged} for why that is the condition the fast path
+   * side, or `forget` dropped both. See {@link unchanged} for why that is the condition the fast path
    * needs rather than an inconvenience it works around.
    */
   let measured: ReadonlyMap<NodeId, Size> | undefined;
@@ -754,12 +758,73 @@ export function createLayout(options: LayoutEngineOptions = {}): LayoutEngine {
    * so seeding it from the previous state would seed one graph's ordering from
    * another graph's.
    */
-  const runPrepared = (graph: Graph, prepared: PreparedState): LayoutResult => {
-    const { result, routed } = runPipeline(prepared, stages);
+  const runPrepared = (graph: Graph, prepared: PreparedState): LayoutResult =>
+    retain(graph, prepared, runPipeline(prepared, stages));
+
+  const retain = (
+    graph: Graph,
+    prepared: PreparedState,
+    { result, routed }: { readonly result: LayoutResult; readonly routed: RoutedState },
+  ): LayoutResult => {
     held = graph;
     warm = warmStartOf(routed);
     measured = prepared.sizes;
     return result;
+  };
+
+  /**
+   * The run a relayout that {@link unchanged} declined needs, and the stages it
+   * ran.
+   *
+   * M3.9b's first fast path that does work. A patch that passes `movesNothing`
+   * and still reached here changed sizes and nothing else, and neither a rank
+   * stage nor an order stage in this package reads a size. Not reading them is
+   * not enough: a full run would also have to land where the held state is.
+   * The rank stage has to be one that {@link keepsItsSeed}, and every order
+   * stage here does, since its warm start holds every pair of a cohort and with
+   * the roster unchanged every layer is one whole cohort. Then position and
+   * route run over the held state, and the answer is the full path's answer,
+   * which `layout.fastpath.test.ts` checks against an engine that cannot skip.
+   * Plus the two conditions of {@link unchanged}: this package's stages, and a
+   * held state that came from a run on this thread. A worker-backed
+   * `relayoutAsync` never takes it: the run goes to the worker.
+   */
+  const runChanged = (
+    graph: Graph,
+    patch: Patch,
+    prepared: PreparedState,
+  ): { readonly next: LayoutResult; readonly ran: readonly LayoutStageName[] } => {
+    if (ownStages && rankKeepsItsSeed && warm !== undefined && movesNothing(patch)) {
+      return { next: retain(graph, prepared, runPlaced(prepared, warm, stages)), ran: PLACED_STAGES };
+    }
+    return { next: runPrepared(graph, prepared), ran: EVERY_STAGE };
+  };
+
+  /**
+   * Drops the retained pipeline state, for a call that leaves the held graph
+   * ahead of it: a run or relayout that threw, or one posted to the worker and
+   * not yet settled. The resize path reuses that state's ranks and layers as
+   * the held graph's, so once the graph has moved past it, it has to go.
+   */
+  const forget = (): void => {
+    warm = undefined;
+    measured = undefined;
+  };
+
+  /** A relayout served on this thread. */
+  const relayoutHere = (patch: Patch): RelayoutResult => {
+    try {
+      const { graph, previous } = forRelayout(patch);
+      const prepared = prepare(graph, config, nodeSize, warm);
+      const skipped = unchanged(patch, previous, prepared.sizes);
+      if (skipped !== undefined) return skipped;
+      const region = regionFor(graph, patch, previous, prepared.sizes);
+      const { next, ran } = runChanged(graph, patch, prepared);
+      return report(graph, next, region, ran);
+    } catch (error) {
+      forget();
+      throw error;
+    }
   };
 
   const runHere = (graph: Graph, previous: PreviousLayout | undefined): LayoutResult =>
@@ -778,7 +843,7 @@ export function createLayout(options: LayoutEngineOptions = {}): LayoutEngine {
    * is a prediction, and a prediction read after the fact is a measurement.
    *
    * No retained pipeline state means no ranks, which is the state an engine is
-   * in after a run served by a worker. The honest answer there is the whole
+   * in after a run served by a worker, or after `forget`. The honest answer there is the whole
    * roster, and it is the same answer that engine's warm start gives.
    */
   const regionFor = (
@@ -808,8 +873,9 @@ export function createLayout(options: LayoutEngineOptions = {}): LayoutEngine {
    *
    * A RUN ON THIS THREAD IS REQUIRED, which is what `measured` being present
    * means and what `warm` being present means at the same moments. It is
-   * required because its absence means one thing, that the run this engine is
-   * holding a drawing from happened in a WORKER, and the stages over there are
+   * required because its absence means this side holds no state it can vouch
+   * for. Usually the run this engine is holding a drawing from happened in a
+   * WORKER (the rest of the cases are `forget`'s), and the stages over there are
    * not this side's to know: "the stages are this side's, and the config is
    * not" is `serveLayout`'s protocol in one sentence. So a drawing that came
    * back across the wire was made by stages `ownStages` says nothing about, and
@@ -898,7 +964,12 @@ export function createLayout(options: LayoutEngineOptions = {}): LayoutEngine {
    * ANSWER, because the worker laid out the graph as it was when the run was
    * sent; what it does not give is an inconsistent one.
    */
-  const report = (graph: Graph, next: LayoutResult, region: InfluenceSet): RelayoutResult => {
+  const report = (
+    graph: Graph,
+    next: LayoutResult,
+    region: InfluenceSet,
+    ran: readonly LayoutStageName[],
+  ): RelayoutResult => {
     const previous = reported;
     if (previous === undefined) {
       throw new EngineStateError('this engine was reset while a relayout was in flight');
@@ -910,7 +981,7 @@ export function createLayout(options: LayoutEngineOptions = {}): LayoutEngine {
       delta,
       influence: wholeRoster(graph, previous),
       region,
-      ran: EVERY_STAGE,
+      ran,
     };
   };
 
@@ -975,12 +1046,14 @@ export function createLayout(options: LayoutEngineOptions = {}): LayoutEngine {
   return {
     run(graph) {
       requireLive();
+      forget();
       reported = runHere(graph, undefined);
       return reported;
     },
 
     async runAsync(graph) {
       requireLive();
+      forget();
       reported =
         worker === undefined
           ? runHere(graph, undefined)
@@ -989,37 +1062,38 @@ export function createLayout(options: LayoutEngineOptions = {}): LayoutEngine {
     },
 
     relayout(patch) {
-      const { graph, previous } = forRelayout(patch);
-      const prepared = prepare(graph, config, nodeSize, warm);
-      const skipped = unchanged(patch, previous, prepared.sizes);
-      if (skipped !== undefined) return skipped;
-      const region = regionFor(graph, patch, previous, prepared.sizes);
-      return report(graph, runPrepared(graph, prepared), region);
+      return relayoutHere(patch);
     },
 
     async relayoutAsync(patch) {
-      const { graph, previous } = forRelayout(patch);
-      if (worker === undefined) {
-        const prepared = prepare(graph, config, nodeSize, warm);
-        const skipped = unchanged(patch, previous, prepared.sizes);
-        if (skipped !== undefined) return skipped;
-        const region = regionFor(graph, patch, previous, prepared.sizes);
-        return report(graph, runPrepared(graph, prepared), region);
-      }
+      if (worker === undefined) return relayoutHere(patch);
       // The warm start does not cross, so the run over there is prepared
       // without one, exactly as it was before this method had a region to
       // compute. Both the region and the state it reads are taken before the
       // await, since the pipeline state this engine holds belongs to whichever
       // run settled last and the patch was described against the one it holds
       // now.
-      const prepared = prepare(graph, config, nodeSize);
-      // Before the post, so an inert patch never leaves this thread. It only
-      // reaches here at all when the last run happened here: see `unchanged`.
-      const skipped = unchanged(patch, previous, prepared.sizes);
-      if (skipped !== undefined) return skipped;
-      const region = regionFor(graph, patch, previous, prepared.sizes);
+      let graph: Graph;
+      let prepared: PreparedState;
+      let region: InfluenceSet;
+      try {
+        let previous: LayoutResult;
+        ({ graph, previous } = forRelayout(patch));
+        prepared = prepare(graph, config, nodeSize);
+        // Before the post, so an inert patch never leaves this thread. It only
+        // reaches here at all when the last run happened here: see `unchanged`.
+        const skipped = unchanged(patch, previous, prepared.sizes);
+        if (skipped !== undefined) return skipped;
+        region = regionFor(graph, patch, previous, prepared.sizes);
+      } catch (error) {
+        forget();
+        throw error;
+      }
+      // A relayout called while this one is in flight would otherwise take the
+      // resize path over the graph as it was before this patch.
+      forget();
       const next = await runThere(graph, prepared, worker);
-      return report(graph, next, region);
+      return report(graph, next, region, EVERY_STAGE);
     },
 
     dispose() {

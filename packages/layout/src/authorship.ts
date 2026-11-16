@@ -56,3 +56,23 @@ export function authored<T extends object>(stage: T): T {
 export function isAuthored(stage: object): boolean {
   return authoredStages.has(stage);
 }
+
+/**
+ * Rank stages whose warm run over an unchanged graph returns the ranks it was
+ * seeded with, which is what lets a resize keep the held ranks without running
+ * the stage. The longest-path ranker checks its seed and has one answer per
+ * graph. The simplex ranker does not qualify: it takes a seed as a floor, and
+ * a warm run of it can land on different ranks, measured on the 1k corpus.
+ */
+const seedKeepingRankers = new WeakSet<object>();
+
+/** Marks a rank stage as one {@link keepsItsSeed} answers yes for. */
+export function seedKeeping<T extends object>(stage: T): T {
+  seedKeepingRankers.add(stage);
+  return stage;
+}
+
+/** Whether this rank stage is one {@link seedKeeping} marked. */
+export function keepsItsSeed(stage: object): boolean {
+  return seedKeepingRankers.has(stage);
+}
