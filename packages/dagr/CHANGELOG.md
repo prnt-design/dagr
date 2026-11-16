@@ -8,7 +8,9 @@
   package's changelog for behavior and compatibility notes.
 - Proposed next version: 0.2.0, pending maintainer approval. The expanded hit
   target union and required renderer/Explorer interface members need consumer
-  migration. Chart remains private and is not exposed by this umbrella.
+  migration. The candidate proposes a first public scoped chart package at 0.2.0,
+  conditional on its release blockers and human configuration changes. Chart
+  remains private in this tree and is not exposed by this umbrella.
   See [release candidate](../../packaging/release-candidate.md).
 
 ## 0.1.4

@@ -7,7 +7,10 @@
   and containment. Shrink dense bar gaps and widths within category bands.
 
 - New package, still private. Packed-artifact checks now cover it; public
-  configuration and umbrella exposure remain pending.
+  configuration remains pending. Proposed first public version: 0.2.0,
+  conditional on the GPU combo fix in PR #222 and maintainer approval.
+  This candidate uses the scoped package, with no umbrella entry.
+  See [release candidate](../../packaging/release-candidate.md).
   `DagrChart` draws bar and line series over a category axis with
   `@prnt/dagr-render`: one or two y-axes scaled by `d3-scale`, marks matched
   across renders by id so a change glides, grows in or shrinks out on the

@@ -74,6 +74,12 @@ describe('the tarball a consumer installs', () => {
     ]);
   });
 
+  it('keeps repository authoring skills outside runtime tarballs', () => {
+    for (const candidate of each()) {
+      expect(candidate.files.some((file) => file.startsWith('skills/') || file.endsWith('/SKILL.md') || file === 'SKILL.md')).toBe(false);
+    }
+  });
+
   it('resolves every dependency range a consumer install reads', () => {
     // @prnt/dagr-layout, @prnt/dagr-react and @prnt/dagr-vdsl each declare @prnt/dagr-graph with
     // pnpm's workspace protocol. This passing is what makes `pnpm publish`
@@ -623,6 +629,7 @@ describe('private chart release candidate', () => {
     expect(missingConsumerFiles(candidate)).toEqual([]);
     expect(candidate.text('LICENSE')).toBe(readFileSync(join(REPO_ROOT, 'LICENSE'), 'utf8'));
     expect(candidate.text('styles.css')).toContain('.dagr-chart');
+    expect(candidate.files.some((file) => file.startsWith('skills/') || file.endsWith('/SKILL.md') || file === 'SKILL.md')).toBe(false);
     const rendererManifest = JSON.parse(readFileSync(join(roots.get('@prnt/dagr-render')!, 'package.json'), 'utf8'));
     expect(candidate.manifest.dependencies?.['@prnt/dagr-render']).toBe(`^${rendererManifest.version}`);
   });
