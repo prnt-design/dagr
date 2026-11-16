@@ -1202,8 +1202,8 @@ loading and compiling what every later one reuses. After each step the runner re
   this scale.
 
 The runner exits non-zero, saying why on stderr, if a row did not come up on
-WebGPU, if the adapter is a fallback adapter, or if a texture format has no
-byte size in the page's table.
+WebGPU, if the adapter is a fallback adapter, if a texture format has no byte
+size in the page's table, or if a pick fails in the `pick` step.
 
 Same machine, browser and adapter as above, headed, `renderer.backend`
 `webgpu` on every row, viewport 1280 by 720 at DPR 1, zoom `fit`, 301 frames

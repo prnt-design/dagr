@@ -228,7 +228,7 @@ function mode(run, tickMs) {
 function reportWrongBackend(rows, wanted) {
   const wrong = rows.filter((row) => row.backend !== wanted);
   if (wrong.length === 0) return;
-  const drewOn = [...new Set(wrong.map((row) => String(row.backend)))].join(', ');
+  const drewOn = [...new Set(wrong.map((row) => row.backend ?? 'no backend'))].join(', ');
   console.error(`${wrong.length} of ${rows.length} rows drew on ${drewOn}, not ${wanted}; see each row's backend`);
   process.exitCode = 1;
 }
