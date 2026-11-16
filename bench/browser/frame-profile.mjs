@@ -225,6 +225,14 @@ function mode(run, tickMs) {
   };
 }
 
+function reportWrongBackend(rows, wanted) {
+  const wrong = rows.filter((row) => row.backend !== wanted);
+  if (wrong.length === 0) return;
+  const drewOn = [...new Set(wrong.map((row) => row.backend ?? 'no backend'))].join(', ');
+  console.error(`${wrong.length} of ${rows.length} rows drew on ${drewOn}, not ${wanted}; see each row's backend`);
+  process.exitCode = 1;
+}
+
 const browser =
   CDP === undefined
     ? await chromium.launch({
@@ -348,7 +356,7 @@ if (memory) {
   };
   console.log(JSON.stringify(report, null, 1));
   const leftover = rows.filter((row) => row.steps.dispose.gpuBuffers + row.steps.dispose.gpuTextures > 0);
-  if (rows.some((row) => row.backend !== 'webgpu')) process.exitCode = 1;
+  reportWrongBackend(rows, 'webgpu');
   if (rows.some((row) => Object.values(row.steps).some((step) => step.unknownFormats !== undefined))) {
     console.error('a texture format has no byte size in TEXEL_BYTES; its bytes are not counted');
     process.exitCode = 1;
@@ -439,7 +447,7 @@ const report = {
   warnings,
 };
 console.log(JSON.stringify(report, null, 1));
-if (rows.some((row) => row.backend !== backend)) process.exitCode = 1;
+reportWrongBackend(rows, backend);
 if (backend === 'webgpu' && (deviceAdapters.length === 0 || deviceAdapters.some((a) => a.isFallbackAdapter !== false))) {
   console.error('a device was created on an adapter not known to be hardware, or none was created; see deviceAdapters');
   process.exitCode = 1;
