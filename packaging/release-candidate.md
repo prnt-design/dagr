@@ -216,7 +216,7 @@ appropriate. Do not automate unpublish, delete tags or imply atomic multi-packag
 rollback. Hold promotion until all eight staged packages are verified.
 
 
-## November 16 preparation evidence and benchmark blocker
+## November 16 preparation evidence and benchmark diagnostic
 
 The preparation at `152c13b29e76b5d5764ff4294d121a9500a07376` passed
 `pnpm typecheck`, `pnpm test`, `pnpm lint`, `pnpm build` and the selected
@@ -235,12 +235,23 @@ The preparation's selected-gate skip does not test that entry. To assess it on
 the current candidate, one separate `pnpm bench:ci` invocation ran under the
 exclusive compute wrapper on November 16. It exited 1 after **two of two
 measurements failed the same entry**, +31.4% versus +17.6% allowed and +33.2%
-versus +17.5% allowed. The historical blocker therefore reproduces. No baseline,
+versus +17.5% allowed. The historical timing failure therefore reproduces. No baseline,
 benchmark policy or runtime changes were made, and no manual retry followed.
 React runtime/benchmark implementation and the baseline match PR #236; its
 React index header differs only in documentation. This is not evidence that
-the release preparation introduced the regression, nor is it permission to
-ignore it. Keep this preparation PR unmerged despite green CI until the
-benchmark owner resolves the blocker and the required final gate is green.
-The existing workboard dependency is `tsk_1048e2545110`; benchmark repair is a
-separate task. The full log is retained with the preparation artifacts.
+the release preparation caused the timing failure. PR #254 merge eligibility
+rests on the mandated scoped `bench:gate` (including its accepted printed skip),
+the other required local checks, reviews and concluded green CI. This separate
+diagnostic does not add a merge gate for unchanged runtime. The future metadata
+or runtime release tree must pass its applicable benchmark gate and all other
+required checks; PR #222 still blocks chart release. The existing diagnostic
+issue is tracked by `tsk_1048e2545110`. The full log is retained with the
+preparation artifacts.
+
+This diagnostic measures Node CPU pointer-query work on the recorded Ryzen
+9 9900X Linux x64 host, not browser rendering or GPU frame time. The baseline
+records Node 22.22.1 and 24 logical CPUs. Prior Apple M4 browser/GPU evidence
+applies only to its documented backend, workload and measurement conditions.
+Neither result predicts performance on an ordinary user's device. The new
+custom PC's GPU has not been identified by this preparation; no GPU capability
+or cross-device speed claim follows from its CPU or general hardware power.
