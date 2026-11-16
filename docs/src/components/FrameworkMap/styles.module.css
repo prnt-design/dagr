@@ -62,11 +62,13 @@
 .kind {
   display: block;
   font-size: 0.75em;
+  white-space: normal;
   color: var(--ifm-color-content-secondary);
 }
 .nodeLabel {
   display: block;
   font-size: 1.3em;
+  white-space: normal;
 }
 .summary {
   display: block;
