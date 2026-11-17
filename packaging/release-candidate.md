@@ -126,8 +126,10 @@ change. Benchmark selection must run through `pnpm bench:gate`, including a
 printed skip where appropriate. Previous unrelated benchmark failures are not
 permission to skip it or weaken a baseline.
 
-Before publishing, Nii must follow the ordered human-only steps below.
-Publication, tags and GitHub releases remain separate human actions.
+Before publishing, follow the ordered steps below. Agents may publish npm
+packages only when explicitly requested by the user, within the requested
+package, version, and tag scope. Release tags and GitHub releases remain
+separate human actions.
 Real iOS/Android, software keyboard, safe-area and hardware GPU claims remain
 bounded by the existing M5.8b/c and renderer evidence tasks. Documentation PR
 #231 is merged; open positioning PR #234 is separate work and is not a release
@@ -161,7 +163,7 @@ first release exists. The portable skills remain in the repository and can
 ship independently of the npm release. No skill installer was run by this
 release preparation.
 
-## Ordered metadata and human publication steps
+## Ordered metadata and publication steps
 
 1. This replacement metadata PR supersedes seven-package PR #236. Preserve its
    review and benchmark evidence. Close #236 only after the replacement is
@@ -188,16 +190,17 @@ release preparation.
    Preserve tarballs and SHA-512 checksums. Existing consumer tests exercise
    source-version tarballs; they must be rerun after metadata changes.
 6. Authenticate as the intended npm maintainer. Recheck live registry versions
-   and access before any write. Human publish order is graph, layout, render,
+   and access before any write. Publish order is graph, layout, render,
    explorer, react, vdsl, chart, dagr. From each corresponding package directory
    use `pnpm publish --access public --tag next` on the exact approved commit.
    This stages all packages without moving `latest`. Verify each registry
    tarball/integrity, install all eight exact 0.2.0 versions outside the repo,
    and rerun the consumer fixtures before promotion. Do not use `npm publish`
    or `npm pack`, which leave workspace ranges unresolved.
-7. Once the entire set passes registry-installed checks, promote each with
+7. Only when promotion is explicitly requested and the entire set passes
+   registry-installed checks, promote each with
    `npm dist-tag add <package>@0.2.0 latest`, then verify every latest tag.
-   Version/config approval does not delegate publication to the agent. Release
+   Version/config approval alone does not authorize agent publication. Release
    tags and a GitHub release are separate human actions after npm verification.
 
 If staging fails partway, stop and record exactly which immutable versions

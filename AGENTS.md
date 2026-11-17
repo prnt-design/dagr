@@ -74,9 +74,18 @@ follow-up commits, never an amend, because a rewritten commit erases the
 record of what the review changed. Never merge a PR whose checks have not
 concluded.
 
+## Publication when explicitly requested
+
+Agents may publish npm packages only when the user explicitly requests
+publication, within the requested package, version, and tag scope. Complete
+required release checks, diff and merged-tree reviews, and concluded green CI
+before publishing. Verify packed artifacts before publication and registry
+artifacts and results afterward. Do not routinely reconfirm an already
+authorized publication. Ordinary feature work does not authorize publication,
+and staging does not authorize promotion to `latest`.
+
 ## What agents must NOT do (queue for the human instead)
 
-- `npm publish`.
 - Changing GitHub repo settings.
 - Force-push `main`, or rewrite any commit that has been reviewed.
 - Major-version dependency bumps.
