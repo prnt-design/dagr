@@ -59,7 +59,7 @@ const packageNode = (
     source: source(`packages/${id}/README.md`),
     status:
       id === 'chart'
-        ? 'Private workspace package, not published'
+        ? 'Approved 0.2.0 candidate, not published'
         : 'Published baseline: 0.1.4; details describe current source',
   };
 };
@@ -112,8 +112,8 @@ export const packages: readonly FrameworkNode[] = [
   packageNode(
     'chart',
     'Chart',
-    'Animated bars and lines, private today.',
-    'DagrChart uses D3 scales and arrays for categorical bars, lines and dual axes, with a data table and tooltip. GPU drawing uses render; explicit SVG rendering is also available. This package is private and is not forwarded by the umbrella. Packed candidate checks do not mean it is published.',
+    'Animated bars and lines, publication pending.',
+    'DagrChart uses D3 scales and arrays for categorical bars, lines and dual axes, with a data table and tooltip. GPU drawing uses render; explicit SVG rendering is also available. Public 0.2.0 metadata is approved; the package is not forwarded by the umbrella. Packed candidate checks do not mean it is published.',
     '<DagrChart label="Orders" categories={categories} series={series} />',
     'DagrChart layoutChart bar line dual axes D3 SVG tooltip table',
     source('packages/chart/README.md'),
@@ -239,7 +239,7 @@ export const features: readonly FrameworkNode[] = [
     'Bar and line charts',
     'chart',
     'Categorical series, dual axes and a data table.',
-    'The private current-source chart maps categories and series to bars and lines using D3. GPU and explicit SVG modes share chart geometry. This is not a published chart API commitment.',
+    'The current-source chart candidate maps categories and series to bars and lines using D3. GPU and explicit SVG modes share chart geometry. This is not a published chart API commitment.',
     'DagrChart layoutChart D3 bar line axes table SVG',
   ),
 ];
