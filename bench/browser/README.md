@@ -594,7 +594,7 @@ the point. Two more conditions guard the derivation:
   one; the main check, which must pass, does.
 
 **What it found on 2026-11-17**, on the same Apple M4 Mac mini in Google
-Chrome 157.0.8103.79, headed three times and headless once, no flags. The adapter
+Chrome 157.0.8103.79, headed five times and headless once, no flags. The adapter
 was `apple` `metal-3`, not a fallback. The two frames are byte-identical
 again, ribbons included. Of 153,600 pixels, 3,517 are in the band and 150,083
 are not, and none of either differ. All 717 ribbon pixels clear of the band
