@@ -618,7 +618,9 @@ checks:
   The abort check before `init()` is tested.
 - That the two backends agree beyond what M4.9b compared: one machine (an
   Apple M4 in Chrome 155), the two-shape probe scene, zoom 1, device pixel
-  ratio 1. Other GPUs, zooms and edge ribbons are unchecked. See
+  ratio 1, with two solid straight edge ribbons added to that scene on
+  2026-11-17 (Chrome 157). Other GPUs, zooms, and dashed or smooth ribbons are
+  unchecked. See
   [What is verified, and on which backend](#what-is-verified-and-on-which-backend).
 - That a browser composes the overlay's two transforms the way the algebra says.
   The layer's `translate() scale()` and an entry's own transform are asserted as
@@ -2036,6 +2038,6 @@ complete, and `<DagrCanvas animate>` drives them from a graph a user is editing
   pick cost is not measured. `DagrCanvas` picks through
   `pickNode` only behind its opt-in `hitTesting="gpu"`. See [Picking](#picking).
 - Backend parity beyond the probe scene and the one machine M4.9b compared on:
-  other GPUs, zooms, and edge ribbons.
+  other GPUs, zooms, and dashed or smooth edge ribbons.
 - Ten thousand nodes at sixty frames a second, measured rather than hoped for
   (M4.10).
