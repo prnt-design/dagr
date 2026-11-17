@@ -10,7 +10,7 @@
  * 4. Two Explorer consumers from `fixtures/explorer`, on React 18 and 19 and
  *    without three: SSR, hydration, cleanup and the core pinch and
  *    visible-frame APIs.
- * 5. The private chart candidate: installed NodeNext types, layout, SVG SSR
+ * 5. The scoped chart candidate: installed NodeNext types, layout, SVG SSR
  *    and CSS, with its required GPU dependencies present.
  *
  * The vitest suite beside this is the gate: it runs on every `pnpm test`, needs
@@ -321,7 +321,7 @@ try {
   );
   run('npx', ['tsc', '--noEmit'], scratch, 'tsc over scoped and umbrella public package surfaces');
   run('node', ['smoke.mjs'], scratch, 'headless scoped and umbrella graph, layout, VDSL, render, explorer, and React smoke');
-  console.log('\nInstalled chart candidate (still private):');
+  console.log('\nInstalled chart candidate (publication separate):');
   const chartConsumer = join(workDir, 'chart-consumer');
   mkdirSync(chartConsumer);
   writeFileSync(join(chartConsumer, 'package.json'), JSON.stringify({ private: true, type: 'module' }));

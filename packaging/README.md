@@ -1,6 +1,6 @@
 # @dagr/packaging
 
-The packaging gate. It packs every published package and the private chart candidate and reads the tarball a
+The packaging gate. It packs all eight release candidate packages and reads the tarball a
 consumer would install, rather than reading the manifest that produced it.
 
 Private, never published, and part of `pnpm test` like any other workspace
@@ -153,9 +153,9 @@ Queued for the maintainer, per `AGENTS.md`. The command is `pnpm publish`.
 and correcting it is the maintainer's edit rather than an agent's.
 
 
-## Private chart candidate
+## Scoped chart candidate
 
-The seven-package public inventory is unchanged. The same build/pack helper
+The coordinated candidate contains eight packages. The build/pack helper
 also packs chart during the test suite, checking rewritten dependencies,
 entries, source maps, CSS, README, changelog and repository license.
 `verify:tools` runs publint and arethetypeswrong over chart too, and installs
@@ -164,5 +164,5 @@ and layout under NodeNext with `skipLibCheck: false`, then checks mixed bar/line
 dual-axis layout, negative values, empty/invalid data, DOM-free SVG SSR with all
 table values, public CSS and the absence of an umbrella chart export. Required React 19,
 Three and their types are installed explicitly. This does not certify GPU
-rendering or make chart public. See the [release candidate](release-candidate.md)
-for remaining blockers and the proposed package set.
+rendering or prove published availability. Chart public metadata is approved;
+publication remains separate. See the [release candidate](release-candidate.md).

@@ -1,7 +1,6 @@
 {
   "name": "@prnt/dagr-chart",
-  "version": "0.1.4",
-  "private": true,
+  "version": "0.2.0",
   "description": "Animated bar and line charts for React on Dagr's WebGPU renderer: D3 scales, instanced marks and spring transitions.",
   "license": "MIT",
   "type": "module",
@@ -55,5 +54,8 @@
     "jsdom": "^30.0.1",
     "react": "^19.2.8",
     "react-dom": "^19.2.8"
+  },
+  "publishConfig": {
+    "access": "public"
   }
 }

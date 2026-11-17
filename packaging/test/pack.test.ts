@@ -619,10 +619,12 @@ if (!control.includes("Cannot find package 'three'")) {
   );
 });
 
-describe('private chart release candidate', () => {
+describe('public chart release candidate', () => {
   it('packs resolved entries, source maps, CSS, consumer docs and the repository license', () => {
     expect(chart).toBeDefined();
     const candidate = chart!;
+    expect(JSON.parse(candidate.text('package.json')!).private).not.toBe(true);
+    expect(candidate.manifest.publishConfig?.access).toBe('public');
     expect(workspaceRanges(candidate.manifest)).toEqual([]);
     expect(unresolvedEntryPoints(candidate)).toEqual([]);
     expect(danglingSourceMaps(candidate)).toEqual([]);

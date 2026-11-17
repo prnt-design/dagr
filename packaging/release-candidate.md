@@ -1,41 +1,29 @@
-# Next release candidate
+# Approved 0.2.0 release candidate
 
-Prepared from `1206f46ebe35674d7a91cf1c1571e3834b9335bb` (origin/main,
-2026-11-16 UTC). This is a release handoff, not authorization to publish.
-The preparation PR adds packaging evidence and release notes, not a version bump.
+Prepared from main `62f9ce33c617ec7e9c25bc6900bd11905cd03eef`. The maintainer
+authorized the exact eight-package metadata patch and its replacement PR.
+All eight source manifests now say **0.2.0**, including the first public
+scoped chart package with public access configured. This is an approved
+candidate, not a published release or authorization to publish.
 
-## Version and exact scope
+Release graph, layout, render, explorer, react, vdsl, chart and dagr together.
+Chart has no umbrella dependency or subpath, preserving the umbrella
+Three-free core/Explorer installation contract.
 
-Recommend **0.2.0** for the seven existing public packages:
-`@prnt/dagr-graph`, `@prnt/dagr-layout`, `@prnt/dagr-render`,
-`@prnt/dagr-explorer`, `@prnt/dagr-react`, `@prnt/dagr-vdsl`, and `@prnt/dagr`.
-Recommend **0.2.0** for the first public `@prnt/dagr-chart` too, for a total
-of eight packages. This is a proposed release matrix, not eight publishable
-packages today: chart remains private until the maintainer applies its release
-configuration and closes the GPU combo blocker below. All eight source
-manifests still say **0.1.4**. Release the siblings together so ranges cannot
-silently select older implementations. Chart is a scoped-package delivery;
-no `@prnt/dagr/chart` entry is proposed in this candidate. This preserves the
-umbrella's optional Three contract. A later umbrella chart entry requires a
-separate dependency-policy decision and packed identity/type checks.
+Under pre-1.0 versioning, 0.2.0 signals source compatibility changes:
+`GraphHitTarget` gains an edge variant, `Renderer` requires asynchronous
+`pickNode`, and complete `ExplorerLabels` values require four new labels.
 
-A patch release would obscure source compatibility changes: `GraphHitTarget`
-gains an edge variant, `Renderer` gains required `pickNode`, and Explorer's
-label interface gains required outline/presentation labels. Under pre-1.0
-versioning, 0.2.0 signals that consumers must review those contracts.
+Public registry reads on November 17 UTC still need to be checked before any
+publication. The prior November 16 inventory reported latest 0.1.4 for the
+seven existing packages and 404 for chart, not published 0.2.0 availability.
 
-Registry metadata fetched on 2026-11-16 reports 0.1.4 as latest for all seven;
-chart returns 404. Registry entries contain no `gitHead`. The November 8
-provenance comparison found that every `src` file
-shipped in those seven registry tarballs matches release commit
+The November 8 provenance comparison found every shipped `src` file in the
+seven registry tarballs matched release commit
 `7396ed493754ff863ac1d24fe41a0b90edefb467` (116 files, zero mismatches).
-This supports that baseline, without claiming an unavailable registry git SHA.
-Registry timestamps and integrity values are preserved in the shared provenance
-artifact. Graph and VDSL source have no changes since that baseline. Layout
-now includes
-the size-changing attribute fast path from #240. The November 16 refresh records
-live registry versions and integrity; it does not claim a new
-byte-by-byte registry source comparison.
+Registry metadata contained no `gitHead`, so this supports a source baseline
+without asserting a registry commit SHA. The November 16 refresh was a live
+metadata/integrity check, not another byte-by-byte source comparison.
 
 ## Package inventory and migration
 
@@ -48,7 +36,7 @@ byte-by-byte registry source comparison.
 | react | CPU edge hits, edge click/hover handlers, `createEdgeHitIndex`; opt-in GPU node picks and `createPickedNodeHitProvider`; shared touch lifecycle; inset and visual-viewport framing and retargeted camera flights | Handle `kind: 'edge'` before reading node/port fields or asserting exhaustive unions; GPU picks remain opt-in and mouse-only; update interaction expectations where handlers are enabled |
 | explorer | Shared touch lifecycle and capture-transfer fix; compact details and larger controls; visual-viewport framing; outline part and map/outline mode with retained state, camera, scroll and focus | Full `ExplorerLabels` values/mocks add `outline`, `presentation`, `mapMode`, `outlineMode`; partial overrides inherit defaults; account for the additional controls and changed narrow-screen layout |
 | umbrella | Existing forwarding modules expose the updated scoped APIs | React 19 remains required; React 18 applications use scoped Explorer; no chart entry exists |
-| chart (first public, conditional) | Category bars, lines, dual y-axes, SVG/GPU selection, animated updates, CSS/theme bindings, table and pointer/touch tooltips | React 19, Three and strict consumer Three types; import scoped CSS and set height; GPU combinations blocked by #222 |
+| chart (first public candidate) | Category bars, lines, dual y-axes, SVG/GPU selection, animated updates, CSS/theme bindings, table and pointer/touch tooltips | React 19, Three and strict consumer Three types; import scoped CSS and set height; GPU lines draw above bars after merged #222 |
 
 For custom renderers, `pickNode(pointer: Vec2): Promise<string | null>` takes
 CSS pixels relative to the canvas top-left. Empty-scene test mocks can return
@@ -58,6 +46,23 @@ receive the implementation automatically. For `GraphHitTarget`, narrow all
 three variants (`nodeId`, `portId`, `edgeId`) before reading a variant's field;
 default Canvas edge handling remains opt-in through the edge handlers.
 
+A consumer that assumed two hit variants must add the edge branch:
+
+```ts
+function hitId(target: GraphHitTarget): string {
+  switch (target.kind) {
+    case 'node': return target.nodeId;
+    case 'port': return target.portId;
+    case 'edge': return target.edgeId;
+  }
+}
+```
+
+For a complete labels object, add `outline`, `presentation`, `mapMode` and
+`outlineMode` with application translations. A partial labels override can omit
+these and inherit defaults. Custom renderer mocks add
+`pickNode: async () => null`; real renderers implement asynchronous picking.
+
 Renderer additions include `createPinchGesture`, `PinchGesture`, `PinchDelta`,
 `visibleFrame`, `clipInset`, `coverInset`, `visualViewportInset`, `FrameInset`,
 `ScreenRect`, `VisibleFrame`, `VisualViewportBox`, and
@@ -65,10 +70,10 @@ Renderer additions include `createPinchGesture`, `PinchGesture`, `PinchDelta`,
 pure additions. React adds `EdgeHitIndex`, `PickedNodeHitOptions` and
 `PickedNodeHitProvider`; Explorer adds `ExplorerOutline`, `ExplorerOutlineProps`
 and `DagrExplorerMode`, plus `mode`, `defaultMode` and `onModeChange` props.
-Package Unreleased changelogs retain the behavioral details.
+Package 0.2.0 changelogs retain the behavioral details.
 
 Published 0.1.4 has the Explorer capture-transfer bug fixed by #196. A manifest
-label of 0.1.4 in a local tarball does not mean its implementation is published.
+label of 0.2.0 in a local tarball does not mean its implementation is published.
 Install the entire locally packed sibling set when evaluating this candidate.
 Keep React/React DOM aligned. Full renderer, React canvas and chart consumers
 install the documented Three peer and matching `@types/three` for strict types.
@@ -76,21 +81,18 @@ ESM-only support is unchanged. No CommonJS build is proposed.
 
 ## First public chart assessment
 
-Chart is **conditionally included as a first public scoped package**. It is
-not ready to publish until the GPU combination blocker is resolved. It is not
-a public umbrella surface. Its current
-manifest has `private: true`, lacks `publishConfig.access`, and the umbrella
-has neither a chart dependency nor a chart export. These are protected release
-configuration decisions for Nii, not changes applied by preparation.
+Chart is included as a first public scoped candidate. PR #222 is merged,
+including line-over-bar rendering. The authorized patch removes `private` and
+sets public access. Publication remains separate. No umbrella surface is added.
 
 | Finding | Current assessment | Next actor / exit condition |
 | --- | --- | --- |
-| Packed artifacts omitted from gate | Closed by this preparation: private chart is packed with resolved entries/maps/docs/license/CSS; external install, strict NodeNext types, pure layout and SVG SSR are checked | Keep the new checks on the final release tree |
-| GPU combo connectors hidden by bars | Open release blocker for advertised GPU combinations; #222 already owns the fix | Resume #222, rebase and pass its applicable local benchmark gate and concluded CI, then rerun the paired chart fixture; do not duplicate its fix |
+| Packed artifacts omitted from gate | Closed by preparation: chart is packed with resolved entries/maps/docs/license/CSS; external install, strict NodeNext types, pure layout and SVG SSR are checked | Keep the new checks on the final release tree |
+| GPU combo connectors hidden by bars | Closed by merged #222 | Preserve line-over-bar tests and the recorded software WebGL2 browser evidence; hardware WebGPU remains unverified |
 | Dense groups, category collisions, tooltip clipping, invented smooth extrema | #228 merged: bounded bar geometry, measured labels/tooltips, linear segments; tests included | Preserve its tests; prior screenshots are not new post-merge visual evidence |
 | SVG/layout root still reaches GPU imports | Known dependency/bundle limit, not a missing-peer defect: Three is required even for SVG/layout imports | Separate implementation task for isolated entry points if lightweight or Three-free SVG/layout is promised; do not advertise that contract now |
-| Keyboard mark inspection, missing values, time/log x, stacking, legend, per-axis formatting/domain controls | Unsupported, documented product limits | Follow-up implementation; do not promise Recharts feature or accessibility parity |
-| Chart public configuration | `private: true`, no public access setting | Nii applies the separate proposed metadata patch after blockers close |
+| Keyboard mark inspection, missing values, time/log x, stacking, per-axis formatting/domain controls | Unsupported, documented product limits | Follow-up implementation; do not promise Recharts feature or accessibility parity |
+| Chart public configuration | Approved metadata applied: public access, no private flag | Validate final 0.2.0 tarballs; publication remains separate |
 | Chart umbrella | Absent, intentionally excluded | No blocker for scoped chart publication; separate decision needed before changing umbrella dependency policy |
 
 The 2026-11-05 npm quality audit at `83e6666` measured roughly 270 KB gzip
@@ -116,7 +118,7 @@ arethetypeswrong over eight tarballs, the seven public API consumers, React
 18/19 Explorer SSR/hydration/cleanup without Three, and the chart fixture.
 The ordinary packaging suite separately checks actual tarball contents,
 licenses, source maps, rewritten workspace ranges and public configuration for
-all seven public packages. Chart's private/public configuration is kept distinct.
+all eight candidate packages.
 
 The preparation PR records the exact tested head, full local gate, diff/tree
 reviews and concluded CI. Rerun all checks after any source or release metadata
@@ -159,24 +161,16 @@ first release exists. The portable skills remain in the repository and can
 ship independently of the npm release. No skill installer was run by this
 release preparation.
 
-## Ordered human-only release steps
+## Ordered metadata and human publication steps
 
-1. Close #222 with reviewed implementation, the full local gate and concluded
-   green CI, then rebase this candidate onto the resulting `origin/main`.
-   Resolve the reproduced benchmark blocker described below before release
-   approval. Use one replacement human metadata PR for the eight-package patch
-   after this preparation, superseding the seven-package PR #236. Do not merge
-   or apply #236 as-is and then apply this patch: its finalized notes and
-   seven-package handoff would compete with this complete candidate. Preserve
-   its review/evidence links in the replacement PR, and close it as superseded
-   only when the replacement is reviewable.
-2. Review the separate proposed patch artifact. It sets **all eight** versions
-   to **0.2.0**, removes chart's private flag and sets its publish access public.
-   It does not add umbrella chart exposure. Only Nii may apply these existing
-   manifest version/publish configuration changes. Review changelogs and convert
-   applicable Unreleased headings to 0.2.0 in the human metadata PR. Preserve
-   unrelated existing release history. Do not publish a subset as a substitute
-   for the requested complete candidate.
+1. This replacement metadata PR supersedes seven-package PR #236. Preserve its
+   review and benchmark evidence. Close #236 only after the replacement is
+   reviewable. PR #222 and #256 are merged: the combo fix and benchmark policy
+   changes are present. Historical timing failures below remain evidence, not
+   proof of noise or evidence that the synthetic scan became faster.
+2. The one-time manifest exception applies only to the exact eight-package patch.
+   Applicable changelog headings are finalized as 0.2.0, preserving history.
+   No publication, tag, release or dist-tag change is authorized.
 3. Run `pnpm install --frozen-lockfile` after rebasing, then run `pnpm install --lockfile-only` after applying the approved metadata
    changes and `pnpm install --frozen-lockfile` against that updated lockfile. Commit the manifest,
    lockfile and final release notes through a PR, never directly to main.
@@ -244,7 +238,10 @@ rests on the mandated scoped `bench:gate` (including its accepted printed skip),
 the other required local checks, reviews and concluded green CI. This separate
 diagnostic does not add a merge gate for unchanged runtime. The future metadata
 or runtime release tree must pass its applicable benchmark gate and all other
-required checks; PR #222 still blocks chart release. The existing diagnostic
+required checks; PR #222 subsequently merged and closes the combo blocker. PR #256 makes
+the synthetic rectangle scan diagnostic with fresh reports, controls and required
+cases; version-only manifests are classified without timing. The required
+selected gate must still pass on the final metadata tree. The existing diagnostic
 issue is tracked by `tsk_1048e2545110`. The full log is retained with the
 preparation artifacts.
 

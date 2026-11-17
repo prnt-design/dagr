@@ -1,6 +1,6 @@
 # @prnt/dagr-chart
 
-## Unreleased
+## 0.2.0
 
 - Draw GPU chart lines above bars, matching SVG, so overlaps do not hide the line.
 
@@ -8,10 +8,8 @@
   extrema. Measure category labels and tooltip content for collision avoidance
   and containment. Shrink dense bar gaps and widths within category bands.
 
-- New package, still private. Packed-artifact checks now cover it; public
-  configuration remains pending. Proposed first public version: 0.2.0,
-  conditional on the GPU combo fix in PR #222 and maintainer approval.
-  This candidate uses the scoped package, with no umbrella entry.
+- First public scoped package metadata is approved for 0.2.0; publication
+  remains a separate maintainer action. No umbrella entry is included.
   See [release candidate](https://github.com/prnt-design/dagr/blob/main/packaging/release-candidate.md).
   `DagrChart` draws bar and line series over a category axis with
   `@prnt/dagr-render`: one or two y-axes scaled by `d3-scale`, marks matched
