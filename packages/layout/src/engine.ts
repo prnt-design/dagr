@@ -804,7 +804,7 @@ export function createLayout(options: LayoutEngineOptions = {}): LayoutEngine {
       let held: PreviousLayout | undefined = warm;
       if (!movesNothing(patch)) {
         const leaf = removedLeaf(patch);
-        held = leaf === undefined ? undefined : withoutLeaf(warm, leaf);
+        held = leaf === undefined ? undefined : withoutLeaf(warm, leaf, graph);
       }
       if (held !== undefined) {
         return { next: retain(graph, prepared, runPlaced(prepared, held, stages)), ran: PLACED_STAGES };

@@ -961,16 +961,26 @@ export function runPlaced(
  * Ranks count up from the sources, so a node with no successor sets no other
  * node's rank, and with one predecessor it sits one rank below it: its edge is
  * short, minted no dummies, and lies on no cycle, so the warm feedback arc set
- * keeps every other reversal. Every remaining layer is a subset of a held one,
- * so the order stage's warm start holds every pair in it, as it does for a
- * resize. Declined when the leaf was alone on its rank, since the ranks below
- * it would then be the last ones and the drawing one layer shorter.
+ * keeps every other reversal. Unless the reversals now come to more than half
+ * of `graph`'s arcs: `feedbackArcSet` answers that from a cold solve, and the
+ * leaf's arc is one fewer to count against. Every remaining layer is a subset
+ * of a held one, so the order stage's warm start holds every pair in it, as it
+ * does for a resize. Declined when the leaf was alone on its rank, since the
+ * drawing would then be one layer shorter.
  */
-export function withoutLeaf(held: PreviousLayout, edge: RemoveEdgeOp): PreviousLayout | undefined {
+export function withoutLeaf(
+  held: PreviousLayout,
+  edge: RemoveEdgeOp,
+  graph: Graph,
+): PreviousLayout | undefined {
   const leaf = edge.target;
   const rank = held.ranks.get(leaf);
   if (rank === undefined || held.ranks.get(edge.source) !== rank - 1) return undefined;
-  if (held.reversedEdges.has(edge.id) || held.virtualChains.has(edge.id)) return undefined;
+  if (held.reversedEdges.size > 0) {
+    let arcs = 0;
+    for (const { source, target } of graph.edges()) if (source !== target) arcs += 1;
+    if (held.reversedEdges.size * 2 > arcs) return undefined;
+  }
   const layer = held.layers[rank];
   if (layer === undefined || layer.length < 2 || !layer.includes(leaf)) return undefined;
   const ranks = new Map(held.ranks);

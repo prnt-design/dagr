@@ -2177,7 +2177,9 @@ start keeps every pair in it, so the answer is again the one a full run gives,
 checked the same way as the resize. A patch that also carries inert ops or
 resizes takes it too; one that removes anything else does not. It runs all four
 stages when the leaf was the only node on its rank, since the drawing then loses
-a layer, and in the same cases a resize does. On the 10k-node corpus a
+a layer; when the edges reversed to break cycles come to more than half of the
+edges left, since the cycle breaker then starts again from nothing; and in the
+same cases a resize does. On the 10k-node corpus a
 removed leaf drops from about 700ms to about 110ms.
 
 ### The tolerance, on the engine

@@ -523,6 +523,14 @@ describe('the relayout that drops a removed leaf', () => {
     step(PLACED_STAGES, (graph) => graph.removeNode('leaf'));
   }, 60_000);
 
+  it('runs all four when the leaf held the reversed edges to half the arcs', () => {
+    const step = lockstep({ name: 'two-cycle', nodes: ['a', 'b'], edges: [['a', 'b'], ['b', 'a']] }, {});
+
+    step(ALL_STAGES, addLeaf('a', 'x'));
+    step(ALL_STAGES, (copy) => copy.addEdge('b', 'a', 'ba2'));
+    step(ALL_STAGES, (copy) => copy.removeNode('x'));
+  });
+
   it('runs all four for a removed node with more than one edge', () => {
     const { graph, patches } = watched(diamond());
     const laid = engine();
