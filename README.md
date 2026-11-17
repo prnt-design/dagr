@@ -26,9 +26,9 @@ See the [measured behavior](https://dagr.prnt.design/docs/incremental-layout).
 
 > ⚠️ Dagr is in the 0.x series, so expect change. The current focus is proving
 > the WebGPU renderer: backend parity was checked by hand on one machine
-> (byte-identical to WebGL2 on the two-shape probe scene), and a published
-> performance profile and a measured large-graph target come next. The queue
-> lives in [ROADMAP.md](./ROADMAP.md).
+> (byte-identical to WebGL2 on a probe scene of two shapes and two edges), and
+> a published performance profile and a measured large-graph target come next.
+> The queue lives in [ROADMAP.md](./ROADMAP.md).
 
 ## Packages
 

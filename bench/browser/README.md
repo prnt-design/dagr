@@ -510,9 +510,11 @@ DAGR_CHROMIUM="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" \
   node bench/browser/backend-probe.mjs --parity
 ```
 
-`--parity` draws the probe scene through `'webgpu'` and through `'webgl2'` and
-compares the two frames pixel by pixel. It exits non-zero unless both backends
-came up as named, the comparison passes, and a control fails on its shift, and says on
+`--parity` draws the probe's two shapes, and two solid edge ribbons, through
+`'webgpu'` and through `'webgl2'` and compares the two frames pixel by pixel.
+It exits non-zero unless both backends came up as named, the comparison passes
+with the ribbons drawn where the page expects them, and both controls (one
+moves a shape, the other the ribbons) fail on their shifts, and says on
 stderr which of these did not hold. It also exits non-zero, saying why on
 stderr before it compares, when the adapter reports `isFallbackAdapter`,
 because a software adapter such as SwiftShader comes up on `'webgpu'` too and
@@ -565,12 +567,51 @@ and exits 0. The frames are not byte-identical as on the Apple M4: 4 of the
 control fails, with 310 band pixels differing by up to 137 and 1,042 interior
 pixels by up to 12.
 
+**Edge ribbons joined the compared scene on 2026-11-17.** Two solid ribbons,
+`halfWidthPixels` 2, run under the shapes: an elbow from the rectangle to the
+circle with two right-angle joins, and a diagonal into the rectangle. The
+earlier results above are for the two shapes alone. A ribbon's coverage
+(`ribbonCoverage` in `ribbon.ts`) ramps over one device pixel centred on its
+visible boundary, half a pixel either side, from interpolated geometry rather
+than derivatives. The band reuses the shapes' one pixel either side as a
+margin, so a ribbon moved by up to a pixel along an axis can still pass.
+Everything within `halfWidthPixels + 2` of a route point is in the band too,
+because the distance to the centreline is not what is drawn there: a butt cap
+is a hard edge resolved by multisampling, and a right-angle join is mitred, a
+square corner whose ramp ends within 2.5 times the square root of 2 pixels of
+the point. Two more conditions guard the derivation:
+
+- Every pixel inside a ribbon, clear of its band, its caps, its joins and any
+  glow, must hold the edge colour on WebGPU within 1 per channel. Otherwise the
+  run fails, because the band was derived for a ribbon somewhere else. With the
+  page's y axis flipped, the comparison alone still passed (both backends drew
+  the same frame), and this condition failed it: 0 of 717.
+- A second control moves every ribbon 2 device pixels in x and y on the WebGL2
+  side. A ribbon has no glow, so a shift inside the band would pass; at 2 px,
+  pixels outside the band change, and the run fails if this control passes.
+  Like the shape control, it counts as failing on its shift when any interior
+  pixel differs, so it does not by itself tell a shifted ribbon from a missing
+  one; the main check, which must pass, does.
+
+**What it found on 2026-11-17**, on the same Apple M4 Mac mini in Google
+Chrome 157.0.8103.79, headed five times and headless once, no flags. The adapter
+was `apple` `metal-3`, not a fallback. The two frames are byte-identical
+again, ribbons included. Of 153,600 pixels, 3,517 are in the band and 150,083
+are not, and none of either differ. All 717 ribbon pixels clear of the band
+hold the edge colour. The shape control fails as before (308 band pixels by up
+to 137, 1,036 interior by up to 13). The edge control fails with 1,071 band
+pixels differing by up to 158 and 1,148 interior pixels by up to 158. `--pick`,
+added to two of the headed runs, still passed on both backends at DPR 1 and 2,
+9,532 picks each.
+
 **Not a gate.** `bench/README.md`'s argument against a browser measurement in
 `bench:ci` is about timings, and a parity check is not a timing, so that
 argument does not carry. What does is the runner: the check needs a full Chrome
 with a WebGPU adapter, and CI runs on a GitHub `ubuntu-latest` runner with no
 GPU and no browser step. It is run by hand like the probe, and its scope is what it compared:
-one machine, the two-shape probe scene, zoom 1, DPR 1, no edge ribbons.
+one machine, the probe's two shapes with two solid straight ribbons since
+2026-11-17, zoom 1, DPR 1. Dashed and smooth ribbons, the above-nodes layer,
+group outlines, rich-node tiers, other zooms and DPR 2 are not compared.
 
 ## Node picking (M4.8b)
 

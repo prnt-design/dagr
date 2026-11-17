@@ -30,11 +30,13 @@
  * Chrome instead of launching one. The output
  * records the browser, mode and flags, because a backend result without them
  * cannot be reproduced. `--parity` adds M4.9b's backend comparison and exits
- * non-zero unless it passes and its control fails on the shift it is given. It
+ * non-zero unless it passes and both its controls fail on their shifts. It
  * also exits non-zero when the adapter reports `isFallbackAdapter`: a software
  * adapter such as
  * SwiftShader still comes up on `webgpu`, so its side of the comparison would
- * not be a GPU's. `--pick` adds M4.8b's check of `pickNode` on both backends at
+ * not be a GPU's. The compared scene has two solid edge ribbons under the
+ * shapes, and the second control shifts them. `--pick`
+ * adds M4.8b's check of `pickNode` on both backends at
  * device pixel ratios 1 and 2, and exits non-zero on the same adapter terms or
  * on any pick that disagrees with the shapes' distance functions.
  */
@@ -54,6 +56,7 @@ const EXECUTABLE = process.env.DAGR_CHROMIUM;
 const LAUNCH_ARGS = (process.env.DAGR_CHROMIUM_ARGS ?? '').split(' ').filter(Boolean);
 const CDP = process.env.DAGR_CDP;
 const CONTROL_SHIFT_PX = 1 / 3;
+const EDGE_CONTROL_SHIFT_PX = 2;
 
 /**
  * The page's import map, filled in from this process's own module resolution.
@@ -95,6 +98,11 @@ function parityFailure(check) {
     reasons.push(`the frames drew on ${check.backends.webgpu} and ${check.backends.webgl2}, not webgpu and webgl2`);
   }
   if (!check.sameSize) reasons.push('the two frames are different sizes');
+  if (!check.ribbonDrawn) {
+    reasons.push(
+      `${check.ribbon.edgeColored} of ${check.ribbon.pixels} pixels inside the ribbons hold the edge colour on webgpu`,
+    );
+  }
   if (check.interior.maxDelta > check.tolerance.interiorMaxDelta) {
     reasons.push(
       `${check.interior.differing} interior pixels differ, by up to ${check.interior.maxDelta} against a tolerance of ${check.tolerance.interiorMaxDelta}`,
@@ -107,15 +115,16 @@ function parityFailure(check) {
  * Why the control did not fail the way it must, or undefined when it did. A
  * control that threw, drew on the wrong backend or compared frames of different
  * sizes also reports `pass: false`, but says nothing about whether the check
- * can see a shifted shape.
+ * can see a shifted shape or ribbon.
  */
-function controlFailure(control) {
-  if (control.pass) return 'passed, so the check cannot see a misplaced shape';
+function controlFailure(control, moved) {
+  if (control.pass) return `passed, so the check cannot see a misplaced ${moved}`;
   const failedOnShift =
     control.error === undefined &&
     control.backends.webgpu === 'webgpu' &&
     control.backends.webgl2 === 'webgl2' &&
     control.sameSize &&
+    control.ribbonDrawn &&
     control.interior.maxDelta > control.tolerance.interiorMaxDelta;
   return failedOnShift ? undefined : `failed, but not on the shift: ${parityFailure(control)}`;
 }
@@ -183,16 +192,22 @@ if (cliArgs.includes('--parity')) {
   parity = {
     check: await page.evaluate(() => window.parity()),
     control: await page.evaluate((shift) => window.parity(shift), CONTROL_SHIFT_PX),
+    edgeControl: await page.evaluate((shift) => window.parity(0, shift), EDGE_CONTROL_SHIFT_PX),
   };
   if (!parity.check.pass) {
     console.error(`the parity check failed: ${parityFailure(parity.check)}`);
     process.exitCode = 1;
   }
-  const control = controlFailure(parity.control);
+  const control = controlFailure(parity.control, 'shape');
   if (control !== undefined) {
     console.error(
       `the parity control, with one shape shifted by ${Number(CONTROL_SHIFT_PX.toPrecision(3))} px, ${control}`,
     );
+    process.exitCode = 1;
+  }
+  const edgeControl = controlFailure(parity.edgeControl, 'ribbon');
+  if (edgeControl !== undefined) {
+    console.error(`the edge control, with the ribbons shifted by ${EDGE_CONTROL_SHIFT_PX} px, ${edgeControl}`);
     process.exitCode = 1;
   }
 }

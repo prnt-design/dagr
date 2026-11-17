@@ -228,9 +228,69 @@
        * control and must fail. A sub-pixel shift moves the fill and outline
        * edges only within the band, so it is the glow's gradient that catches
        * it; a shape without glow shifted the same way would pass.
+       *
+       * `edgeShift` moves every ribbon on the WebGL2 side by that much in x and
+       * y, the edges' control. A ribbon has no glow, so only a shift wider than
+       * the band can show: at 2 px, pixels the band leaves outside it change.
        */
       const EDGE_BAND_DEVICE_PX = 1;
       const ROUNDING = 1;
+
+      /**
+       * Two solid ribbons under the shapes: an elbow with two right-angle
+       * joins from the rectangle to the circle, and a diagonal into the
+       * rectangle, so the ribbon pipeline is compared too.
+       *
+       * `ribbonCoverage` in `ribbon.ts` ramps over half a device pixel either
+       * side of the visible boundary, `halfWidthPixels` from the centreline,
+       * from interpolated geometry rather than derivatives. The band reuses the
+       * shapes' one pixel either side as a margin, so a ribbon moved by up to
+       * a pixel along an axis can pass; the edge control below is wider. Two
+       * places are put in the band whole, since there the distance to the
+       * centreline is not what the ribbon draws: a butt cap is a hard edge
+       * resolved by multisampling, and a right-angle join is mitred, a square
+       * corner the distance rounds off, whose ramp ends within 2.5 * sqrt(2)
+       * px of the route point. Both are within `halfWidthPixels + 2` of it.
+       */
+      const EDGE_STYLE = { halfWidthPixels: 2 };
+      const EDGE_COLOR = 0x8d99ae;
+      const EDGES = [
+        {
+          id: 'elbow',
+          points: [
+            { x: -60, y: -25 },
+            { x: -60, y: -90 },
+            { x: 60, y: -90 },
+            { x: 60, y: -30 },
+          ],
+          color: EDGE_COLOR,
+        },
+        {
+          id: 'diagonal',
+          points: [
+            { x: -210, y: 130 },
+            { x: -80, y: 25 },
+          ],
+          color: EDGE_COLOR,
+        },
+      ];
+
+      const segmentDistance = (a, b, x, y) => {
+        const dx = b.x - a.x;
+        const dy = b.y - a.y;
+        const t = Math.max(0, Math.min(1, ((x - a.x) * dx + (y - a.y) * dy) / (dx * dx + dy * dy)));
+        return Math.hypot(x - (a.x + t * dx), y - (a.y + t * dy));
+      };
+
+      const ribbonDistances = (edge, x, y) => {
+        let centreline = Infinity;
+        for (let i = 1; i < edge.points.length; i += 1) {
+          centreline = Math.min(centreline, segmentDistance(edge.points[i - 1], edge.points[i], x, y));
+        }
+        let point = Infinity;
+        for (const p of edge.points) point = Math.min(point, Math.hypot(x - p.x, y - p.y));
+        return { centreline, point };
+      };
 
       const signedDistance = (node, x, y) => {
         const px = x - node.center.x;
@@ -242,13 +302,19 @@
         return Math.hypot(Math.max(qx, 0), Math.max(qy, 0)) + Math.min(Math.max(qx, qy), 0) - r;
       };
 
-      window.parity = async (shiftX = 0) => {
-        const draw = async (backend, nodes) => {
+      window.parity = async (shiftX = 0, edgeShift = 0) => {
+        const draw = async (backend, nodes, edges) => {
           const previous = document.getElementById('stage');
           const canvas = document.createElement('canvas');
           canvas.id = 'stage';
           previous.replaceWith(canvas);
-          const renderer = await createRenderer({ canvas, backend, nodes });
+          const renderer = await createRenderer({
+            canvas,
+            backend,
+            nodes,
+            edgeGroups: [{ id: 'edges', style: EDGE_STYLE }],
+          });
+          renderer.setEdges('edges', edges);
           renderer.camera.setViewport({ width: 480, height: 320, devicePixelRatio: 1 });
           renderer.render();
           const data = readPixels(canvas);
@@ -259,29 +325,52 @@
         const shifted = NODES.map((node, i) =>
           i === 0 ? { ...node, center: { x: node.center.x + shiftX, y: node.center.y } } : node,
         );
+        const shiftedEdges = EDGES.map((edge) => ({
+          ...edge,
+          points: edge.points.map((p) => ({ x: p.x + edgeShift, y: p.y + edgeShift })),
+        }));
         let gpu;
         let gl;
         try {
-          gpu = await draw('webgpu', NODES);
-          gl = await draw('webgl2', shifted);
+          gpu = await draw('webgpu', NODES, EDGES);
+          gl = await draw('webgl2', shifted, shiftedEdges);
         } catch (error) {
           return { pass: false, error: String(error), code: error && error.code };
         }
         const band = { pixels: 0, differing: 0, maxDelta: 0 };
         const interior = { pixels: 0, differing: 0, maxDelta: 0 };
+        // All of these must hold the edge colour, or the band above was
+        // derived for a ribbon somewhere else.
+        const ribbon = { pixels: 0, edgeColored: 0 };
+        const hw = EDGE_STYLE.halfWidthPixels;
         for (let row = 0; row < gpu.height; row += 1) {
           for (let col = 0; col < gpu.width; col += 1) {
-            // Device pixel centres in world units: zoom 1, DPR 1, the origin at
-            // the canvas centre. Both shapes are symmetric in y, so the sign of
-            // the y axis does not matter here.
+            // Device pixel centres in world units, y up: zoom 1, DPR 1, the
+            // origin at the canvas centre.
             const x = col + 0.5 - gpu.width / 2;
             const y = gpu.height / 2 - (row + 0.5);
             let nearest = Infinity;
+            let glowed = false;
             for (const node of NODES) {
               const d = signedDistance(node, x, y);
               nearest = Math.min(nearest, Math.abs(d), Math.abs(d + OUTLINE_DEVICE_PX));
+              if (d < node.glowWorld + EDGE_BAND_DEVICE_PX) glowed = true;
+            }
+            let onRibbon = false;
+            for (const edge of EDGES) {
+              const { centreline, point } = ribbonDistances(edge, x, y);
+              if (point < hw + 2) nearest = 0;
+              nearest = Math.min(nearest, Math.abs(centreline - hw));
+              if (centreline < hw - EDGE_BAND_DEVICE_PX && point >= hw + 2) onRibbon = true;
             }
             const i = (row * gpu.width + col) * 4;
+            if (onRibbon && !glowed) {
+              ribbon.pixels += 1;
+              const near = (value, channel) => Math.abs(value - ((EDGE_COLOR >> channel) & 0xff)) <= ROUNDING;
+              if (near(gpu.data[i], 16) && near(gpu.data[i + 1], 8) && near(gpu.data[i + 2], 0)) {
+                ribbon.edgeColored += 1;
+              }
+            }
             const delta = Math.max(
               Math.abs(gpu.data[i] - gl.data[i]),
               Math.abs(gpu.data[i + 1] - gl.data[i + 1]),
@@ -296,14 +385,23 @@
         }
         const backends = { webgpu: gpu.reported, webgl2: gl.reported };
         const sameSize = gl.width === gpu.width && gl.height === gpu.height;
+        const ribbonDrawn = ribbon.pixels > 0 && ribbon.edgeColored === ribbon.pixels;
         return {
-          pass: gpu.reported === 'webgpu' && gl.reported === 'webgl2' && sameSize && interior.maxDelta <= ROUNDING,
+          pass:
+            gpu.reported === 'webgpu' &&
+            gl.reported === 'webgl2' &&
+            sameSize &&
+            ribbonDrawn &&
+            interior.maxDelta <= ROUNDING,
           backends,
           sameSize,
           tolerance: { edgeBandDevicePx: EDGE_BAND_DEVICE_PX, interiorMaxDelta: ROUNDING },
           shiftX,
+          edgeShift,
           band,
           interior,
+          ribbon,
+          ribbonDrawn,
         };
       };
 
