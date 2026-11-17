@@ -1,6 +1,6 @@
 # @prnt/dagr-explorer
 
-## Unreleased
+## 0.2.0
 
 - `DagrExplorer` lets the reader choose the map or an outline of the same
   nodes, at any width, with a Map and an Outline button. `mode`,

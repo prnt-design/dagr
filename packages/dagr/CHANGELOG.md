@@ -1,17 +1,16 @@
 # Changelog
 
-## Unreleased
+## 0.2.0
 
 - Forward renderer pinch/visible-frame and GPU picking APIs, React edge
   interaction and opt-in GPU hit testing, and Explorer outline/map modes and
   mobile framing fixes through the existing subpaths. See each scoped
   package's changelog for behavior and compatibility notes.
-- Proposed next version: 0.2.0, pending maintainer approval. The expanded hit
-  target union and required renderer/Explorer interface members need consumer
-  migration. The candidate proposes a first public scoped chart package at 0.2.0,
-  conditional on its release blockers and human configuration changes. Chart
-  remains private in this tree and is not exposed by this umbrella.
-  See [release candidate](https://github.com/prnt-design/dagr/blob/main/packaging/release-candidate.md).
+- Coordinated 0.2.0 metadata is approved. The expanded hit target union and
+  required renderer/Explorer interface members need consumer migration. Chart
+  is a separate scoped package and is not exposed by this umbrella. Publication
+  remains a separate maintainer action. See
+  [release candidate](https://github.com/prnt-design/dagr/blob/main/packaging/release-candidate.md).
 
 ## 0.1.4
 

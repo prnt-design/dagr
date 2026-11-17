@@ -1,6 +1,6 @@
 # @prnt/dagr-react
 
-## Unreleased
+## 0.2.0
 
 - `createEdgeHitIndex` builds 3.7 to 6 times faster at 10,000 nodes in Node (one to four segments per edge), and nearly in proportion to its segments: the same answers, from a grid kept in flat typed arrays over the segments' bounds instead of a `Map` of arrays. The cells coarsen if the grid would exceed about four a segment.
 - A `DagrCanvas` `fit()` or `focusNode` flight still under way when `inset`, the visual viewport or the canvas size changes works its target out again in the new frame, from where the camera is, and lands when it would have. It used to land where the old frame put it.

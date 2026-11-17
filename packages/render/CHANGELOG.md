@@ -9,7 +9,7 @@ which unit a number is in. A caller upgrading past one of those sees a drawing
 in a different place, and no compiler tells them. "Behaviour changed, types did
 not" is the category this file has a heading for.
 
-## Unreleased
+## 0.2.0
 
 - Add `SceneEdgeGroup.layer`: chart lines can opt into `'above-nodes'`, while
   graph edges keep the default `'below-nodes'`. Declaration order is preserved

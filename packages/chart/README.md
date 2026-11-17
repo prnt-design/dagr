@@ -5,9 +5,10 @@ Animated bar and line charts for React, drawn by
 (`d3-scale`, `d3-array`), `@prnt/dagr-render` draws the marks as instanced
 shapes and ribbons, and every change glides on the renderer's springs.
 
-Not published yet: the package is private to this workspace until public configuration and
-umbrella exposure are approved. Its packed artifacts are checked while private. Inside the workspace, depend on
-it as `workspace:*`.
+Public scoped-package metadata is approved for 0.2.0; publication is pending.
+Chart has no umbrella entry, and umbrella exposure is not required for its
+scoped release. Evaluate the matching locally packed sibling artifacts before
+publication. Inside the workspace, depend on it as `workspace:*`.
 
 ## The chart
 

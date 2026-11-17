@@ -1,6 +1,6 @@
 {
   "name": "@prnt/dagr-layout",
-  "version": "0.1.4",
+  "version": "0.2.0",
   "description": "Headless Sugiyama layout pipeline for Dagr, the dagre successor: incremental and animation first.",
   "license": "MIT",
   "type": "module",

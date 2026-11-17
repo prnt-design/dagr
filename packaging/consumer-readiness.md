@@ -63,7 +63,7 @@ pnpm install --frozen-lockfile
 pnpm --filter @dagr/packaging verify:tools
 ```
 
-This builds and packs all seven packages, runs publint and arethetypeswrong,
+This builds and packs all eight candidate packages, runs publint and arethetypeswrong,
 installs tarballs with npm outside the workspace, and compiles/runs the public
 surfaces. It also runs the minimal `fixtures/explorer` server/client pair under
 React 18.3.1 and 19.2.8 without three. Each consumer also compiles
@@ -74,9 +74,9 @@ are removed even when a check fails.
 
 For an application evaluating unreleased APIs, use these locally packed
 artifacts and install the matching graph/layout/render/Explorer tarballs
-together. Installing only one source tarball can resolve its sibling version
-ranges to registry 0.1.4. A source manifest saying 0.1.4 does not mean that
-source implementation was published.
+together. Installing only one source tarball can request sibling versions
+that are not yet available in the registry. The approved source manifests now say
+0.2.0; this does not mean that implementation was published.
 
 ## Registry and source inventory
 
@@ -95,13 +95,13 @@ checks below. Publication remains a maintainer action.
 | Visible frame (adapters) | Explorer frames around its drawer and a host `inset`; no visual-viewport framing | Explorer and `DagrCanvas` frame in what the visual viewport leaves; `DagrCanvas` adds an `inset` prop; a `fit()`/`focusNode` flight retargets on a frame change |
 | Compact Explorer details | Published details implementation has no compact docking | Bottom docking below 720 CSS pixels, 44px primary controls, 16px search input |
 | Touch adapters | Earlier independent input handling; capture-transfer bug reproduced in Chromium | Shared pinch/contact lifecycle; capture-transfer fix merged in #196 |
-| Renderer and React fixes | See released changelogs | GPU node picking, edge retarget/empty-edge fixes, edge interaction and GPU hit-testing bindings in package Unreleased sections |
+| Renderer and React fixes | See released changelogs | GPU node picking, edge retarget/empty-edge fixes, edge interaction and GPU hit-testing bindings in package 0.2.0 sections |
 
 The package changelogs are the complete release-note inputs, including
 [renderer](../packages/render/CHANGELOG.md),
 [React](../packages/react/CHANGELOG.md), and
 [Explorer](../packages/explorer/CHANGELOG.md). This table is a bounded adoption
-inventory, not a substitute for reviewing every Unreleased section at release.
+inventory, not a substitute for reviewing every 0.2.0 section at release.
 
 ## Evidence and remaining validation
 

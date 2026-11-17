@@ -9,7 +9,7 @@ types did not" is the category this file has a heading for, so that the v0.1
 release notes do not have to be reconstructed by diffing five milestones' worth
 of doc prose.
 
-## Unreleased
+## 0.2.0
 
 - Size-changing attribute patches can reuse held ranks and layers and run only
   position and route with the default longest-path ranker and eligible built-in
