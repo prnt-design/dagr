@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { URL } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { PACKAGES, validate, verifyBytes, release, hasGreenCI } from '../bin/npm-release.mjs';
+import { PACKAGES, validate, verifyBytes, release, hasGreenCI, hasEquivalentGreenCI } from '../bin/npm-release.mjs';
 
 const link = 'https://github.com/prnt-design/dagr/pull/123';
 const integrity = `sha512-${createHash('sha512').update('preserved bytes').digest('base64')}`;
@@ -11,7 +11,7 @@ function fixture(mode = 'publish') {
   const evidence = {
     mode, version: input.version, tag: input.tag, source: 'a'.repeat(40),
     scope: [...PACKAGES], request: link,
-    checks: Object.fromEntries(['typecheck', 'test', 'lint', 'build', 'bench:gate', 'verify:tools', 'diff-review', 'tree-review'].map((key) => [key, link])),
+    checks: Object.fromEntries(['typecheck', 'test', 'lint', 'build', 'bench:gate', 'verify:tools', 'diff-review', 'tree-review', 'registry-consumers'].map((key) => [key, link])),
     packages: Object.fromEntries(PACKAGES.map((name) => [name, { integrity, url: 'https://example.com/preserved.tgz' }])),
   };
   return { input, evidence };
@@ -73,6 +73,29 @@ describe('manual release boundary', () => {
       expect(hasGreenCI([green, { ...green, run_number: 2, ...newer }], 'source')).toBe(false);
     }
     expect(hasGreenCI([{ ...green, run_attempt: 2, conclusion: 'failure' }, green], 'source')).toBe(false);
+  });
+  it('checks exact same-repository PR CI identity and tree, rather than asserting main CI', () => {
+    const head = 'a'.repeat(40);
+    const tree = 'b'.repeat(40);
+    const ci = { status: 'completed', conclusion: 'success', event: 'pull_request', path: '.github/workflows/ci.yml', head_repository: { full_name: 'prnt-design/dagr' }, head_sha: head, head_commit: { id: head, tree_id: tree } };
+    expect(hasEquivalentGreenCI(ci, head, tree)).toBe(true);
+    for (const changed of [{ conclusion: 'failure' }, { status: 'in_progress' }, { event: 'workflow_dispatch' }, { path: '.github/workflows/other.yml' }, { head_sha: 'c'.repeat(40) }, { head_repository: { full_name: 'fork/dagr' } }, { head_commit: { id: head, tree_id: 'c'.repeat(40) } }]) {
+      expect(hasEquivalentGreenCI({ ...ci, ...changed }, head, tree)).toBe(false);
+    }
+  });
+  it('requires registry consumer evidence before promotion can reuse validated bytes', () => {
+    const { input, evidence } = fixture('promote');
+    evidence.request = { dispatchMessage: '41ec4a5d-7fdf-4c3d-8cab-e80a02815e49' };
+    expect(validate(evidence, input)).toEqual(PACKAGES);
+    delete evidence.checks['registry-consumers'];
+    expect(() => validate(evidence, input)).toThrow('registry consumer evidence');
+  });
+  it('restricts the prepared 0.2.0 handoff to vdsl and umbrella promotion', () => {
+    const evidence = JSON.parse(readFileSync(new URL('../release-evidence/0.2.0-latest.json', import.meta.url), 'utf8'));
+    const input = { mode: 'promote', version: '0.2.0', tag: 'latest', packages: '@prnt/dagr-vdsl,@prnt/dagr' };
+    expect(validate(evidence, input)).toEqual(['@prnt/dagr-vdsl', '@prnt/dagr']);
+    expect(() => validate(evidence, { ...input, mode: 'publish' })).toThrow();
+    expect(() => validate(evidence, { ...input, packages: PACKAGES.join(',') })).toThrow();
   });
   it('keeps the workflow manual, serialized, and free of npm credentials', () => {
     const workflow = readFileSync(new URL('../../.github/workflows/npm-release.yml', import.meta.url), 'utf8');

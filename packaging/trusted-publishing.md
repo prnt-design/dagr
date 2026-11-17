@@ -30,8 +30,12 @@ validates a new trust configuration. See [npm's trusted publisher documentation]
 
 Complete the release candidate's local gate, machine-matched `pnpm bench:gate`,
 external verifier, diff and merged-tree reviews, and concluded green CI first.
-The workflow checks successful push CI for both the source SHA and workflow
-commit on main. It cannot
+The workflow checks concluded successful push CI for the workflow commit on
+main. Source CI can be successful main push CI, or an exact recorded CI run
+whose head has the same Git tree as the source squash commit. In the latter
+case `sourceCI` records the run number, head SHA and tree SHA. The workflow
+checks the live run status, repository, workflow path, head and tree against
+the local source tree; it does not relabel PR CI as main CI. It cannot
 replace local benchmark evidence with a GitHub-hosted benchmark.
 
 Preserve the exact **pnpm-packed** tarballs that passed review and validation.
@@ -61,7 +65,8 @@ all placeholders, this example is not release authorization):
     "bench:gate": "https://github.com/prnt-design/dagr/pull/123",
     "verify:tools": "https://github.com/prnt-design/dagr/pull/123",
     "diff-review": "https://github.com/prnt-design/dagr/pull/123",
-    "tree-review": "https://github.com/prnt-design/dagr/pull/123"
+    "tree-review": "https://github.com/prnt-design/dagr/pull/123",
+    "registry-consumers": "https://github.com/prnt-design/dagr/pull/123"
   },
   "packages": {
     "@prnt/dagr-graph": {"integrity": "sha512-<base64 SHA-512>"}
@@ -72,9 +77,15 @@ all placeholders, this example is not release authorization):
 `packages` must contain all eight package names, each with the reviewed
 `sha512-...` integrity. Publish mode additionally requires an HTTPS `url` for
 each preserved tarball. Promotion uses registry URLs instead and checks the
-entire eight-package candidate before moving any selected tag. Evidence links
-must point to this repository's issues, PRs or Actions runs. Their content is
-reviewed by the evidence PR reviewers, not interpreted as approval by software.
+entire eight-package candidate before moving any selected tag. Evidence references can point to this repository's issues, PRs or Actions
+runs, or use `{"dispatchMessage": "<original UUID>"}` for retained Dispatch
+provenance. Reviewers check the original author, context, assertions and
+preserved records. Software checks reference syntax, not human authorization
+or the truth of a passing-check assertion. Promotion requires the additional
+`registry-consumers` reference, recording passed exact-version consumer checks
+for the pinned candidate. Since the registry bytes are checked again against
+those same pins, promotion reuses those completed checks without rebuilding or
+repeating consumer installations.
 The source SHA must be an ancestor of the workflow commit.
 
 ## Run only after trust and explicit authorization
@@ -85,14 +96,17 @@ exact version, tag and committed evidence path. Inputs must match evidence
 exactly. A promotion-only request needs no unpublished version or rebuild.
 All eight registry versions must already exist and match their pinned bytes.
 
-Publish mode preflights all selected versions as absent, verifies the preserved
-candidate, then invokes `npm publish <tarball> --ignore-scripts` in dependency
+Publish mode preflights all selected versions as absent. Existing unselected
+versions must match the reviewed registry metadata and downloaded-byte hashes;
+the external verifier uses those actual registry bytes alongside the remaining
+preserved candidate. It then invokes `npm publish <tarball> --ignore-scripts` in dependency
 order. Using npm on an already pnpm-packed tarball preserves rewritten workspace
 ranges and exact reviewed bytes. It differs from `npm publish` on a package
 directory, which is still prohibited by the release candidate instructions.
 Promotion invokes only `npm dist-tag add`. Both modes download and hash registry
-artifacts and verify selected tags after each write. The complete candidate is
-checked by the existing external consumer verifier before the first write.
+artifacts and verify selected tags after each write. Publish mode checks the complete candidate with the existing external consumer
+verifier before the first write. Promotion verifies the entire registry set
+and reuses the reviewed exact-byte registry-consumer evidence.
 
 Multi-package operations are not atomic. On failure inspect registry state and
 record the completed package list. Never blindly retry publication or unpublish.
@@ -100,3 +114,31 @@ A partial publish needs a new reviewed scope excluding existing versions, or a
 separately authorized promotion once the entire candidate is verified. A partial
 promotion can be retried with the same explicit scope and evidence. This workflow
 does not move GitHub tags, create releases, roll back or alter package versions.
+
+
+## Prepared 0.2.0 promotion handoff
+
+`packaging/release-evidence/0.2.0-latest.json` records only the remaining
+`@prnt/dagr-vdsl` and `@prnt/dagr` promotion to `latest`. It contains the eight
+approved inventory pins, original user approval message references, PR #257's
+local gate and reviews, and preserved registry byte/12-consumer results with
+consumer lockfile fingerprints. These historical results are reviewer-checked
+assertions. Live CI identity/tree checks and registry metadata/byte checks are
+machine verification. No new release bytes or new user approval are implied.
+
+PR #257's successful run 43998137443 tested head
+`54ec2cc563b190ec46035696bcc16a137ec7a41a`. Its tree
+`027de55b09258e150e773673f8d684a981e59bec` equals source squash commit
+`38f1ed8bc0a12a45e3b4ae4f551fc318e77fdc29`. The record uses `sourceCI` to
+express that equivalence explicitly.
+
+The evidence file reaches main with this reviewed workflow PR, after the full
+local gate, independent diff/tree reviews and concluded green PR CI. Then wait
+for the merge commit's main CI to conclude green. Configure npm trust and have
+the coordinating release owner dispatch on main with mode `promote`, packages
+`@prnt/dagr-vdsl,@prnt/dagr`, version `0.2.0`, tag `latest` and evidence path
+`packaging/release-evidence/0.2.0-latest.json`. The run downloads and hashes all
+eight existing versions before the two tag writes. It does not republish,
+rebuild or repeat completed consumer checks. Verify the final tags and default
+consumer installation separately as the release handoff requires. No live run
+was performed while preparing this record.

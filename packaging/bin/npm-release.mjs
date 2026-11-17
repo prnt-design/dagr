@@ -18,6 +18,10 @@ function requireValue(condition, message) {
 function evidenceLink(value) {
   return typeof value === 'string' && /^https:\/\/github\.com\/prnt-design\/dagr\/(?:pull|issues|actions\/runs)\/\d+(?:[/?#].*)?$/.test(value);
 }
+function evidenceReference(value) {
+  return evidenceLink(value) || (value !== null && typeof value === 'object'
+    && /^[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/.test(value.dispatchMessage));
+}
 export function validate(evidence, input) {
   requireValue(['publish', 'promote'].includes(input.mode), 'mode must be publish or promote');
   requireValue(typeof input.version === 'string' && /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-[0-9A-Za-z]+(?:[.-][0-9A-Za-z]+)*)?$/.test(input.version), 'invalid exact version');
@@ -26,9 +30,15 @@ export function validate(evidence, input) {
   requireValue(selected.length > 0 && new Set(selected).size === selected.length && selected.every((name) => PACKAGES.includes(name)), 'invalid or duplicate package scope');
   requireValue(evidence.version === input.version && evidence.mode === input.mode && evidence.tag === input.tag, 'evidence does not authorize mode/version/tag');
   requireValue(Array.isArray(evidence.scope) && evidence.scope.length === selected.length && new Set(evidence.scope).size === selected.length && evidence.scope.every((name) => selected.includes(name)), 'evidence does not authorize package scope');
-  requireValue(evidenceLink(evidence.request), 'explicit release request evidence required');
+  requireValue(evidenceReference(evidence.request), 'explicit release request evidence required');
   requireValue(typeof evidence.source === 'string' && /^[a-f0-9]{40}$/.test(evidence.source), 'exact source SHA required');
-  requireValue(CHECKS.every((key) => evidenceLink(evidence.checks?.[key])), 'all local gate, external verifier and review evidence required');
+  requireValue(CHECKS.every((key) => evidenceReference(evidence.checks?.[key])), 'all local gate, external verifier and review evidence required');
+  if (input.mode === 'promote') requireValue(evidenceReference(evidence.checks?.['registry-consumers']), 'reviewed exact registry consumer evidence required for promotion');
+  if (evidence.sourceCI !== undefined) {
+    requireValue(Number.isSafeInteger(evidence.sourceCI?.run) && evidence.sourceCI.run > 0
+      && /^[a-f0-9]{40}$/.test(evidence.sourceCI.head)
+      && /^[a-f0-9]{40}$/.test(evidence.sourceCI.tree), 'exact source CI run, head and tree required');
+  }
   requireValue(evidence.packages && Object.keys(evidence.packages).length === PACKAGES.length && PACKAGES.every((name) => {
     const artifact = evidence.packages[name];
     if (!artifact || !/^sha512-[A-Za-z0-9+/]{86}==$/.test(artifact.integrity)) return false;
@@ -44,6 +54,13 @@ export function hasGreenCI(runs, sha) {
   const latest = runs?.filter((job) => job.head_sha === sha && job.head_branch === 'main')
     .sort((a, b) => b.run_number - a.run_number || b.run_attempt - a.run_attempt)[0];
   return latest?.status === 'completed' && latest.conclusion === 'success';
+}
+export function hasEquivalentGreenCI(ci, head, tree) {
+  return ci?.status === 'completed' && ci.conclusion === 'success'
+    && ['push', 'pull_request'].includes(ci.event)
+    && ci.path === '.github/workflows/ci.yml'
+    && ci.head_repository?.full_name === 'prnt-design/dagr'
+    && ci.head_sha === head && ci.head_commit?.id === head && ci.head_commit.tree_id === tree;
 }
 export function verifyBytes(bytes, integrity) {
   requireValue(`sha512-${createHash('sha512').update(bytes).digest('base64')}` === integrity, 'tarball integrity mismatch');
@@ -77,7 +94,12 @@ export async function release(env = process.env) {
   const selected = validate(evidence, input);
   run('git', ['merge-base', '--is-ancestor', evidence.source, env.GITHUB_SHA]);
   // Public read only API. No additional GitHub token permissions are needed.
-  for (const sha of new Set([evidence.source, env.GITHUB_SHA])) {
+  if (evidence.sourceCI) {
+    const tree = run('git', ['rev-parse', `${evidence.source}^{tree}`]).trim();
+    const ci = await json(`https://api.github.com/repos/prnt-design/dagr/actions/runs/${evidence.sourceCI.run}`);
+    requireValue(tree === evidence.sourceCI.tree && hasEquivalentGreenCI(ci, evidence.sourceCI.head, tree), 'source CI must succeed on the identical reviewed Git tree');
+  }
+  for (const sha of new Set(evidence.sourceCI ? [env.GITHUB_SHA] : [evidence.source, env.GITHUB_SHA])) {
     const ci = await json(`https://api.github.com/repos/prnt-design/dagr/actions/workflows/ci.yml/runs?head_sha=${sha}&event=push&per_page=100`);
     requireValue(hasGreenCI(ci.workflow_runs, sha), 'source and workflow commits need concluded green main CI');
   }
@@ -89,8 +111,9 @@ export async function release(env = process.env) {
       const artifact = evidence.packages[name];
       const existing = await registry(name, input.version, true);
       if (input.mode === 'publish' && selected.includes(name)) requireValue(!existing, `immutable version already exists: ${name}`);
-      if (input.mode === 'promote') requireValue(existing?.dist?.integrity === artifact.integrity, `registry integrity differs: ${name}`);
-      const bytes = await download(input.mode === 'promote' ? existing.dist.tarball : artifact.url, artifact.integrity);
+      const useRegistry = input.mode === 'promote' || existing !== null;
+      if (useRegistry) requireValue(existing?.dist?.integrity === artifact.integrity, `registry integrity differs: ${name}`);
+      const bytes = await download(useRegistry ? existing.dist.tarball : artifact.url, artifact.integrity);
       const path = join(work, `${name.replace('@prnt/', 'prnt-')}-${input.version}.tgz`);
       writeFileSync(path, bytes);
       const manifest = JSON.parse(run('tar', ['-xOf', path, 'package/package.json']));
@@ -98,7 +121,9 @@ export async function release(env = process.env) {
       requireValue(!Object.values({ ...manifest.dependencies, ...manifest.optionalDependencies, ...manifest.peerDependencies }).some((range) => String(range).startsWith('workspace:')), `unresolved workspace range: ${name}`);
       paths.set(name, path);
     }
-    run('node', ['packaging/bin/verify-tools.mjs'], { stdio: 'inherit', env: { ...env, DAGR_TARBALL_DIR: work } });
+    if (input.mode === 'publish') {
+      run('node', ['packaging/bin/verify-tools.mjs'], { stdio: 'inherit', env: { ...env, DAGR_TARBALL_DIR: work } });
+    }
     for (const name of selected) {
       if (input.mode === 'publish') {
         run('npm', ['publish', paths.get(name), '--access', 'public', '--tag', input.tag, '--ignore-scripts', '--registry', REGISTRY], { stdio: 'inherit' });
