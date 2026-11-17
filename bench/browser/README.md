@@ -475,8 +475,9 @@ and records `attached` and the user agent in place of the executable, mode and
 flags, which the helper prints when it starts. `--headed` and `--headless`
 are refused while attached, because the helper chose the mode. Their page
 still comes from the static server in WSL, which the Windows side reaches as
-`127.0.0.1:8733`. When the helper runs from an SSH session, its Chrome lands
-in Windows session 0, where a WebGPU canvas presents nothing; [the NVIDIA
+`127.0.0.1:8733`. When the helper runs from an SSH session, its Chrome,
+headed or headless, lands in Windows session 0, where a WebGPU canvas
+presents nothing; [the NVIDIA
 rows below 10,000](#sizes-below-10000-on-the-nvidia-rtx-4090-2026-11-17) say
 how to start it in the signed-in session. `gpu-hover.mjs`,
 `mobile-core-check.mjs` and `mobile-budget.mjs` also attach through
@@ -5030,5 +5031,6 @@ no tick, which a 1,024 ns grain does not explain; not traced.
   leaves it idle rather than the work changing; not traced.
 
 Hit testing is not in these rows. Still not covered, all on the NVIDIA
-adapter: a zoom other than `fit`, unrounded GPU timestamps, rich nodes and
-the WebGL2 fallback.
+adapter: a zoom other than `fit`, unrounded GPU timestamps (the disturbed
+mode above reading at 32 ns is the only finer grain seen, not explained by
+any flag), rich nodes and the WebGL2 fallback.
