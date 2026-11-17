@@ -267,8 +267,10 @@ branches never enter public docs, source, npm artifacts, or job fixtures.
   count up from the sources and every remaining layer is part of a held one, so
   the engine drops the leaf from the held ranks and layers and positions and
   routes, with the full path's answer, at 111ms against 623ms for an added leaf
-  in the same re-measure. A leaf alone on its rank keeps all four stages. The
-  added leaf remains.
+  in the same re-measure. A leaf alone on its rank, or one whose removal leaves
+  the reversed edges above half of the edges, keeps all four stages. The path
+  takes no gap policy of its own (it is the full run's answer), so M3.10b's gap
+  question stays open. The added leaf remains.
 - [x] **M3.10a** The session corpus: six scripted mutation sessions with
   stability metrics committed as golden files, and the docs page publishing
   the numbers.

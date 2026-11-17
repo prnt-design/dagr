@@ -960,13 +960,13 @@ export function runPlaced(
  *
  * Ranks count up from the sources, so a node with no successor sets no other
  * node's rank, and with one predecessor it sits one rank below it: its edge is
- * short, minted no dummies, and lies on no cycle, so the warm feedback arc set
- * keeps every other reversal. Unless the reversals now come to more than half
- * of `graph`'s arcs: `feedbackArcSet` answers that from a cold solve, and the
- * leaf's arc is one fewer to count against. Every remaining layer is a subset
- * of a held one, so the order stage's warm start holds every pair in it, as it
- * does for a resize. Declined when the leaf was alone on its rank, since the
- * drawing would then be one layer shorter.
+ * short and minted no dummies, and with no edge out it lies on no cycle, so the
+ * warm feedback arc set keeps every other reversal. Unless the reversals now
+ * come to more than half of `graph`'s arcs: `feedbackArcSet` answers that from a
+ * cold solve, and the leaf's arc is one fewer to count against. Every remaining
+ * layer is a subset of a held one, so the order stage's warm start holds every
+ * pair in it, as it does for a resize. Declined when the leaf was alone on its
+ * rank, since the drawing would then be one layer shorter.
  */
 export function withoutLeaf(
   held: PreviousLayout,

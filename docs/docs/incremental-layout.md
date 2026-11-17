@@ -181,7 +181,8 @@ and every layer left is part of one the engine holds, whose order the order
 stage's warm start would keep. The engine takes the leaf out of the held ranks
 and layers and positions and routes over the rest, and the answer is again the
 one a full run gives. It runs all four stages instead when the leaf was the only
-node on its rank, since the drawing then loses a layer.
+node on its rank, since the drawing then loses a layer, or when the edges
+reversed to break cycles would come to more than half of the edges left.
 
 An added leaf still runs all four stages and costs about what a cold layout
 does: a cold run of the same graph, measured in the same session, takes 693ms,
@@ -203,8 +204,8 @@ fires there without a re-measure fails it.
 ## What is not here yet
 
 Every relayout in the session corpus is a full pipeline run, with one exception
-noted below; no session resizes a node, so the resize path above never fires
-there. The stability above comes from what the stages are handed rather than
+noted below; no session resizes a node or removes a single leaf on its own, so
+neither path above fires there. The stability above comes from what the stages are handed rather than
 from work they skip, so a structural patch still costs about a cold layout in
 time.
 

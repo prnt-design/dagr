@@ -263,7 +263,8 @@ export interface RelayoutResult {
    * because a patch that changes nothing the pipeline reads has nothing for a
    * stage to do and the drawing the caller is holding is already the answer.
    * An attribute edit that changes a size names `position` and `route`, which
-   * run over the held ranks and layers.
+   * run over the held ranks and layers, and so does a patch that removes a
+   * sink leaf.
    *
    * A LIST RATHER THAN A BOOLEAN, because a boolean was an accident of which
    * fast path landed first: the resize path runs two of the four, and an
@@ -480,9 +481,9 @@ export interface LayoutEngine {
    * node still gets a rank and a position. A batch emits the whole edit as one
    * patch, so the engine sees the one graph state you meant.
    *
-   * A STRUCTURAL EDIT IS NO FASTER THAN A COLD RUN, on purpose, and the tests
-   * hold it to landing the same geometry a cold run of the same graph does. The
-   * whole pipeline runs again. That is what makes the delta contract, the engine
+   * A STRUCTURAL EDIT IS NO FASTER THAN A COLD RUN, on purpose, apart from a
+   * removed sink leaf, and the tests hold it to landing the same geometry a cold
+   * run of the same graph does. The whole pipeline runs again. That is what makes the delta contract, the engine
    * lifetime and the retained state testable before any incremental algorithm
    * exists, and it gives M3.6 through M3.9 a correct baseline to be measured
    * against rather than nothing. The patch is read for three things today:

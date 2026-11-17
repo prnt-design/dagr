@@ -5,7 +5,9 @@
  * is available on day one: an attribute edit that does not change a node's size
  * changes no geometry at all, so the right answer is the drawing the caller
  * already holds, an empty delta, and no stage run. `engine.ts` is where the
- * decision is taken, and this is the pair of questions it takes it on.
+ * decision is taken, and this is the pair of questions it takes it on. It also
+ * recognises the one structural patch M3.9b answers without a rank or order
+ * run, {@link removedLeaf}.
  *
  * ## What the pipeline reads
  *

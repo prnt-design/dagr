@@ -2149,7 +2149,7 @@ position stages, an insertion-order order stage and `brandes-koepf-position`.
 `networkSimplexRank` does not qualify: a warm run takes the previous ranks as a
 floor rather than an answer and can land on different ranks, so with it a resize
 runs all four stages. On the 10k-node corpus a resize drops from about 700ms to
-about 120ms; see
+about 100ms; see
 [What a relayout costs](./incremental-layout.md#what-a-relayout-costs). It is
 also refused in the same two cases as the patch that runs no stage, and a
 `relayoutAsync` on an engine with a worker posts the run there. A run or
@@ -2170,8 +2170,9 @@ graph.removeNode('leaf'); // its one edge came from 'n7'
 engine.relayout(patch).ran; // ['position', 'route']
 ```
 
-Ranks count up from the sources, so no other node's rank depended on the leaf,
-and its edge was one rank long, so it had no dummy chain and lay on no cycle.
+Ranks count up from the sources, so no other node's rank depended on the leaf.
+Its edge was one rank long, so it had no dummy chain, and the leaf had no edge
+out, so the edge lay on no cycle.
 Every layer left is part of one the engine holds, and the order stage's warm
 start keeps every pair in it, so the answer is again the one a full run gives,
 checked the same way as the resize. A patch that also carries inert ops or
@@ -2179,8 +2180,9 @@ resizes takes it too; one that removes anything else does not. It runs all four
 stages when the leaf was the only node on its rank, since the drawing then loses
 a layer; when the edges reversed to break cycles come to more than half of the
 edges left, since the cycle breaker then starts again from nothing; and in the
-same cases a resize does. On the 10k-node corpus a
-removed leaf drops from about 700ms to about 110ms.
+same cases a resize does. On the 10k-node corpus a removed leaf drops from about
+700ms to about 110ms; see
+[What a relayout costs](./incremental-layout.md#what-a-relayout-costs).
 
 ### The tolerance, on the engine
 
