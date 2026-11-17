@@ -1,0 +1,235 @@
+{
+  "mode": "promote",
+  "version": "0.2.0",
+  "tag": "latest",
+  "scope": [
+    "@prnt/dagr-vdsl",
+    "@prnt/dagr"
+  ],
+  "source": "38f1ed8bc0a12a45e3b4ae4f551fc318e77fdc29",
+  "sourceCI": {
+    "run": 43998137443,
+    "head": "54ec2cc563b190ec46035696bcc16a137ec7a41a",
+    "tree": "027de55b09258e150e773673f8d684a981e59bec"
+  },
+  "request": {
+    "dispatchMessage": "41ec4a5d-7fdf-4c3d-8cab-e80a02815e49",
+    "text": "Okay go ahead then.",
+    "continuation": {
+      "dispatchMessage": "c95292c5-ca11-46f1-bcc5-0a23312dff6e",
+      "contextMessage": "2504be6f-58c4-49a5-8d16-2dcdadd0d1af",
+      "text": "Ready now"
+    },
+    "verification": "Original user messages and their context are reviewer-checked authorization provenance, not machine-verified approval."
+  },
+  "checks": {
+    "typecheck": "https://github.com/prnt-design/dagr/pull/257",
+    "test": "https://github.com/prnt-design/dagr/pull/257",
+    "lint": "https://github.com/prnt-design/dagr/pull/257",
+    "build": "https://github.com/prnt-design/dagr/pull/257",
+    "bench:gate": "https://github.com/prnt-design/dagr/pull/257",
+    "verify:tools": "https://github.com/prnt-design/dagr/pull/257",
+    "diff-review": "https://github.com/prnt-design/dagr/pull/257",
+    "tree-review": "https://github.com/prnt-design/dagr/pull/257",
+    "registry-consumers": {
+      "dispatchMessage": "2504be6f-58c4-49a5-8d16-2dcdadd0d1af",
+      "record": "registryValidation",
+      "verification": "Reviewer-checked preserved publication report, result records and exact-version/integrity consumer lockfiles."
+    }
+  },
+  "packages": {
+    "@prnt/dagr": {
+      "integrity": "sha512-H2egYq0usho81yDj+euenGxOl3v6IWOkKbRErZWEfFDksGzhLl3QJZIWU2KGw4XEdVX0+eTX66Xdl56WuQtoHA=="
+    },
+    "@prnt/dagr-chart": {
+      "integrity": "sha512-KG18wsvyoqG5owT8WEl/M67wK9vGqSCC7SUBHbVUKD5dMSir8ebV/4xp7D+7twA2FTUUtgjyLwGvGowlrpJLZw=="
+    },
+    "@prnt/dagr-explorer": {
+      "integrity": "sha512-dlW1tB2UaYRZW7lV78sBltltrHwk2kQWUCyzHDowceGbttx+0JJFkTnEWCJiIW/Q1KN0D6g36oSOsMXYuDnucA=="
+    },
+    "@prnt/dagr-graph": {
+      "integrity": "sha512-SzwK5Eya1/Dzu7TXFx0DZYZNzthH+AxK6NqMHTlh/VyY8PgaeEwdma4m0Fo847KhwU7QfdRQ7sXB7aFKeatlYw=="
+    },
+    "@prnt/dagr-layout": {
+      "integrity": "sha512-zEo9utF82NZ8JMcrBj+7hwwX+mVBhT1HWlDvve5oFT8kiLUsZSmIZf3dcjaSSLPG9+Uo0Ijnh3sz9X7iQTEGCA=="
+    },
+    "@prnt/dagr-react": {
+      "integrity": "sha512-S/917WAaOSBt6/fCcuCyRN4se/ZATXnjOMUrnekpvYrgQVMuqBGdAkhX1z2/ch+K+meJzLYzTYnzPsRLCS4XWw=="
+    },
+    "@prnt/dagr-render": {
+      "integrity": "sha512-HoIbj7qm2m1nspvlsAcgEcP89BSC0Omj+8lE+tFStzwtrcUQhRGDoox5T8Ph2sfAoC2RV/1FR2O7SY0H6OMUCw=="
+    },
+    "@prnt/dagr-vdsl": {
+      "integrity": "sha512-EmnuO7lSq8i36uiaNoPlefbT5RGmcvAapWO+s5o+pzszc8NTuGmKOuStvQabzm5roXluXNuFAN/VlhrNUMs4OQ=="
+    }
+  },
+  "registryValidation": {
+    "recordedAt": "2026-11-17T05:43:00Z",
+    "ownerAgent": "agt_4861a706cce5",
+    "resultsFile": "results-2026-11-17-05-35-02-183.json",
+    "reportFile": "publication-report-2026-11-17-05-43-38-658.md",
+    "reportSha256": "8f1f00d61a231c58f893d95f3930fc0ba59027b1779ed73f56410854b2b2fb72",
+    "results": [
+      {
+        "fixture": "scratch",
+        "command": [
+          "npm",
+          "install",
+          "--ignore-scripts",
+          "--no-audit",
+          "--no-fund",
+          "--registry=https://registry.npmjs.org"
+        ],
+        "exitCode": 0
+      },
+      {
+        "fixture": "scratch",
+        "command": [
+          "./node_modules/.bin/tsc",
+          "--noEmit"
+        ],
+        "exitCode": 0
+      },
+      {
+        "fixture": "scratch",
+        "command": [
+          "node",
+          "smoke.mjs"
+        ],
+        "exitCode": 0
+      },
+      {
+        "fixture": "chart-consumer",
+        "command": [
+          "npm",
+          "install",
+          "--ignore-scripts",
+          "--no-audit",
+          "--no-fund",
+          "--registry=https://registry.npmjs.org"
+        ],
+        "exitCode": 0
+      },
+      {
+        "fixture": "chart-consumer",
+        "command": [
+          "./node_modules/.bin/tsc",
+          "--noEmit"
+        ],
+        "exitCode": 0
+      },
+      {
+        "fixture": "chart-consumer",
+        "command": [
+          "node",
+          "smoke.mjs"
+        ],
+        "exitCode": 0
+      },
+      {
+        "fixture": "explorer-react-18",
+        "command": [
+          "npm",
+          "install",
+          "--ignore-scripts",
+          "--no-audit",
+          "--no-fund",
+          "--registry=https://registry.npmjs.org"
+        ],
+        "exitCode": 0
+      },
+      {
+        "fixture": "explorer-react-18",
+        "command": [
+          "./node_modules/.bin/tsc",
+          "--noEmit"
+        ],
+        "exitCode": 0
+      },
+      {
+        "fixture": "explorer-react-18",
+        "command": [
+          "node",
+          "client.mjs",
+          "18"
+        ],
+        "exitCode": 0
+      },
+      {
+        "fixture": "explorer-react-19",
+        "command": [
+          "npm",
+          "install",
+          "--ignore-scripts",
+          "--no-audit",
+          "--no-fund",
+          "--registry=https://registry.npmjs.org"
+        ],
+        "exitCode": 0
+      },
+      {
+        "fixture": "explorer-react-19",
+        "command": [
+          "./node_modules/.bin/tsc",
+          "--noEmit"
+        ],
+        "exitCode": 0
+      },
+      {
+        "fixture": "explorer-react-19",
+        "command": [
+          "node",
+          "client.mjs",
+          "19"
+        ],
+        "exitCode": 0
+      }
+    ],
+    "lockfiles": {
+      "scratch": {
+        "sha256": "c08ba6a6c857e29780305d65599b588152fc19e5ef273e971bcf590d154a2662",
+        "packages": [
+          "@prnt/dagr",
+          "@prnt/dagr-explorer",
+          "@prnt/dagr-graph",
+          "@prnt/dagr-layout",
+          "@prnt/dagr-react",
+          "@prnt/dagr-render",
+          "@prnt/dagr-vdsl"
+        ]
+      },
+      "chart-consumer": {
+        "sha256": "5a4d93b98cb685080d4381c8cad2ce1a5a327eeddce76708e6ac0e6338e91035",
+        "packages": [
+          "@prnt/dagr",
+          "@prnt/dagr-chart",
+          "@prnt/dagr-explorer",
+          "@prnt/dagr-graph",
+          "@prnt/dagr-layout",
+          "@prnt/dagr-react",
+          "@prnt/dagr-render",
+          "@prnt/dagr-vdsl"
+        ]
+      },
+      "explorer-react-18": {
+        "sha256": "41212bd22e4ac5ac6ace9ffbd3956749e7787c6eeab76928fda02db7b2eabe5d",
+        "packages": [
+          "@prnt/dagr-explorer",
+          "@prnt/dagr-graph",
+          "@prnt/dagr-layout",
+          "@prnt/dagr-render"
+        ]
+      },
+      "explorer-react-19": {
+        "sha256": "155fd2f0237ae6334ca9ab9b49d7738bfd9efa2c7aa4402e26a7a6300224f359",
+        "packages": [
+          "@prnt/dagr-explorer",
+          "@prnt/dagr-graph",
+          "@prnt/dagr-layout",
+          "@prnt/dagr-render"
+        ]
+      }
+    },
+    "assertion": "Preserved records report all eight registry tarballs byte-identical to approved inventory and all 12 registry-installed consumer checks passing. Evidence reviewers verify these records. The workflow independently checks all eight registry metadata and downloaded-byte pins again before tag writes; it does not rerun completed source or consumer checks."
+  }
+}

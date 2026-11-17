@@ -1,0 +1,62 @@
+name: npm release
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: Explicitly authorized action
+        type: choice
+        options: [publish, promote]
+        required: true
+      packages:
+        description: Comma-separated full package names, in the authorized scope
+        type: string
+        required: true
+      version:
+        description: Exact authorized version
+        type: string
+        required: true
+      tag:
+        description: Explicitly authorized npm dist-tag
+        type: string
+        required: true
+      evidence:
+        description: Reviewed JSON evidence path committed on main
+        type: string
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: npm-release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    if: github.repository == 'prnt-design/dagr' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      RELEASE_MODE: ${{ inputs.mode }}
+      RELEASE_PACKAGES: ${{ inputs.packages }}
+      RELEASE_VERSION: ${{ inputs.version }}
+      RELEASE_TAG: ${{ inputs.tag }}
+      RELEASE_EVIDENCE: ${{ inputs.evidence }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22.22.1
+          cache: pnpm
+      # npm 11.21 adds OIDC dist-tag authentication as well as direct publish.
+      - run: npm install --global npm@11.21.0 --ignore-scripts
+      - run: pnpm install --frozen-lockfile
+      - run: node packaging/bin/npm-release.mjs

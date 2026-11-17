@@ -40,7 +40,7 @@
 import { execFileSync } from 'node:child_process';
 import { copyFileSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { basename, join } from 'node:path';
+import { basename, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const REPO_ROOT = fileURLToPath(new URL('../..', import.meta.url));
@@ -67,27 +67,31 @@ function run(command, args, cwd, label) {
 }
 
 try {
-  console.log('Building and packing the published packages...');
-  execFileSync(
-    'pnpm',
-    [
-      ...PACKAGES.flatMap((p) => [
-        '--filter',
-        p === 'dagr' ? '@prnt/dagr' : `@prnt/dagr-${p}`,
-      ]),
-      'build',
-    ],
-    { cwd: REPO_ROOT, stdio: 'inherit' },
-  );
-  for (const name of PACKAGES) {
-    execFileSync('pnpm', ['pack', '--pack-destination', workDir], {
-      cwd: join(REPO_ROOT, 'packages', name),
-      stdio: 'pipe',
-    });
+  const preserved = process.env.DAGR_TARBALL_DIR;
+  const tarballDir = preserved ? resolve(preserved) : workDir;
+  if (!preserved) {
+    console.log('Building and packing the published packages...');
+    execFileSync(
+      'pnpm',
+      [
+        ...PACKAGES.flatMap((p) => [
+          '--filter',
+          p === 'dagr' ? '@prnt/dagr' : `@prnt/dagr-${p}`,
+        ]),
+        'build',
+      ],
+      { cwd: REPO_ROOT, stdio: 'inherit' },
+    );
+    for (const name of PACKAGES) {
+      execFileSync('pnpm', ['pack', '--pack-destination', workDir], {
+        cwd: join(REPO_ROOT, 'packages', name),
+        stdio: 'pipe',
+      });
+    }
   }
-  const tarballs = readdirSync(workDir)
+  const tarballs = readdirSync(tarballDir)
     .filter((f) => f.endsWith('.tgz'))
-    .map((f) => join(workDir, f))
+    .map((f) => join(tarballDir, f))
     .sort();
 
   console.log('\npublint:');

@@ -152,6 +152,10 @@ The command is `pnpm publish`. Agents may publish only when explicitly
 requested by the user, within the package, version, and tag scope and release
 checks required by `AGENTS.md` and the [release candidate](release-candidate.md).
 
+For manually authorized OIDC publication or promotion, see
+[trusted publishing](trusted-publishing.md). That workflow publishes preserved
+`pnpm pack` tarballs, with no rebuild or interactive npm login.
+
 
 ## Scoped chart candidate
 
