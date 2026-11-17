@@ -156,34 +156,43 @@ left.
 
 Wall-clock milliseconds for one `engine.relayout(patch)` on the 10k corpus
 (10,000 nodes, 40,000 edges) at the defaults, measured on an Apple M4 under Node
-25.6.1 at a one-minute load average of 3.17. A cycle adds a leaf under a node in
+25.6.1 at a one-minute load average of 2.37. A cycle adds a leaf under a node in
 the middle of the graph, grows that node with a `nodeSize` callback, shrinks it
 back and removes the leaf. Each figure is a median over eleven cycles after two
 warmups, so the resize column pools both size changes, 22 relayouts.
 
 | Phase | add a leaf | remove a leaf | resize a node |
 | --- | --- | --- | --- |
-| `longest-path-rank` | 64.9ms | 67.0ms | not run |
-| `barycenter-order` | 372ms | 387ms | not run |
-| `grid-position` | 22.2ms | 22.4ms | 20.7ms |
-| `polyline-route` | 28.6ms | 29.9ms | 28.6ms |
-| everything else | 189ms | 190ms | 66.6ms |
-| **whole relayout** | **678ms** | **704ms** | **116ms** |
+| `longest-path-rank` | 57.9ms | not run | not run |
+| `barycenter-order` | 358ms | not run | not run |
+| `grid-position` | 19.9ms | 17.7ms | 17.7ms |
+| `polyline-route` | 25.3ms | 24.8ms | 24.1ms |
+| everything else | 161ms | 67.8ms | 58.3ms |
+| **whole relayout** | **623ms** | **111ms** | **101ms** |
 
 **A resize runs only position and route.** Neither the rank stage nor the order
 stage reads a size, and run again over an unchanged graph both would land where
 they are, so the engine positions and routes over the ranks and layers it
-already holds, and the answer is the one a full run gives. An added
-or removed leaf still runs all four stages and costs about what a cold layout
-does: a cold run of the same graph, measured in the same session, takes 771ms,
-and the leaf relayouts take 41 to 42 frames at 60 Hz, against M3.9b's budget
-of one. The order stage is 55% of an added leaf, so a fast path for a leaf that
-still sweeps every rank cannot meet that budget. Neither can one that only skips
-stages: "everything else", the work outside them, is about 11 frames on its own
-for an added leaf, and about 4 even for a resize, which skips the rank and order
-contract checks. It includes measuring nodes, the influence region, merging the
-dummy sizes, the stage contract checks, assembling the result, the delta and
-retaining the warm start.
+already holds, and the answer is the one a full run gives.
+
+**So does a removed leaf**, meaning a node whose one edge came in from the rank
+above. Ranks count up from the sources, so no other node's rank depended on it,
+and every layer left is part of one the engine holds, whose order the order
+stage's warm start would keep. The engine takes the leaf out of the held ranks
+and layers and positions and routes over the rest, and the answer is again the
+one a full run gives. It runs all four stages instead when the leaf was the only
+node on its rank, since the drawing then loses a layer.
+
+An added leaf still runs all four stages and costs about what a cold layout
+does: a cold run of the same graph, measured in the same session, takes 693ms,
+and an added leaf takes 37 frames at 60 Hz, against M3.9b's budget of one; a
+removed leaf takes 7. The order stage is 57% of an added leaf, so a fast path
+for a leaf that still sweeps every rank cannot meet that budget. Neither can one
+that only skips stages: "everything else", the work outside them, is about 10
+frames on its own for an added leaf, and about 3 even for a resize, which skips
+the rank and order contract checks. It includes measuring nodes, the influence
+region, merging the dummy sizes, the stage contract checks, assembling the
+result, the delta and retaining the warm start.
 
 Like the pipeline page's [What a run costs](layout.md#what-a-run-costs), which
 was measured on a different machine, this is a measurement and not a baseline:
@@ -217,10 +226,11 @@ has a reason, and none of them is that the corpus cannot see:
   stage at all.
 
 What is still missing is most of the work the third bullet does not do. A
-resize now runs only position and route (see the table above), and no session
-in this corpus resizes a node. An added or removed leaf still runs every stage,
-and a fast path for those is what would make a small structural edit cheap in
-time rather than only stable in space.
+resize and a removed leaf now run only position and route (see the table
+above), and no session in this corpus resizes a node or removes a single leaf
+on its own. An added leaf still runs every stage, and a fast path for it is what
+would make a small structural edit cheap in time rather than only stable in
+space.
 
 The corpus does not yet carry a comparison between the current warm-start rule
 and a softer one that would let the transpose pass break a held pair on a

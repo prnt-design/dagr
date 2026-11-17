@@ -318,12 +318,11 @@ describe('what a relayout costs', () => {
     }
     expect(rows.join('\n')).toBe(expected);
 
-    const leafTotals = [kinds['add-leaf'].total, kinds['remove-leaf'].total];
     const flattened = section.replace(/\s+/gu, ' ');
     for (const phrase of [
       `measured in the same session, takes ${render(committed.cold)}`,
-      `the leaf relayouts take ${String(Math.round(Math.min(...leafTotals) / FRAME_MS))} to ` +
-        `${String(Math.round(Math.max(...leafTotals) / FRAME_MS))} frames`,
+      `an added leaf takes ${String(Math.round(kinds['add-leaf'].total / FRAME_MS))} frames at 60 Hz`,
+      `a removed leaf takes ${String(Math.round(kinds['remove-leaf'].total / FRAME_MS))}.`,
       `about ${String(Math.round(kinds['add-leaf'].outside / FRAME_MS))} frames on its own for an added leaf, ` +
         `and about ${String(Math.round(kinds.resize.outside / FRAME_MS))} even for a resize`,
       `order stage is ${percent(kinds['add-leaf'].stages['order'] ?? 0, kinds['add-leaf'].total)} ` +

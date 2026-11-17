@@ -1,4 +1,4 @@
-import type { EdgeId, Graph, NodeId } from '@prnt/dagr-graph';
+import type { EdgeId, Graph, NodeId, RemoveEdgeOp } from '@prnt/dagr-graph';
 import { measureNodes, resolveConfig } from './config.js';
 import { InternalLayoutError, StageContractError } from './errors.js';
 import { defaultStages } from './stages.js';
@@ -919,10 +919,11 @@ export function runPipeline(
 
 /**
  * Position and route over the ranks and layers of the run before, for a patch
- * that changed sizes and nothing else: `engine.ts` decides when that holds.
+ * that changed sizes and nothing else, or one that also removed a leaf
+ * {@link withoutLeaf} took out of them: `engine.ts` decides when that holds.
  *
  * Neither check before the position stage runs again. Both held of these
- * fields when that run produced them, over a roster this patch did not change.
+ * fields when that run produced them, and dropping a leaf keeps them true.
  */
 export function runPlaced(
   prepared: PreparedState,
@@ -951,6 +952,32 @@ export function runPlaced(
     },
     stages,
   );
+}
+
+/**
+ * The held drawing with a removed sink leaf taken out, when that is the drawing
+ * a full run would rank and order, or `undefined`.
+ *
+ * Ranks count up from the sources, so a node with no successor sets no other
+ * node's rank, and with one predecessor it sits one rank below it: its edge is
+ * short, minted no dummies, and lies on no cycle, so the warm feedback arc set
+ * keeps every other reversal. Every remaining layer is a subset of a held one,
+ * so the order stage's warm start holds every pair in it, as it does for a
+ * resize. Declined when the leaf was alone on its rank, since the ranks below
+ * it would then be the last ones and the drawing one layer shorter.
+ */
+export function withoutLeaf(held: PreviousLayout, edge: RemoveEdgeOp): PreviousLayout | undefined {
+  const leaf = edge.target;
+  const rank = held.ranks.get(leaf);
+  if (rank === undefined || held.ranks.get(edge.source) !== rank - 1) return undefined;
+  if (held.reversedEdges.has(edge.id) || held.virtualChains.has(edge.id)) return undefined;
+  const layer = held.layers[rank];
+  if (layer === undefined || layer.length < 2 || !layer.includes(leaf)) return undefined;
+  const ranks = new Map(held.ranks);
+  ranks.delete(leaf);
+  const layers = [...held.layers];
+  layers[rank] = layer.filter((id) => id !== leaf);
+  return { ...held, ranks, layers };
 }
 
 function placed(

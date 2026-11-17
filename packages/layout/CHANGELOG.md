@@ -9,6 +9,13 @@ types did not" is the category this file has a heading for, so that the v0.1
 release notes do not have to be reconstructed by diffing five milestones' worth
 of doc prose.
 
+## Unreleased
+
+- Removing a sink leaf, a node whose one edge comes in from the rank above,
+  runs only position and route over the held ranks and layers with the leaf
+  taken out, under the same conditions as a resize, and lands the full
+  pipeline's answer. A leaf alone on its rank keeps the full pipeline.
+
 ## 0.2.0
 
 - Size-changing attribute patches can reuse held ranks and layers and run only

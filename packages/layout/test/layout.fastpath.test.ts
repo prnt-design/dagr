@@ -262,19 +262,22 @@ function unmarked(stages: LayoutStageOverrides): LayoutStageOverrides {
   };
 }
 
-describe('the relayout that skips rank and order', () => {
-  // A warm simplex run can move ranks, with or without its pivot budget
-  // running out, so a resize has to run it.
-  const sets: readonly (readonly [string, LayoutStageOverrides, readonly string[]])[] = [
-    ['the defaults', {}, PLACED_STAGES],
-    ['a longest-path ranker with no warm share', { rank: longestPathRank({ maxWarmShare: 0 }) }, PLACED_STAGES],
-    ['the simplex ranker', { rank: networkSimplexRankStage }, ALL_STAGES],
-    ['a simplex ranker out of pivots', { rank: networkSimplexRank({ maxIterations: 1 }) }, ALL_STAGES],
-    ['insertion order', { order: insertionOrderStage }, PLACED_STAGES],
-    ['Brandes-Koepf positions', { position: brandesKoepfPositionStage }, PLACED_STAGES],
-  ];
+/**
+ * Each stage set the skipping paths are checked under, and what a resize or a
+ * removed leaf runs with it. A warm simplex run can move ranks, with or without
+ * its pivot budget running out, so both have to run it.
+ */
+const STAGE_SETS: readonly (readonly [string, LayoutStageOverrides, readonly string[]])[] = [
+  ['the defaults', {}, PLACED_STAGES],
+  ['a longest-path ranker with no warm share', { rank: longestPathRank({ maxWarmShare: 0 }) }, PLACED_STAGES],
+  ['the simplex ranker', { rank: networkSimplexRankStage }, ALL_STAGES],
+  ['a simplex ranker out of pivots', { rank: networkSimplexRank({ maxIterations: 1 }) }, ALL_STAGES],
+  ['insertion order', { order: insertionOrderStage }, PLACED_STAGES],
+  ['Brandes-Koepf positions', { position: brandesKoepfPositionStage }, PLACED_STAGES],
+];
 
-  for (const [name, stages, resized] of sets) {
+describe('the relayout that skips rank and order', () => {
+  for (const [name, stages, resized] of STAGE_SETS) {
     it(`gives the answer the full path gives, through resizes and an edit between them, with ${name}`, () => {
       const spec = smallCorpus();
       const skipping = watched(build(spec));
@@ -447,6 +450,169 @@ describe('the relayout that skips rank and order', () => {
     graph.updateNodeAttrs('a', { big: true });
 
     expect((await laid.relayoutAsync(last(patches))).ran).toEqual(PLACED_STAGES);
+  });
+});
+
+/**
+ * Two engines over two copies of one graph, one able to skip and one not, fed
+ * the same edits; every relayout is checked against the full path's answer.
+ */
+function lockstep(
+  spec: GraphSpec,
+  stages: LayoutStageOverrides,
+): (ran: readonly string[], edit: (graph: Graph) => void) => void {
+  const skipping = watched(build(spec));
+  const straight = watched(build(spec));
+  const one = engine({ config: { nodeSize }, stages });
+  const two = engine({ config: { nodeSize }, stages: unmarked(stages) });
+  one.run(skipping.graph);
+  two.run(straight.graph);
+  return (ran, edit) => {
+    edit(skipping.graph);
+    edit(straight.graph);
+    const skipped = one.relayout(last(skipping.patches));
+    const full = two.relayout(last(straight.patches));
+
+    expect(skipped.ran).toEqual(ran);
+    expect(full.ran).toEqual(ALL_STAGES);
+    expect(boxes(skipped.result)).toEqual(boxes(full.result));
+    expect(routes(skipped.result)).toEqual(routes(full.result));
+    expect(skipped.delta).toEqual(full.delta);
+  };
+}
+
+function addLeaf(parent: string, leaf: string): (graph: Graph) => void {
+  return (graph) =>
+    graph.batch(() => {
+      graph.addNode(leaf);
+      graph.addEdge(parent, leaf);
+    });
+}
+
+describe('the relayout that drops a removed leaf', () => {
+  for (const [name, stages, removed] of STAGE_SETS) {
+    it(`gives the answer the full path gives, through leaves added and removed, with ${name}`, () => {
+      const spec = smallCorpus();
+      const step = lockstep(spec, stages);
+      const middle = spec.nodes[Math.floor(spec.nodes.length / 2)] ?? '';
+      const first = spec.nodes[0] ?? '';
+
+      step(ALL_STAGES, addLeaf(middle, 'leaf'));
+      step(ALL_STAGES, addLeaf(first, 'other'));
+      step(removed, (graph) => graph.removeNode('leaf'));
+      step(removed, (graph) =>
+        graph.batch(() => {
+          graph.removeNode('other');
+          graph.updateNodeAttrs(middle, { big: true });
+        }),
+      );
+      step(ALL_STAGES, addLeaf(first, 'leaf'));
+      step(removed, (graph) => graph.removeNode('leaf'));
+    }, 60_000);
+  }
+
+  it('gives the answer the full path gives on a graph with cycles in it', () => {
+    const spec = smallCorpus();
+    const step = lockstep(
+      { ...spec, edges: [...spec.edges, [spec.nodes.at(-1) ?? '', spec.nodes[0] ?? '']] },
+      {},
+    );
+    const middle = spec.nodes[Math.floor(spec.nodes.length / 2)] ?? '';
+
+    step(ALL_STAGES, addLeaf(middle, 'leaf'));
+    step(PLACED_STAGES, (graph) => graph.removeNode('leaf'));
+  }, 60_000);
+
+  it('runs all four for a removed node with more than one edge', () => {
+    const { graph, patches } = watched(diamond());
+    const laid = engine();
+    laid.run(graph);
+
+    graph.removeNode('b');
+
+    expect(laid.relayout(last(patches)).ran).toEqual(ALL_STAGES);
+  });
+
+  it('runs all four for a removed node whose one edge leaves it', () => {
+    const { graph, patches } = watched(diamond());
+    const laid = engine();
+    laid.run(graph);
+    graph.batch(() => {
+      graph.addNode('e');
+      graph.addEdge('e', 'd', 'ed');
+    });
+    laid.relayout(last(patches));
+
+    graph.removeNode('e');
+
+    expect(laid.relayout(last(patches)).ran).toEqual(ALL_STAGES);
+  });
+
+  it('runs all four for a removed node with no edge', () => {
+    const { graph, patches } = watched(diamond());
+    const laid = engine();
+    laid.run(graph);
+    graph.addNode('e');
+    laid.relayout(last(patches));
+
+    graph.removeNode('e');
+
+    expect(laid.relayout(last(patches)).ran).toEqual(ALL_STAGES);
+  });
+
+  it('runs all four for a removed leaf alone on its rank, and gives the cold answer', () => {
+    const { graph, patches } = watched(diamond());
+    const laid = engine();
+    laid.run(graph);
+    graph.batch(() => {
+      graph.addNode('e');
+      graph.addEdge('d', 'e', 'de');
+    });
+    laid.relayout(last(patches));
+
+    graph.removeNode('e');
+    const relaid = laid.relayout(last(patches));
+    const cold = engine().run(graph);
+
+    expect(relaid.ran).toEqual(ALL_STAGES);
+    expect(boxes(relaid.result)).toEqual(boxes(cold));
+  });
+
+  it('runs all four when the patch also removes another edge', () => {
+    const { graph, patches } = watched(diamond());
+    const laid = engine();
+    laid.run(graph);
+    graph.batch(() => {
+      graph.addNode('e');
+      graph.addEdge('b', 'e', 'be');
+    });
+    laid.relayout(last(patches));
+
+    graph.batch(() => {
+      graph.removeNode('e');
+      graph.removeEdge('ab');
+    });
+
+    expect(laid.relayout(last(patches)).ran).toEqual(ALL_STAGES);
+  });
+
+  it('runs all four for a removed leaf when the drawing it holds came from a worker', async () => {
+    const channel = new MessageChannel();
+    const stop = serveLayout(channel.port2 as unknown as LayoutPort);
+    const { graph, patches } = watched(diamond());
+    graph.batch(() => {
+      graph.addNode('e');
+      graph.addEdge('b', 'e', 'be');
+    });
+    const laid = engine({ worker: channel.port1 as unknown as LayoutPort });
+
+    await laid.runAsync(graph);
+    graph.removeNode('e');
+
+    expect(laid.relayout(last(patches)).ran).toEqual(ALL_STAGES);
+    stop();
+    channel.port1.close();
+    channel.port2.close();
   });
 });
 

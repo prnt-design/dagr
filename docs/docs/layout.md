@@ -2012,11 +2012,13 @@ you meant, and reports the node once. The suite measures both paths side by side
 in `test/layout.relayout.test.ts`. See
 [Batching](./graph-model.md#batching) for what a batch is and what it is not.
 
-**It is no faster than a cold run, unless it runs no stage at all or only
-resizes.** For a patch that adds or removes a node or an edge the whole pipeline
-runs again, and the tests hold it to landing the same geometry a cold run of the
-same graph does. A resize runs only position and route: see
-[the resize that keeps its ranks and order](#the-resize-that-keeps-its-ranks-and-order).
+**It is no faster than a cold run, unless it runs no stage at all, only
+resizes, or removes a leaf.** For any other patch that adds or removes a node or
+an edge the whole pipeline runs again, and the tests hold it to landing the same
+geometry a cold run of the same graph does. A resize or a removed leaf runs only
+position and route: see
+[the resize that keeps its ranks and order](#the-resize-that-keeps-its-ranks-and-order)
+and [the removed leaf](#the-removed-leaf).
 Running the whole pipeline for a structural edit is the point of shipping it in
 this shape first: it makes the delta
 contract, the engine lifetime and the retained state testable before any
@@ -2156,6 +2158,27 @@ layers, so the next resize or inert patch runs all four stages rather than
 trusting state from a roster the graph has moved past. `region` is still
 computed and `influence` is still the whole roster, since the position stage is
 entitled to move any node.
+
+### The removed leaf
+
+Removing a node whose one edge comes in from the rank above takes the same path,
+over the held ranks and layers with the leaf taken out:
+
+```ts
+graph.removeNode('leaf'); // its one edge came from 'n7'
+
+engine.relayout(patch).ran; // ['position', 'route']
+```
+
+Ranks count up from the sources, so no other node's rank depended on the leaf,
+and its edge was one rank long, so it had no dummy chain and lay on no cycle.
+Every layer left is part of one the engine holds, and the order stage's warm
+start keeps every pair in it, so the answer is again the one a full run gives,
+checked the same way as the resize. A patch that also carries inert ops or
+resizes takes it too; one that removes anything else does not. It runs all four
+stages when the leaf was the only node on its rank, since the drawing then loses
+a layer, and in the same cases a resize does. On the 10k-node corpus a
+removed leaf drops from about 700ms to about 110ms.
 
 ### The tolerance, on the engine
 

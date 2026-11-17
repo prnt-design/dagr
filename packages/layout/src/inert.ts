@@ -35,7 +35,7 @@
  * this union in this repo is written out arm by arm.
  */
 
-import type { NodeId, Patch } from '@prnt/dagr-graph';
+import type { NodeId, Patch, PatchOp, RemoveEdgeOp } from '@prnt/dagr-graph';
 import type { Size } from './types.js';
 
 /**
@@ -51,36 +51,66 @@ import type { Size } from './types.js';
  * one emission and the drawing they produce together is a new one.
  */
 export function movesNothing(patch: Patch): boolean {
-  for (const op of patch) {
-    switch (op.op) {
-      // `update-node-attrs` is read by `nodeSize` and by nothing else, so it is
-      // settled by the sizes rather than by its kind: see {@link sameSizes}.
-      //
-      // The three port ops move where an edge ATTACHES rather than where a node
-      // sits, and `polylineRouteStage` reads no port at all: it attaches at the
-      // box border. `influence.ts` widens no band for them for the same reason.
-      //
-      // No stage here reads an edge attribute: ranks come from the edges
-      // themselves and routes come from the ranks. Graph attributes reach a
-      // layout through the config, which an engine binds at construction and a
-      // patch cannot reach. Containment is reserved (M5.5) and drawn by nothing
-      // until M7, which is the milestone that makes this arm wrong.
-      case 'update-node-attrs':
-      case 'add-port':
-      case 'remove-port':
-      case 'update-edge-ports':
-      case 'update-edge-attrs':
-      case 'update-graph-attrs':
-      case 'update-node-parent':
-        break;
+  return patch.every(isInert);
+}
 
-      // add-node, remove-node, add-edge, and anything this file has not been
-      // taught, which is the case the default arm exists for.
-      default:
-        return false;
+function isInert(op: PatchOp): boolean {
+  switch (op.op) {
+    // `update-node-attrs` is read by `nodeSize` and by nothing else, so it is
+    // settled by the sizes rather than by its kind: see {@link sameSizes}.
+    //
+    // The three port ops move where an edge ATTACHES rather than where a node
+    // sits, and `polylineRouteStage` reads no port at all: it attaches at the
+    // box border. `influence.ts` widens no band for them for the same reason.
+    //
+    // No stage here reads an edge attribute: ranks come from the edges
+    // themselves and routes come from the ranks. Graph attributes reach a
+    // layout through the config, which an engine binds at construction and a
+    // patch cannot reach. Containment is reserved (M5.5) and drawn by nothing
+    // until M7, which is the milestone that makes this arm wrong.
+    case 'update-node-attrs':
+    case 'add-port':
+    case 'remove-port':
+    case 'update-edge-ports':
+    case 'update-edge-attrs':
+    case 'update-graph-attrs':
+    case 'update-node-parent':
+      return true;
+
+    // add-node, remove-node, add-edge, and anything this file has not been
+    // taught, which is the case the default arm exists for.
+    default:
+      return false;
+  }
+}
+
+/**
+ * The one edge of a removed sink leaf, when that and inert ops are all this
+ * patch does, or `undefined`.
+ *
+ * `removeNode` emits a `remove-edge` op for every edge the node had, so one
+ * such op naming the removed node as its target, and no other, means the node
+ * had exactly that edge and it came in. Whether the held drawing lets the
+ * engine drop the leaf without a run is `withoutLeaf`'s question in
+ * `pipeline.ts`.
+ */
+export function removedLeaf(patch: Patch): RemoveEdgeOp | undefined {
+  let node: NodeId | undefined;
+  let edge: RemoveEdgeOp | undefined;
+  for (const op of patch) {
+    if (op.op === 'remove-node') {
+      if (node !== undefined) return undefined;
+      node = op.id;
+    } else if (op.op === 'remove-edge') {
+      if (edge !== undefined) return undefined;
+      edge = op;
+    } else if (!isInert(op)) {
+      return undefined;
     }
   }
-  return true;
+  if (node === undefined || edge === undefined) return undefined;
+  if (edge.target !== node || edge.source === node) return undefined;
+  return edge;
 }
 
 /**

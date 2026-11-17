@@ -11,8 +11,8 @@ import type { LayoutDelta } from './delta.js';
 import { DagrLayoutError, EngineStateError, WorkerTransportError } from './errors.js';
 import type { InfluenceSet } from './influence.js';
 import { influenceRegion, wholeRoster } from './influence.js';
-import { movesNothing, sameSizes } from './inert.js';
-import { prepare, runPipeline, runPlaced } from './pipeline.js';
+import { movesNothing, removedLeaf, sameSizes } from './inert.js';
+import { prepare, runPipeline, runPlaced, withoutLeaf } from './pipeline.js';
 import { defaultStages } from './stages.js';
 import type {
   LayoutConfig,
@@ -501,7 +501,8 @@ export interface LayoutEngine {
    * running less: a patch that changes nothing the pipeline reads is answered
    * from the drawing already in hand. M3.9b's resize path runs less: a patch
    * that only changes sizes runs position and route over the held ranks and
-   * layers. See {@link RelayoutResult.ran}.
+   * layers, and so does one that removes a sink leaf, with the leaf taken out
+   * of them. See {@link RelayoutResult.ran}.
    *
    * The delta is measured against the geometry this engine last REPORTED rather
    * than against its last computed run, which is what makes a nonzero
@@ -788,14 +789,26 @@ export function createLayout(options: LayoutEngineOptions = {}): LayoutEngine {
    * Plus the two conditions of {@link unchanged}: this package's stages, and a
    * held state that came from a run on this thread. A worker-backed
    * `relayoutAsync` never takes it: the run goes to the worker.
+   *
+   * A patch that removes one sink leaf, with or without inert ops beside it,
+   * takes the same path over the held state with the leaf taken out, when
+   * `withoutLeaf` in `pipeline.ts` says that is what a full run would rank and
+   * order, under the same conditions.
    */
   const runChanged = (
     graph: Graph,
     patch: Patch,
     prepared: PreparedState,
   ): { readonly next: LayoutResult; readonly ran: readonly LayoutStageName[] } => {
-    if (ownStages && rankKeepsItsSeed && warm !== undefined && movesNothing(patch)) {
-      return { next: retain(graph, prepared, runPlaced(prepared, warm, stages)), ran: PLACED_STAGES };
+    if (ownStages && rankKeepsItsSeed && warm !== undefined) {
+      let held: PreviousLayout | undefined = warm;
+      if (!movesNothing(patch)) {
+        const leaf = removedLeaf(patch);
+        held = leaf === undefined ? undefined : withoutLeaf(warm, leaf);
+      }
+      if (held !== undefined) {
+        return { next: retain(graph, prepared, runPlaced(prepared, held, stages)), ran: PLACED_STAGES };
+      }
     }
     return { next: runPrepared(graph, prepared), ran: EVERY_STAGE };
   };
