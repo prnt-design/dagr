@@ -475,9 +475,14 @@ and records `attached` and the user agent in place of the executable, mode and
 flags, which the helper prints when it starts. `--headed` and `--headless`
 are refused while attached, because the helper chose the mode. Their page
 still comes from the static server in WSL, which the Windows side reaches as
-`127.0.0.1:8733`. `gpu-hover.mjs`, `mobile-core-check.mjs` and
-`mobile-budget.mjs` also attach through `DAGR_CDP`, but serve their pages
-through Playwright routes, so they need no static server. The `machine` block
+`127.0.0.1:8733`. When the helper runs from an SSH session, its Chrome,
+headed or headless, lands in Windows session 0, where a WebGPU canvas
+presents nothing; [the NVIDIA
+rows below 10,000](#sizes-below-10000-on-the-nvidia-rtx-4090-2026-11-17) say
+how to start it in the signed-in session. `gpu-hover.mjs`,
+`mobile-core-check.mjs` and `mobile-budget.mjs` also attach through
+`DAGR_CDP`, but serve their pages through Playwright routes, so they need no
+static server. The `machine` block
 of a frame profile describes WSL, where Node runs: the CPU is the host's, the
 memory is the VM's share of it.
 
@@ -4869,3 +4874,163 @@ Hit testing is not in these rows. That leaves the matrix's Apple M4 cells
 done. Still not covered, all on the NVIDIA adapter: sizes below 10,000, a zoom
 other than `fit`, unrounded GPU timestamps, rich nodes and the WebGL2
 fallback.
+
+### Sizes below 10,000 on the NVIDIA RTX 4090 (2026-11-17)
+
+`tsk_ad4b7ce0d93b`, the matrix's smaller sizes on its first machine. The rows
+[at 10,000](#results-matrix-at-10000-nodes-m410-2026-10-30) at 1,000, 2,500
+and 5,000 nodes, the sizes measured [on the Apple
+M4](#sizes-below-10000-on-the-apple-m4-2026-11-13), on main `38f1ed8`,
+nothing changed.
+
+```
+export WSL_INTEROP=/run/WSL/1_interop          # only from an SSH session, see below
+node bench/browser/windows-chrome.mjs          # headed, left running
+DAGR_CDP=http://127.0.0.1:9445 node bench/browser/backend-probe.mjs --parity
+DAGR_CDP=http://127.0.0.1:9445 node bench/browser/frame-profile.mjs \
+  --motion=springs --sizes=1000,2500,5000 --edges=straight,smooth --moving=1,0.1 --frames=1200 --dpr=1   # then --dpr=2
+```
+
+The WSL2 machine (AMD Ryzen 9 9900X), driving Google Chrome 157.0.8103.78 on
+the Windows side, headed, no flags beyond the helper's. The adapter, probed
+at run time, was `nvidia` `lovelace`, not a fallback, and `renderer.backend`
+was `webgpu` on every row of every run. Viewport 1280 by 720 at DPR 1 and 2,
+`fit` (zoom 0.2215, 0.1407 and 0.1007 at the three sizes), 1,281, 3,238 and
+6,551 edges, 60 warm-up and 1,200 measured frames per mode. Three runs at
+each DPR, DPR 1 and 2 alternating, one at a time, load average 0.0 to 3.5 at
+the start of each (read with `uptime`), which was not controlled: other
+agents' processes started on the machine during run 2. Columns as at 10,000.
+
+**This run was driven over SSH, and a Chrome launched from there draws
+nothing on WebGPU.** The Windows OpenSSH server puts its sessions in Windows
+session 0, which has no desktop, and a Windows program that WSL's interop
+starts for that SSH session lands there too. The first probe from it, headed
+and then `--headless`, found the same `nvidia` `lovelace` adapter and
+`renderer.backend` `webgpu`, but no WebGPU pixel lit (0 against WebGL2's
+10,780) and the parity check failed on every one of its 151,840 interior
+pixels. A WebGPU render pass
+read back through a buffer held its clear colour, and the same pass copied
+out of a WebGPU canvas read as zeros, so the device worked and the canvas
+presented nothing. `frame-profile.mjs` would have timed those empty frames
+without complaint. Pointing `WSL_INTEROP` at the interop socket of a WSL
+process started from the signed-in session (here `/run/WSL/1_interop`, which
+the Windows sign-in task's WSL owns; `(Get-Process -Id $PID).SessionId` in a
+PowerShell started through a socket says which session it lands in) starts
+Chrome in that session instead. From there the probe lit 10,780 pixels on
+all three preferences and the parity check passed, before the runs below.
+
+| DPR | Nodes | Edges | Motion | Interval p95 | Past one tick | `apply` | `advance` | `setNodes` | `setEdges` | `render` | Holds the tick |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 1 | 1,000 | straight | still | 16.9 to 18.1 | 0% | | | | | 0.1 to 0.2 | yes |
+| 1 | 1,000 | straight | all moving | 16.9 to 18.1 | 0%, 0%, 0% | 0.9 to 1.0 | 0.2 | 0.1 to 0.2 | 0.2 to 0.3 | 0.2 | yes |
+| 1 | 1,000 | straight | a tenth | 16.9 to 18.1 | 0%, 0%, 0.4% | 0.1 to 0.2 | 0.0 to 0.1 | 0.1 to 0.2 | 0.2 | 0.2 | yes |
+| 1 | 1,000 | smooth | still | 16.9 to 18.5 | 0% to 4.6% | | | | | 0.1 to 0.2 | yes |
+| 1 | 1,000 | smooth | all moving | 16.9 to 18.1 | 0%, 0%, 0% | 1.4 to 1.6 | 0.2 to 0.3 | 0.1 to 0.2 | 1.0 to 1.1 | 0.2 | yes |
+| 1 | 1,000 | smooth | a tenth | 16.8 to 18.1 | 0%, 0%, 0% | 0.3 | 0.1 | 0.2 | 0.5 to 0.6 | 0.2 to 0.3 | yes |
+| 1 | 2,500 | straight | still | 16.8 to 18.1 | 0% | | | | | 0.1 to 0.2 | yes |
+| 1 | 2,500 | straight | all moving | 16.8 to 18.1 | 0%, 0%, 0% | 1.9 | 0.5 | 0.3 to 0.4 | 0.4 to 0.5 | 0.2 | yes |
+| 1 | 2,500 | straight | a tenth | 16.8 to 18.1 | 0%, 0%, 0% | 0.3 to 0.4 | 0.1 | 0.3 to 0.4 | 0.4 | 0.2 | yes |
+| 1 | 2,500 | smooth | still | 16.8 to 18.1 | 0% | | | | | 0.1 to 0.2 | yes |
+| 1 | 2,500 | smooth | all moving | 16.8 to 18.1 | 0%, 0.1%, 0% | 2.9 to 3.4 | 0.6 to 0.8 | 0.3 | 1.9 to 2.3 | 0.4 | yes |
+| 1 | 2,500 | smooth | a tenth | 16.8 to 18.1 | 0%, 0%, 0% | 0.5 to 0.6 | 0.1 to 0.2 | 0.3 to 0.4 | 0.9 | 0.3 to 0.4 | yes |
+| 1 | 5,000 | straight | still | 16.8 to 18.1 | 0% | | | | | 0.1 to 0.2 | yes |
+| 1 | 5,000 | straight | all moving | 16.8 to 18.1 | 0%, 0%, 0% | 3.3 to 3.9 | 0.9 to 1.0 | 0.6 | 0.8 | 0.3 | yes |
+| 1 | 5,000 | straight | a tenth | 16.8 to 18.1 | 0%, 0.3%, 0% | 0.6 | 0.2 | 0.6 to 0.7 | 0.5 to 0.6 | 0.3 | yes |
+| 1 | 5,000 | smooth | still | 16.8 to 18.1 | 0% | | | | | 0.1 to 0.2 | yes |
+| 1 | 5,000 | smooth | all moving | 16.8 to 18.1 | 0%, 0%, 0% | 7.9 to 8.7 | 1.2 to 1.7 | 0.6 | 3.6 to 4.2 | 0.6 | yes |
+| 1 | 5,000 | smooth | a tenth | 16.8 to 18.1 | 0%, 0%, 0% | 0.8 to 0.9 | 0.2 to 0.3 | 0.6 to 0.7 | 1.5 to 1.6 | 0.6 | yes |
+| 2 | 1,000 | straight | still | 16.8 to 18.1 | 0% | | | | | 0.2 | yes |
+| 2 | 1,000 | straight | all moving | 16.8 to 18.1 | 0%, 0%, 0% | 1.0 | 0.2 | 0.1 to 0.2 | 0.2 | 0.2 | yes |
+| 2 | 1,000 | straight | a tenth | 16.8 to 18.1 | 0%, 0%, 0% | 0.2 | 0.0 to 0.1 | 0.1 to 0.2 | 0.2 | 0.2 to 0.3 | yes |
+| 2 | 1,000 | smooth | still | 16.8 to 18.1 | 0% | | | | | 0.1 to 0.2 | yes |
+| 2 | 1,000 | smooth | all moving | 16.8 to 18.1 | 0%, 0%, 0% | 1.5 | 0.2 to 0.3 | 0.1 to 0.2 | 1.1 to 1.2 | 0.2 to 0.3 | yes |
+| 2 | 1,000 | smooth | a tenth | 16.8 to 18.1 | 0%, 0%, 0% | 0.3 | 0.1 | 0.1 to 0.2 | 0.5 to 0.6 | 0.2 to 0.3 | yes |
+| 2 | 2,500 | straight | still | 16.8 to 18.1 | 0% to 0.1% | | | | | 0.1 to 0.2 | yes |
+| 2 | 2,500 | straight | all moving | 16.9 to 18.1 | 2.5%, 0%, 0% | 1.8 to 1.9 | 0.4 to 0.5 | 0.3 | 0.4 to 0.5 | 0.2 to 0.3 | yes |
+| 2 | 2,500 | straight | a tenth | 16.9 to 18.1 | 0%, 0%, 0% | 0.4 | 0.1 | 0.4 | 0.4 | 0.2 to 0.3 | yes |
+| 2 | 2,500 | smooth | still | 16.8 to 18.1 | 0% | | | | | 0.2 | yes |
+| 2 | 2,500 | smooth | all moving | 16.9 to 18.1 | 0%, 0%, 0% | 3.0 to 3.4 | 0.6 to 0.8 | 0.3 | 2.0 to 2.4 | 0.3 to 0.4 | yes |
+| 2 | 2,500 | smooth | a tenth | 16.8 to 18.1 | 0%, 0%, 0% | 0.5 to 0.6 | 0.1 to 0.2 | 0.4 | 0.9 to 1.1 | 0.3 to 0.4 | yes |
+| 2 | 5,000 | straight | still | 16.9 to 18.1 | 0% to 0.1% | | | | | 0.2 to 0.3 | yes |
+| 2 | 5,000 | straight | all moving | 16.9 to 18.1 | 0%, 0.1%, 0% | 3.4 to 3.7 | 0.8 to 1.0 | 0.6 to 0.7 | 0.8 | 0.3 to 0.4 | yes |
+| 2 | 5,000 | straight | a tenth | 16.8 to 18.1 | 0%, 0%, 0% | 0.6 to 1.0 | 0.2 | 0.6 to 0.8 | 0.5 to 0.8 | 0.3 to 0.4 | yes |
+| 2 | 5,000 | smooth | still | 16.9 to 18.1 | 0% | | | | | 0.2 to 0.3 | yes |
+| 2 | 5,000 | smooth | all moving | 16.9 to 18.1 | 0.1%, 0%, 0% | 7.9 to 8.7 | 1.2 to 1.8 | 0.6 to 0.7 | 3.5 to 4.6 | 0.6 | yes |
+| 2 | 5,000 | smooth | a tenth | 16.9 to 18.1 | 0%, 0%, 0% | 0.9 | 0.3 | 0.6 to 0.7 | 1.5 to 1.6 | 0.6 | yes |
+
+`input` was 0.4 ms or less on every animated row. The interval p95 was 16.8
+to 18.5 ms on every row. The pacing moved between two rates within runs:
+some rows' interval median was 16.7 ms and others' 17.3 to 18.0, still rows
+included, and the control, measured last, read 16.7 ms in three runs and 17.5
+to 17.7 in the other three, in which ticks are counted at that rate. Either
+way an interval of one rate's tick is one tick. Run 1 at DPR 1 of the
+10,000-node matrix also paced at the slower rate; the cause was not traced
+in either.
+Where an animated row missed ticks it was one to five intervals in 1,200,
+the longest 510 ms, except run 1 of straight edges with every node moving at
+2,500 nodes and DPR 2: 30 intervals (2.5%), none longer than 50.1 ms, and 0% in
+the other two runs. A still row went further: smooth edges at 1,000 nodes,
+DPR 1, missed 4.6% in run 3, the longest 545 ms. A still mode draws the same
+frame every time, so both are counted as disturbance from outside the scene,
+not as the scene missing the tick.
+
+**GPU time per frame**, from `--gpu` with the helper started with
+`DAGR_CHROMIUM_ARGS=--enable-webgpu-developer-features`, one run at each DPR
+straight after the six above. As at 10,000, the runner exits non-zero on
+both, because the timestamps were still rounded to 1,024 ns with that flag
+on. Medians / 95th percentiles of the frame's passes summed, in
+milliseconds:
+
+| DPR | Nodes | Edges | Still | All moving | A tenth moving |
+| --- | --- | --- | --- | --- | --- |
+| 1 | 1,000 | straight | 0.05 / 0.06 to 0.07 | 0.06 / 0.06 | 0.05 / 0.06 |
+| 1 | 1,000 | smooth | 0.07 / 0.08 | 0.06 / 0.06 | 0.02 / 0.07 |
+| 1 | 2,500 | straight | 0.02 / 0.03 to 0.05 | 0.02 / 0.03 | 0.02 / 0.02 |
+| 1 | 2,500 | smooth | 0.03 / 0.03 | 0.02 / 0.03 | 0.03 / 0.03 |
+| 1 | 5,000 | straight | 0.02 to 0.03 / 0.03 | 0.02 / 0.03 | 0.02 / 0.03 |
+| 1 | 5,000 | smooth (re-run) | 1.34 to 1.37 / 1.44 to 1.48 | 0.21 / 0.23 | 0.25 / 0.27 |
+| 2 | 1,000 | straight | 0.71 to 0.74 / 0.73 to 0.77 | 0.73 / 0.74 | 0.73 / 0.75 |
+| 2 | 1,000 | smooth | 0.75 to 1.61 / 0.79 to 1.64 | 0.75 / 0.77 | 0.26 / 0.73 |
+| 2 | 2,500 | straight | 0.30 to 0.88 / 1.56 to 3.20 | 0.31 / 0.92 | 0.87 / 1.70 |
+| 2 | 2,500 | smooth | 0.34 to 0.35 / 1.00 to 1.89 | 0.91 / 0.94 | 0.32 / 0.93 |
+| 2 | 5,000 | straight | 0.11 to 1.05 / 1.48 to 2.02 | 0.37 / 1.07 | 0.87 / 1.06 |
+| 2 | 5,000 | smooth | 1.15 to 1.16 / 1.19 to 1.20 | 0.39 / 1.11 | 1.12 / 1.13 |
+
+In the DPR 1 run, smooth edges at 5,000 nodes went wrong in both of the
+modes measured first: the still mode missed 15.5% of ticks with a GPU frame
+p95 of 26.6 ms, and the all-moving mode 46.4%, its GPU frame 3.6 ms at the
+median and 55.7 at p95, with the timestamps there at a 32 ns grain rather
+than 1,024. The GPU frame itself ran long, which fits another process using
+the GPU at the time, but nothing was traced. A re-run of the 5,000-node
+rows alone at DPR 1, about ten minutes later in a fresh launch, missed 0% of
+ticks on every row, and the table gives its smooth row. Every other row of both
+`--gpu` runs missed at most 1.4% of ticks. The longest single GPU frame on
+those rows was 31.1 ms at DPR 1 and 30.2 ms at DPR 2, on modes that missed
+no tick, which a 1,024 ns grain does not explain; not traced.
+
+- **Every row holds the tick at all three sizes**, smooth edges with every
+  node moving included, at both ratios. Away from the outside disturbances
+  above, animated rows missed 0% to 0.4% of ticks. At 10,000 on
+  this machine smooth edges with every node moving misses 3.9% to 9.3%; at
+  5,000 it does not.
+- **The heaviest row is smooth edges, all moving, at 5,000 nodes**, and it is
+  heavier here than on the Apple M4. Between retargets `setEdges` is 3.5 to
+  4.6 ms and `advance` 1.2 to 1.8, against 2.8 to 3.3 and 0.7 to 1.0 on the
+  Apple M4, and a retarget's `apply` is 7.9 to 8.7 ms against 4.9 to 5.9. At
+  10,000 here these are 7.5 to 9.0, 3.8 to 4.8 and 17.6 to 22.5. Summed per
+  run, the step medians come to 14.1 to 16.6 ms on a retarget frame at 5,000,
+  at the edge of one tick, and those rows missed at most one interval in
+  1,200.
+  The CPU steps run in the Windows side's Chrome on the Ryzen, so this is a
+  comparison of machines, not of GPUs.
+- **The GPU frame is not what limits these sizes.** At DPR 1 it is 0.08 ms
+  or less at the median on every row of the table except smooth edges at
+  5,000, and 1.4 ms or less there; the re-run's straight rows at 5,000 read
+  0.11 to 1.16 ms. As at 10,000, still modes often read higher than moving
+  ones on the same scene, which fits the GPU clocking down when the frame
+  leaves it idle rather than the work changing; not traced.
+
+Hit testing is not in these rows. Still not covered, all on the NVIDIA
+adapter: a zoom other than `fit`, unrounded GPU timestamps (the disturbed
+mode above reading at 32 ns is the only finer grain seen, not explained by
+any flag), rich nodes and the WebGL2 fallback.
