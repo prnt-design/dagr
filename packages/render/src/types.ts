@@ -150,8 +150,9 @@ export interface Renderer {
    *
    * Groups are declared at construction, through
    * {@link RendererOptions.edgeGroups}, and drawn in the order they were
-   * declared: that order is the only layering this package offers, because
-   * M4.3 established that blend order WITHIN a mesh is slot order and a slot is
+   * declared within each layer. Groups default below nodes and can opt above
+   * them with `layer: 'above-nodes'`. Within a group,
+   * blend order is slot order and a slot is
    * not durable across a removal. Dashed routed edges under solid overlay lines
    * is two groups.
    *

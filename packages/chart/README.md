@@ -51,6 +51,21 @@ The chart fills the element it is given and has no height of its own.
   or against the SVG mark geometry. During a glide, its value and anchor use
   the target layout rather than following the interpolated frame.
 
+## Combining bars and lines
+
+Keep a line distinguishable where it crosses a bar, as well as against the
+background. A different hue alone may have too little lightness contrast.
+Use quieter bars with a stronger line, and give the legend bar and line symbols.
+Chart lines draw above bars in both rendering modes.
+If colours change with a theme, check the overlap in both light and dark modes.
+The `color` on each series, or its `cssColors` binding, controls both backends;
+SVG fill/stroke classes are an additional option.
+
+The demo's `both` view intentionally draws each dataset twice to compare mark
+styles. It uses subdued bars and brighter lines with separate legend entries.
+For different measures, name each series and say which axis it uses, as in the
+running-total example. Overlapping bar and line series need not share a colour.
+
 ## Motion
 
 Marks are matched across renders by series `id` and category index. A mark in
@@ -160,12 +175,17 @@ silently switching rendering modes.
   rendering="svg"
   label="Monthly orders"
   categories={['Jan', 'Feb', 'Mar']}
-  series={[{ id: 'orders', label: 'Orders', values: [17, 32, 38], color: 0x6366f1 }]}
+  series={[
+    { id: 'orders', label: 'Orders', values: [17, 32, 38], color: 0xa3b3ff },
+    { id: 'target', label: 'Target', mark: 'line', values: [25, 25, 25], color: 0x0f172a },
+  ]}
+  className="[--chart-bg:var(--color-white)] dark:[--chart-bg:var(--color-slate-950)]"
+  cssColors={{ background: '--chart-bg' }}
   style={{ height: 360 }}
   classNames={{
-    bar: 'fill-indigo-500 dark:fill-indigo-400 data-[hovered=true]:fill-indigo-300',
-    point: 'fill-violet-500',
-    line: 'stroke-violet-500',
+    bar: 'fill-indigo-300 dark:fill-indigo-500',
+    point: 'fill-slate-900 dark:fill-amber-300',
+    line: 'stroke-slate-900 dark:stroke-amber-300',
   }}
 />
 ```

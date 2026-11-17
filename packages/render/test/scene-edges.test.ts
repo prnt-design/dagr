@@ -19,9 +19,9 @@ import type { Vec2 } from '../src/types.js';
  * The two properties this file exists for, both of which are about the shape of
  * the seam rather than about the picture:
  *
- * - **A group is a mesh**, in declaration order, because that order is the only
- *   layering this package offers (M4.3: slot order within one mesh is not
- *   durable).
+ * - **A group is a mesh**, in declaration order within its layer (M4.3:
+ *   slot order within one mesh is not durable). Groups default below nodes
+ *   and overlays can opt above them.
  * - **Style is not geometry.** `setStyle` writes uniforms and touches no
  *   buffer, which is what lets a draw loop clamp the width against the zoom
  *   every frame without re-tessellating anything.
@@ -103,6 +103,26 @@ describe('SceneEdges', () => {
     expect(scene.meshes).toHaveLength(2);
     expect(scene.meshes[0]).not.toBe(scene.meshes[1]);
     scene.dispose();
+  });
+
+  it('keeps graph edges below nodes and lets an overlay stay above them after geometry updates', () => {
+    const scene = new SceneEdges([
+      { id: 'graph', style: { halfWidthPixels: 1 } },
+      { id: 'under', layer: 'below-nodes', style: { halfWidthPixels: 1 } },
+      { id: 'chart', layer: 'above-nodes', style: { halfWidthPixels: 1 } },
+    ]);
+    expect(scene.meshes.map((mesh) => mesh.renderOrder)).toEqual([0, 0, 1]);
+    scene.setEdges('chart', [edge('line', straight)]);
+    expect(scene.meshes[2]?.renderOrder).toBe(1);
+    expect(scene.meshes.every((mesh) => mesh.material.transparent && !mesh.material.depthWrite)).toBe(true);
+    scene.dispose();
+  });
+
+  it('rejects an invalid layer before allocating its mesh', () => {
+    expect(() => new SceneEdges([
+      // @ts-expect-error JavaScript callers can pass an invalid layer.
+      { id: 'bad', layer: 'middle', style: { halfWidthPixels: 1 } },
+    ])).toThrow(/layer has to be below-nodes or above-nodes/);
   });
 
   it('draws nothing until it is given edges', () => {

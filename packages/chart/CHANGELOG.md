@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Draw GPU chart lines above bars, matching SVG, so overlaps do not hide the line.
+
 - Use linear interpolation consistently in SVG and GPU charts to avoid invented
   extrema. Measure category labels and tooltip content for collision avoidance
   and containment. Shrink dense bar gaps and widths within category bands.
