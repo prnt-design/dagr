@@ -148,9 +148,9 @@ See [consumer onboarding and release handoff](./consumer-readiness.md).
 
 ## The publish itself
 
-Queued for the maintainer, per `AGENTS.md`. The command is `pnpm publish`.
-`AGENTS.md` currently names `npm publish`, which is the one that does not work,
-and correcting it is the maintainer's edit rather than an agent's.
+The command is `pnpm publish`. Agents may publish only when explicitly
+requested by the user, within the package, version, and tag scope and release
+checks required by `AGENTS.md` and the [release candidate](release-candidate.md).
 
 
 ## Scoped chart candidate
