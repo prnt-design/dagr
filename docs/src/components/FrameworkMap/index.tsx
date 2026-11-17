@@ -148,7 +148,8 @@ export default function FrameworkMap() {
         <p>
           Published baseline is 0.1.4 for the seven public packages. This map
           describes current repository source, including later work; it does not
-          announce a 0.2.0 publication. Chart remains private. Follow the
+          announce a 0.2.0 publication. Chart public metadata is approved;
+          publication remains pending. Follow the
           package sources for current details. Graph models parent
           relationships, but layout ignores parent today. Drill-down (M6.4),
           collapse/expand and compound layout (M7) remain planned.
