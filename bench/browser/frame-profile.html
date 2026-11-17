@@ -530,6 +530,28 @@
         return canvas;
       };
 
+      // Pixels brighter than the renderer's default clear colour, 0x0b0d10, by
+      // the margin backend-probe.html uses. A WebGPU canvas in a Chrome without
+      // a desktop (Windows session 0) presents nothing while the renderer still
+      // reports `webgpu`, and this count is what tells the runner so. Read in
+      // strips so the readback does not leave a whole frame's bytes in the heap
+      // the run reports.
+      const litPixels = (canvas) => {
+        const scratch = document.createElement('canvas');
+        scratch.width = canvas.width;
+        scratch.height = canvas.height;
+        const ctx = scratch.getContext('2d');
+        ctx.drawImage(canvas, 0, 0);
+        let lit = 0;
+        for (let y = 0; y < scratch.height; y += 64) {
+          const data = ctx.getImageData(0, y, scratch.width, Math.min(64, scratch.height - y)).data;
+          for (let i = 0; i < data.length; i += 4) {
+            if (data[i] + data[i + 1] + data[i + 2] > 0x0b + 0x0d + 0x10 + 24) lit += 1;
+          }
+        }
+        return lit;
+      };
+
       /**
        * Runs `frames` animation frames after `warmup`, calling `work(ts)`
        * inside each one, and returns the interval between frames and the
@@ -585,8 +607,9 @@
         const richData = nodeMode === 'rich' ? richDataFor(count, links) : null;
         const heapBefore = heap();
         const buildStart = performance.now();
+        const canvas = freshCanvas();
         const renderer = await createRenderer({
-          canvas: freshCanvas(),
+          canvas,
           backend,
           nodes: drawNodes ? nodesAt(home) : [],
           edgeGroups: [{ id: 'edges', ...group }],
@@ -608,6 +631,7 @@
         renderer.render();
         const buildMs = performance.now() - buildStart;
         const heapBuilt = heap();
+        const lit = litPixels(canvas);
 
         // DagrCanvas caches the index by the identity of the drawn array, so a
         // still scene builds it once and every pointer move is a query.
@@ -775,6 +799,7 @@
           edgeHit: edgeHit ? { indexMs: edgeIndexMs, hits: edgeHits } : null,
           pick: pick ? picks : null,
           backend: drewOn,
+          lit,
           zoom: drawnZoom,
           buildMs,
           heap: { before: heapBefore, built: heapBuilt, afterAnimated: heapAfter },
