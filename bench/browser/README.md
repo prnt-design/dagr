@@ -570,12 +570,14 @@ pixels by up to 12.
 circle with two right-angle joins, and a diagonal into the rectangle. The
 earlier results above are for the two shapes alone. A ribbon's coverage
 (`ribbonCoverage` in `ribbon.ts`) ramps over one device pixel centred on its
-visible boundary, from interpolated geometry rather than derivatives, so its
-band is the same one pixel either side. Everything within `halfWidthPixels +
-2` of a route point is in the band too: a butt cap is a hard edge resolved by
-multisampling, and a join's fan is a chord that falls up to 0.88 px short of
-the circle at a right angle, so the distance to the centreline is not what is
-drawn there. Two more conditions guard the derivation:
+visible boundary, half a pixel either side, from interpolated geometry rather
+than derivatives. The band reuses the shapes' one pixel either side as a
+margin, so a ribbon moved by up to a pixel along an axis can still pass.
+Everything within `halfWidthPixels + 2` of a route point is in the band too,
+because the distance to the centreline is not what is drawn there: a butt cap
+is a hard edge resolved by multisampling, and a right-angle join is mitred, a
+square corner whose ramp ends within 2.5 times the square root of 2 pixels of
+the point. Two more conditions guard the derivation:
 
 - Every pixel inside a ribbon, clear of its band, its caps, its joins and any
   glow, must hold the edge colour on WebGPU within 1 per channel. Otherwise the
@@ -585,17 +587,20 @@ drawn there. Two more conditions guard the derivation:
 - A second control moves every ribbon 2 device pixels in x and y on the WebGL2
   side. A ribbon has no glow, so a shift inside the band would pass; at 2 px,
   pixels outside the band change, and the run fails if this control passes.
+  Like the shape control, it counts as failing on its shift when any interior
+  pixel differs, so it does not by itself tell a shifted ribbon from a missing
+  one; the main check, which must pass, does.
 
 **What it found on 2026-11-17**, on the same Apple M4 Mac mini in Google
-Chrome 157.0.8103.79, headed twice and headless once, no flags. The adapter
+Chrome 157.0.8103.79, headed three times and headless once, no flags. The adapter
 was `apple` `metal-3`, not a fallback. The two frames are byte-identical
 again, ribbons included. Of 153,600 pixels, 3,517 are in the band and 150,083
 are not, and none of either differ. All 717 ribbon pixels clear of the band
 hold the edge colour. The shape control fails as before (308 band pixels by up
 to 137, 1,036 interior by up to 13). The edge control fails with 1,071 band
-pixels differing by up to 158 and 1,148 interior pixels by up to 158. `--pick`
-in the same headed runs still passed on both backends at DPR 1 and 2, 9,532
-picks each.
+pixels differing by up to 158 and 1,148 interior pixels by up to 158. `--pick`,
+added to two of the headed runs, still passed on both backends at DPR 1 and 2,
+9,532 picks each.
 
 **Not a gate.** `bench/README.md`'s argument against a browser measurement in
 `bench:ci` is about timings, and a parity check is not a timing, so that

@@ -619,8 +619,9 @@ checks:
 - That the two backends agree beyond what M4.9b compared: one machine (an
   Apple M4 in Chrome 155), the two-shape probe scene, zoom 1, device pixel
   ratio 1, with two solid straight edge ribbons added to that scene on
-  2026-11-17 (Chrome 157). Other GPUs, zooms, and dashed or smooth ribbons are
-  unchecked. See
+  2026-11-17 (Chrome 157). Other GPUs, zooms, dashed and smooth ribbons, the
+  above-nodes layer, group outlines, rich-node tiers and DPR 2 are unchecked.
+  See
   [What is verified, and on which backend](#what-is-verified-and-on-which-backend).
 - That a browser composes the overlay's two transforms the way the algebra says.
   The layer's `translate() scale()` and an entry's own transform are asserted as
@@ -925,7 +926,10 @@ and every other pixel by at most 1 in 255 per channel. A control run shifts one
 shape a third of a pixel on one side and must fail; it does, by up to 13 in 255
 on 1,036 pixels of glow away from any edge. The check is
 `node bench/browser/backend-probe.mjs --parity`; `bench/browser/README.md` has
-how to run it and why it is not a CI gate.
+how to run it and why it is not a CI gate. Since 2026-11-17 the scene also
+has two solid straight edge ribbons, and on the same machine in Chrome 157
+the frames stay byte-identical with them, against a second control that
+shifts the ribbons 2 pixels and must fail.
 
 ## Usage
 
@@ -2038,6 +2042,7 @@ complete, and `<DagrCanvas animate>` drives them from a graph a user is editing
   pick cost is not measured. `DagrCanvas` picks through
   `pickNode` only behind its opt-in `hitTesting="gpu"`. See [Picking](#picking).
 - Backend parity beyond the probe scene and the one machine M4.9b compared on:
-  other GPUs, zooms, and dashed or smooth edge ribbons.
+  other GPUs, zooms, dashed and smooth edge ribbons, the above-nodes layer,
+  group outlines, rich-node tiers and DPR 2.
 - Ten thousand nodes at sixty frames a second, measured rather than hoped for
   (M4.10).

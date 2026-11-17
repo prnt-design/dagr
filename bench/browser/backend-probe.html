@@ -241,14 +241,16 @@
        * joins from the rectangle to the circle, and a diagonal into the
        * rectangle, so the ribbon pipeline is compared too.
        *
-       * `ribbonCoverage` in `ribbon.ts` ramps over one device pixel centred on
-       * the visible boundary, `halfWidthPixels` from the centreline, from
-       * interpolated geometry rather than derivatives, so the band is the same
-       * one pixel either side of it. Two places are put in the band whole,
-       * since there the distance to the centreline is not what the ribbon
-       * draws: a butt cap is a hard edge resolved by multisampling, and a
-       * join's fan is a chord short of the circle (up to 0.88 px at a right
-       * angle here). Both are within `halfWidthPixels + 2` of a route point.
+       * `ribbonCoverage` in `ribbon.ts` ramps over half a device pixel either
+       * side of the visible boundary, `halfWidthPixels` from the centreline,
+       * from interpolated geometry rather than derivatives. The band reuses the
+       * shapes' one pixel either side as a margin, so a ribbon moved by up to
+       * a pixel along an axis can pass; the edge control below is wider. Two
+       * places are put in the band whole, since there the distance to the
+       * centreline is not what the ribbon draws: a butt cap is a hard edge
+       * resolved by multisampling, and a right-angle join is mitred, a square
+       * corner the distance rounds off, whose ramp ends within 2.5 * sqrt(2)
+       * px of the route point. Both are within `halfWidthPixels + 2` of it.
        */
       const EDGE_STYLE = { halfWidthPixels: 2 };
       const EDGE_COLOR = 0x8d99ae;
@@ -337,9 +339,8 @@
         }
         const band = { pixels: 0, differing: 0, maxDelta: 0 };
         const interior = { pixels: 0, differing: 0, maxDelta: 0 };
-        // Ribbon pixels clear of every boundary, cap, join and glow, and how
-        // many of them hold the edge colour on WebGPU. All of them must, or the
-        // band above was derived for a ribbon somewhere else.
+        // All of these must hold the edge colour, or the band above was
+        // derived for a ribbon somewhere else.
         const ribbon = { pixels: 0, edgeColored: 0 };
         const hw = EDGE_STYLE.halfWidthPixels;
         for (let row = 0; row < gpu.height; row += 1) {

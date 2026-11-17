@@ -117,8 +117,8 @@ function parityFailure(check) {
  * sizes also reports `pass: false`, but says nothing about whether the check
  * can see a shifted shape.
  */
-function controlFailure(control) {
-  if (control.pass) return 'passed, so the check cannot see a misplaced shape';
+function controlFailure(control, moved) {
+  if (control.pass) return `passed, so the check cannot see a misplaced ${moved}`;
   const failedOnShift =
     control.error === undefined &&
     control.backends.webgpu === 'webgpu' &&
@@ -198,14 +198,14 @@ if (cliArgs.includes('--parity')) {
     console.error(`the parity check failed: ${parityFailure(parity.check)}`);
     process.exitCode = 1;
   }
-  const control = controlFailure(parity.control);
+  const control = controlFailure(parity.control, 'shape');
   if (control !== undefined) {
     console.error(
       `the parity control, with one shape shifted by ${Number(CONTROL_SHIFT_PX.toPrecision(3))} px, ${control}`,
     );
     process.exitCode = 1;
   }
-  const edgeControl = controlFailure(parity.edgeControl);
+  const edgeControl = controlFailure(parity.edgeControl, 'ribbon');
   if (edgeControl !== undefined) {
     console.error(`the edge control, with the ribbons shifted by ${EDGE_CONTROL_SHIFT_PX} px, ${edgeControl}`);
     process.exitCode = 1;
