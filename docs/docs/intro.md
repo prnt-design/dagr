@@ -98,8 +98,10 @@ The full layout pipeline, incremental deltas, instanced rendering, spring
 animation, HTML overlays, React integration, click selection and hover, port
 validation, and the explorer are implemented. The work now proves the WebGPU
 renderer. The same scene drawn through WebGPU and WebGL2 was byte-identical in
-a hand-run check (Apple M4, Chrome 155, two-shape probe scene, zoom 1, DPR 1);
-edge ribbons, other zooms and DPRs, and other GPUs are not yet covered. A
+a hand-run check (Apple M4, Chrome 155, two-shape probe scene, zoom 1, DPR 1),
+and still was with two solid straight edge ribbons added (Chrome 157);
+dashed and smooth ribbons, other zooms and DPRs, and other GPUs are not yet
+covered. A
 performance profile is published, and GPU node picking ships behind an opt-in
 `hitTesting="gpu"` on `DagrCanvas`, with edge hits on the CPU. The large-graph
 target, 10,000 nodes animating at 60 fps, is still open: it held with a tenth

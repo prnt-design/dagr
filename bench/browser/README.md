@@ -510,9 +510,11 @@ DAGR_CHROMIUM="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" \
   node bench/browser/backend-probe.mjs --parity
 ```
 
-`--parity` draws the probe scene through `'webgpu'` and through `'webgl2'` and
-compares the two frames pixel by pixel. It exits non-zero unless both backends
-came up as named, the comparison passes, and a control fails on its shift, and says on
+`--parity` draws the probe's two shapes, and two solid edge ribbons, through
+`'webgpu'` and through `'webgl2'` and compares the two frames pixel by pixel.
+It exits non-zero unless both backends came up as named, the comparison passes
+with the ribbons drawn where the page expects them, and both controls (one
+moves a shape, the other the ribbons) fail on their shifts, and says on
 stderr which of these did not hold. It also exits non-zero, saying why on
 stderr before it compares, when the adapter reports `isFallbackAdapter`,
 because a software adapter such as SwiftShader comes up on `'webgpu'` too and
@@ -607,9 +609,9 @@ added to two of the headed runs, still passed on both backends at DPR 1 and 2,
 argument does not carry. What does is the runner: the check needs a full Chrome
 with a WebGPU adapter, and CI runs on a GitHub `ubuntu-latest` runner with no
 GPU and no browser step. It is run by hand like the probe, and its scope is what it compared:
-one machine, the two-shape probe scene with two solid straight ribbons since
+one machine, the probe's two shapes with two solid straight ribbons since
 2026-11-17, zoom 1, DPR 1. Dashed and smooth ribbons, the above-nodes layer,
-group outlines, rich-node tiers and DPR 2 are not compared.
+group outlines, rich-node tiers, other zooms and DPR 2 are not compared.
 
 ## Node picking (M4.8b)
 

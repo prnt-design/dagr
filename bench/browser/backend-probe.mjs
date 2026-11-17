@@ -30,12 +30,12 @@
  * Chrome instead of launching one. The output
  * records the browser, mode and flags, because a backend result without them
  * cannot be reproduced. `--parity` adds M4.9b's backend comparison and exits
- * non-zero unless it passes and its control fails on the shift it is given. It
+ * non-zero unless it passes and both its controls fail on their shifts. It
  * also exits non-zero when the adapter reports `isFallbackAdapter`: a software
  * adapter such as
  * SwiftShader still comes up on `webgpu`, so its side of the comparison would
  * not be a GPU's. The compared scene has two solid edge ribbons under the
- * shapes, and a second control, which must also fail, shifts them. `--pick`
+ * shapes, and the second control shifts them. `--pick`
  * adds M4.8b's check of `pickNode` on both backends at
  * device pixel ratios 1 and 2, and exits non-zero on the same adapter terms or
  * on any pick that disagrees with the shapes' distance functions.
@@ -115,7 +115,7 @@ function parityFailure(check) {
  * Why the control did not fail the way it must, or undefined when it did. A
  * control that threw, drew on the wrong backend or compared frames of different
  * sizes also reports `pass: false`, but says nothing about whether the check
- * can see a shifted shape.
+ * can see a shifted shape or ribbon.
  */
 function controlFailure(control, moved) {
   if (control.pass) return `passed, so the check cannot see a misplaced ${moved}`;
