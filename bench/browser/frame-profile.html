@@ -531,23 +531,18 @@
       };
 
       // Pixels brighter than the renderer's default clear colour, 0x0b0d10, by
-      // the margin backend-probe.html uses. A WebGPU canvas in a Chrome without
-      // a desktop (Windows session 0) presents nothing while the renderer still
-      // reports `webgpu`, and this count is what tells the runner so. Read in
-      // strips so the readback does not leave a whole frame's bytes in the heap
-      // the run reports.
+      // backend-probe.html's margin, since a WebGPU canvas can present nothing
+      // while the renderer reports `webgpu`.
       const litPixels = (canvas) => {
         const scratch = document.createElement('canvas');
         scratch.width = canvas.width;
         scratch.height = canvas.height;
         const ctx = scratch.getContext('2d');
         ctx.drawImage(canvas, 0, 0);
+        const data = ctx.getImageData(0, 0, scratch.width, scratch.height).data;
         let lit = 0;
-        for (let y = 0; y < scratch.height; y += 64) {
-          const data = ctx.getImageData(0, y, scratch.width, Math.min(64, scratch.height - y)).data;
-          for (let i = 0; i < data.length; i += 4) {
-            if (data[i] + data[i + 1] + data[i + 2] > 0x0b + 0x0d + 0x10 + 24) lit += 1;
-          }
+        for (let i = 0; i < data.length; i += 4) {
+          if (data[i] + data[i + 1] + data[i + 2] > 0x0b + 0x0d + 0x10 + 24) lit += 1;
         }
         return lit;
       };

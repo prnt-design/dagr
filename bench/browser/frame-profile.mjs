@@ -35,8 +35,9 @@
  * the page created, reports `isFallbackAdapter`. With `--backend=webgl2` the
  * page asks for `backend: 'webgl2'`, and the runner exits non-zero when no
  * WebGL2 context names its GPU or one names a software renderer, since Chrome
- * falls back to SwiftShader there too. Every row also counts the pixels its
- * first frame lit, and the runner exits non-zero when a row lit none: a WebGPU
+ * falls back to SwiftShader there too. Outside `--memory`, every row also counts
+ * the pixels its first frame lit, and the runner exits non-zero when a row lit
+ * none: a WebGPU
  * canvas can present nothing while `renderer.backend` still says `webgpu`.
  *
  * `DAGR_CDP`, a DevTools endpoint such as `windows-chrome.mjs` prints, attaches
@@ -457,7 +458,7 @@ reportWrongBackend(rows, backend);
 const dark = rows.filter((row) => row.lit === 0);
 if (dark.length > 0) {
   console.error(
-    `${dark.length} of ${rows.length} rows lit no pixel on their first frame, so the canvas presented nothing and their frames are not a drawing's; see each row's lit`,
+    `${dark.length} of ${rows.length} rows lit no pixel on their first frame, so the canvas presented nothing; see each row's lit`,
   );
   process.exitCode = 1;
 }
