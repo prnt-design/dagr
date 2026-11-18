@@ -847,6 +847,16 @@ describe('tessellateRibbons: reusing the previous build', () => {
     expect(sameBits(tessellateRibbons(after, undefined, undefined, previous), tessellateRibbons(after))).toBe(true);
   });
 
+  it('counts copied vertices without treating an unchanged empty route as reuse', () => {
+    const before = [route('a', [0, 0], [10, 0]), route('b', [0, 0], [20, 0]), route('empty', [1, 1], [1, 1])];
+    const previous = tessellateRibbons(before);
+    const partial = tessellateRibbons([before[0]!, route('b', [0, 0], [30, 0]), before[2]!], undefined, undefined, previous);
+    expect(partial.copiedVertices).toBe(previous.ranges[0]!.vertexCount);
+    const changed = tessellateRibbons([route('a', [0, 0], [40, 0]), route('b', [0, 0], [30, 0]), before[2]!], undefined, undefined, previous);
+    expect(changed.copiedVertices).toBe(0);
+    expect(previous.copiedVertices).toBe(0);
+  });
+
   it('still rejects a route that cannot be drawn under an id that could', () => {
     const previous = tessellateRibbons([route('a', [0, 0], [10, 0])]);
     expect(() =>
@@ -866,6 +876,59 @@ describe('tessellateRibbons: reusing the previous build', () => {
       expect(sameBits(next, tessellateRibbons(many(shift), options))).toBe(true);
       previous = next;
     }
+  });
+});
+
+describe('tessellateRibbons: writing into a spare build', () => {
+  const route = (id: string, ...points: [number, number][]): RibbonRoute => ({
+    id,
+    points: points.map(([x, y]) => ({ x, y })),
+  });
+  const many = (shift: number): RibbonRoute[] =>
+    Array.from({ length: 3_000 }, (_, i) =>
+      route(`r${String(i)}`, [i, 0], [i + 25 + (i % 7) + (i % 10 === 0 ? shift : 0), 45], [i, 90]),
+    );
+  const KEYS = ['position', 'offset', 'across', 'arc', 'index'] as const;
+  const options = { curve: 'smooth' } as const;
+  // Booleans rather than `toEqual` and `toBe`, which print every element of
+  // arrays and buffers this long when they differ, for minutes.
+  const sameValues = (a: Float32Array | Uint32Array, b: Float32Array | Uint32Array): boolean =>
+    a.length === b.length && a.every((value, i) => Object.is(value, b[i]));
+
+  it('draws exactly what a fresh build does over a spare full of garbage, in its buffers', () => {
+    const first = tessellateRibbons(many(0), options);
+    const hint = { vertexCount: first.vertexCount, indexCount: first.indexCount };
+    const spare = tessellateRibbons(many(1), options, hint);
+    const previous = tessellateRibbons(many(2), options, hint, first);
+    for (const key of KEYS) {
+      new (spare[key].constructor as Float32ArrayConstructor)(spare[key].buffer).fill(-7);
+    }
+    const next = tessellateRibbons(many(3), options, hint, previous, spare);
+    const fresh = tessellateRibbons(many(3), options);
+    for (const key of KEYS) {
+      expect(next[key].buffer === spare[key].buffer, key).toBe(true);
+      expect(sameValues(next[key], fresh[key])).toBe(true);
+    }
+    expect(next.ranges).toEqual(fresh.ranges);
+  });
+
+  it('ignores a spare that is the build it copies from', () => {
+    const first = tessellateRibbons(many(0), options);
+    const hint = { vertexCount: first.vertexCount, indexCount: first.indexCount };
+    const previous = tessellateRibbons(many(1), options, hint);
+    const next = tessellateRibbons(many(2), options, hint, previous, previous);
+    for (const key of KEYS) {
+      expect(next[key].buffer === previous[key].buffer, key).toBe(false);
+      expect(sameValues(next[key], tessellateRibbons(many(2), options)[key]), key).toBe(true);
+    }
+  });
+
+  it('leaves a spare far larger than the build needs, rather than keeping it alive', () => {
+    const spare = tessellateRibbons(many(0), options);
+    const small = [route('a', [0, 0], [10, 0])];
+    const next = tessellateRibbons(small, options, undefined, undefined, spare);
+    for (const key of KEYS) expect(next[key].buffer === spare[key].buffer, key).toBe(false);
+    expect(sameValues(next.position, tessellateRibbons(small, options).position)).toBe(true);
   });
 });
 

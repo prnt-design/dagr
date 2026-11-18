@@ -2836,6 +2836,82 @@ three pairs, load average 2.9 to 3.9. Animated-mode medians in milliseconds:
 consecutive nodes alternate colours within one shape gains nothing and pays a
 comparison per colour.
 
+### With each edge build written into the one before last (2026-10-26)
+
+Historical evidence for the unmerged PR #159 experiment follows. The builds,
+backend and figures below are from 2026-10-26, not the current integration.
+The memory trade and all-moving frame results remained unresolved.
+
+At 10,000 smooth nodes a `setEdges` build is about 15 MB of typed arrays: the
+tessellation's position, offset, across, arc and index, and the colour and
+intensity buffers. Allocated new on every frame of motion, they set off a
+mark-compact of about 4 ms every fifth call or so in Node, which a median
+hides and a p90 does not. A group now keeps the build before the last, whose
+geometry the last call disposed, and the next build writes into its buffers
+when they hold between the hinted size plus half the hint's headroom and 1.25
+times the hint. A spare outside that window is let go.
+
+This is the trade the 2026-10-21 section declined: keeping one builder per
+group doubled the smooth edges' retained heap, and so does this. The
+difference is what is held. A kept builder held each group's largest arrays
+for its whole life; the spare is about the current size, because a group that
+shrinks or grows out of the window drops it on the next call. The retained
+heap the 2026-10-19 memory table gives for 10,000 smooth edges does not
+hold while they move in this experimental build (below).
+
+Byte-identical: the previous build and this one, given the same 6,000 random
+`setEdges` calls over 150 scenes (two groups, one smooth and dashed, edges
+moving, recoloured, added and removed, groups shrunk and grown, highlights
+written between builds, bad colours and points), hold the same attributes,
+index and draw range after every call, and reject the same 594 calls with the
+same messages. In Node, `setEdges` on 13,169 smooth routes, 600 calls after 200
+of warm-up, three pairs with a tenth moving and two with all moving, at load
+about 4.5, in milliseconds:
+
+| Moving | Build | Median | p90 | Mark-compacts in 800 calls |
+| --- | --- | --- | --- | --- |
+| a tenth | previous | 1.74 to 1.77 | 6.35 to 7.18 | 147 |
+| a tenth | this one | 1.53 to 1.54 | 1.67 to 1.70 | 6 |
+| all | previous | 8.24 to 8.33 | 39.2 to 39.3 | 135 |
+| all | this one | 8.14 to 8.17 | 8.66 to 8.74 | 3 |
+
+With a tenth moving and a collection forced after the loop, retained array
+buffers were 30.2 MB against 14.7, and heap plus array buffers 70.1 MB against
+51.9. In the browser, `--memory --sizes=10000 --edges=smooth`, two runs of
+each: the edges hold 15.3 MB after their first build in both, and after the
+moving-edges step 16.4 MB in the previous build against 33.6 in this one. The
+GPU buffers created a frame while edges move are 12.5 MB in both, since each
+build still gets new GPU buffers. The `heapMb` the frame profile reports in
+its other modes is read without a forced collection, so it is not compared
+here.
+
+On WebGPU, same machine (Apple M4), Google Chrome 155.0.8059.85 headed with
+`--enable-webgpu-developer-features`, adapter `apple` `metal-3` (not a
+fallback), `renderer.backend` `webgpu` on every run, tick 16.7 ms, DPR 1,
+`fit`, `--motion=springs --sizes=10000 --edges=smooth --frames=1200` with
+`--moving=0.1` and with `--moving=1` (42 to 45 retargets a run), builds
+swapped through `packages/render/dist/ribbon.js` and `scene-edges.js`,
+previous build first in each of three pairs, load average 2.8 to 4.8.
+Animated-mode medians in milliseconds:
+
+| Moving | Build | `setEdges` | `setEdges` p95 | `apply` | `advance` | Past one tick |
+| --- | --- | --- | --- | --- | --- | --- |
+| a tenth | previous | 3.0, 3.0, 3.1 | 3.7, 3.6, 3.7 | 1.6, 1.8, 1.6 | 0.6, 0.6, 0.6 | 0%, 0%, 0% |
+| a tenth | this one | 1.9, 1.8, 2.0 | 2.3, 2.0, 2.8 | 1.4, 1.5, 1.6 | 0.5, 0.4, 0.6 | 0%, 0%, 0% |
+| all | previous | 9.2, 9.1, 9.2 | 11.6, 11.8, 11.8 | 15.3, 15.6, 15.2 | 3.7, 3.2, 3.8 | 3.8%, 2.7%, 3.5% |
+| all | this one | 8.3, 8.3, 8.4 | 10.4, 10.0, 10.1 | 16.5, 16.9, 15.5 | 4.6, 5.6, 5.1 | 2.8%, 6.4%, 4.1% |
+
+These runs were on a build whose window's top was 1.25 times its floor rather
+than the hint, which differs from this one only for a spare between 1.25 and
+1.33 times the hint. An earlier round, on a first version that took a spare
+at the hint's exact size, went the other way with all moving: the previous
+build missed 2.5% to 7.1% of ticks and that version 0.7% to 2.2%, with
+`advance` 3.7 to 4.9 against 2.7 to 3.3, and `setEdges` the same as here.
+`apply` and `advance` do not run this code, and where a collection lands
+moves with it, so ticks missed with every node moving are unresolved by these
+two rounds rather than better or worse. With a tenth moving, `setEdges` at
+about 1.9 is now within a step of `apply` and `setNodes` (1.2).
+
 ### All moving and a tenth moving on an AMD GPU (2026-10-26)
 
 The M4.10 sections above measured on the Apple M4. This one profiles the same frame
@@ -3057,11 +3133,12 @@ third column is the rerun.
 - **With a tenth moving it fell by 0.3 to 0.5 ms**, both builds holding the
   tick.
 - `setEdges` and `apply`, which the change does not run, stayed within their
-  run-to-run spread, unlike the 2026-10-26 attempt above.
+  run-to-run spread, unlike the edge velocities attempt above.
 
-What is left of the all-moving frame between retargets is `setEdges` at 11 ms,
-which #159 addresses and whose memory trade is the maintainer's call, and the
-per-point allocation of the frame's points, which a caller holding an earlier
+What was left of the all-moving frame between retargets on main without #159
+was `setEdges` at 11 ms (paired in the AMD section above: 10.4 to 11.0
+without #159, 10.0 to 10.4 with it), and the per-point allocation of the
+frame's points, which a caller holding an earlier
 frame relies on.
 
 ### Edge builds written into the GPU buffers already created, not kept (2026-10-27)
@@ -5445,3 +5522,116 @@ sections; not traced.
 
 Hit testing is not in these rows. Still not covered, all on the NVIDIA
 adapter: unrounded GPU timestamps and the WebGL2 fallback.
+### PR #159 refreshed with reclaimable, partial-motion spares (2026-11-18)
+
+At measurement time PR #159 was unmerged. This is not acceptance of the
+historical strong spare's 16.4 to 33.6 MB retained-memory trade. Main still allocates
+fresh edge arrays. The refresh preserves the later routing arithmetic and
+edge layers, keeps fresh geometry/attributes and GPU buffers, and preserves
+synchronous render, completed geometry swap, old geometry disposal, then
+spare recording. Only disposed CPU arrays may be overwritten.
+
+An initial weak-spare candidate (`14cceff`) made the spare collectible but
+still used it for every workload. Its three pairs consistently reduced
+partial-motion `setEdges` (3.0 to 3.2 ms against 2.1 to 2.2), but all-moving
+`apply` medians increased from 16.2, 17.5, 19.4 to 17.0, 18.4, 21.4 ms,
+and `advance` from 2.8, 3.3, 3.0 to 3.7, 3.7, 4.0. Ticks missed went both
+ways. That whole-frame cost signal rejected unconditional weak reuse.
+All its results remain in the archive, including natural heap snapshots.
+
+The narrowed candidate (`91f829099d659ced08b36a3ea502efd5654647c6`, against
+main `d402d97b67319e6c4448c27c94af2b8e0c521987`) records how many vertices
+the tessellator already copied from unchanged routes. It retains a weak
+spare only when that count is nonzero. Fully changed steady-state builds
+hold no spare and allocate exact colour/intensity arrays, as main does.
+A transition from partial to full motion may consume the existing disposed
+spare once before dropping it. No extra route scan, public option or motion
+fraction threshold was added. A cache miss always allocates fresh arrays.
+
+Three paired rounds, in orders main/candidate, candidate/main,
+main/candidate, on the AMD Ryzen 9 9900X and Windows Chrome 157.0.8103.79,
+headed, NVIDIA GeForce RTX 4090 (`nvidia`, `lovelace`, not fallback),
+`--enable-webgpu-developer-features`, WebGPU on every row. Each run used
+`--motion=springs --sizes=10000 --edges=smooth --nodes=shapes --moving=0.1,1
+--frames=1200 --warmup=60 --zoom=1 --dpr=1`. The unmodified runner's actual
+canvas guard passed on every row. Partial then all motion ran in each
+invocation, without forced GC between frame rows. Animated medians and
+p95 in milliseconds, and ticks missed as percentages, in pair order:
+
+| Moving | Build | `setEdges` | p95 | `apply` | `advance` | Past one tick |
+| --- | --- | --- | --- | --- | --- | --- |
+| tenth | main | 3.2, 3.1, 3.2 | 5.6, 5.3, 5.3 | 2.0, 2.4, 2.5 | 0.6, 0.6, 0.7 | 0%, 0.3%, 0% |
+| tenth | narrowed | 2.2, 2.2, 2.2 | 3.1, 3.6, 3.3 | 2.0, 2.1, 2.1 | 0.6, 0.6, 0.7 | 0%, 0%, 0% |
+| all | main | 7.5, 8.3, 8.2 | 10.9, 11.4, 11.4 | 17.3, 19.9, 18.8 | 4.2, 3.9, 3.9 | 5.1%, 6.4%, 7.3% |
+| all | narrowed | 7.5, 7.5, 8.1 | 10.4, 10.2, 11.4 | 18.0, 18.5, 20.6 | 3.3, 3.5, 4.0 | 3.8%, 3.8%, 6.7% |
+
+This supports a partial-motion CPU-step improvement, not an all-moving
+60 Hz result. `apply` is still slower in two of three all-moving pairs.
+Control ticks were 17.6, 16.7, 16.7 ms on main against 17.6, 17.7, 16.7:
+pair 2 has mismatched pacing, and pair 1 is not an exact 16.7 ms tick.
+Other motion fractions, browsers and GPUs were not reprofiled.
+
+The existing `--memory --sizes=10000 --edges=smooth --nodes=shapes
+--frames=120 --zoom=1 --dpr=1` harness reports 15.703 to 15.892 MiB of
+moving-edge retained memory on main against 15.594 to 15.939 on the narrowed
+candidate. This is the initial edges' `heapDelta` plus `moveEdges.heapDelta`,
+including V8, backing stores and embedder heap, after forced collections.
+GPU bytes created per moving frame stay about 12.50 MB in both.
+
+A separate supplement reuses the page's graph, spring and draw helpers,
+with a deterministic spring input clock and 120 sampled frames per phase.
+Whole-page backing stores after GC, in MiB (ranges across all three runs):
+
+| Phase | Main | Narrowed |
+| --- | --- | --- |
+| 10k, tenth moving | 18.666 | 19.050 to 19.164 |
+| 10k, all moving | 16.477 | 16.481 |
+| shrink to 1k, all moving | 5.264 | 5.268 |
+| 1k, tenth moving | 5.471 | 5.522 to 5.525 |
+| empty | 4.021 | 4.025 |
+| regrow to 10k, tenth moving | 18.666 | 19.147 to 19.164 |
+| regrow to 10k, all moving | 16.477 | 16.481 |
+| disposed | 4.007 | 4.011 |
+
+The page's graph-only baseline differs by about 4 KiB. Partial-motion
+headroom still adds about 0.4 to 0.5 MiB after GC; the old large spare is
+not pinned through shrink/empty/full-motion phases. Weak retention is
+opportunistic, not a hard memory budget: eviction is not guaranteed, and
+natural-GC peak memory is unmeasured and not bounded by this cache. Raw
+unforced heap snapshots are retained but are neither peaks nor proof of
+memory parity. The historical strong-spare trade has not been accepted.
+
+Each hardware window held the canonical exclusive compute lock from setup
+through owned browser/server teardown, with an isolated Chrome profile and
+ports. Windows processes are outside that lock's guarantee. No explicit
+handoff from the former Windows measurement owner was obtainable; idle GPU
+and process preflight and repeated process/GPU monitoring detected no
+competing measurements (69 and 70 samples), not guaranteed Windows quietness.
+A standalone deterministic follow-up after the first window refused its
+1% GPU-load preflight and ran no measurements; it was preserved, not retried.
+The distinct narrowed-policy campaign later included the deterministic
+supplement. All 36 measurement commands and both probes exited zero.
+
+Native `WeakRef` enables the cache. If its constructor is unavailable,
+builds retain no spare and allocate fresh exact colour/intensity arrays.
+This compatibility guard was added after the timings above; the measured
+native-WeakRef policy is unchanged. The constructor and `deref` are supported from
+Chrome 84, Firefox 79, Safari 14.1 and Node 14.6 according to
+[MDN compatibility data](https://github.com/mdn/browser-compat-data/blob/main/javascript/builtins/WeakRef.json).
+The shipped renderer already uses native private methods, whose engine
+floors are Chrome 84, Firefox 90, Safari 15 and Node 14.6 in
+[MDN's class compatibility data](https://github.com/mdn/browser-compat-data/blob/main/javascript/classes.json).
+This comparison does not validate GC behavior on those browsers. Runtime
+checks here used Chrome 157 and Node 22.22.1. Tests also cover an unavailable
+constructor, a discarded target, full-to-partial resumption, topology
+replacement, shrink/empty/regrow, and failed rebuilds that would change
+the cache policy.
+
+The [readable summary](results/pr159-2026-11-18.summary.json),
+[manifest and checksums](results/pr159-2026-11-18.manifest.json), and
+[compressed raw evidence](results/pr159-2026-11-18.raw.json.gz) retain both
+candidate rounds, the failed preflight, scripts and monitor records. Home
+and worktree paths and ephemeral Chrome process handles are explicitly
+redacted, with original/public file hashes recorded. No timing, status,
+adapter, timestamp or ownership classification was altered; originals
+remain in the investigation's local evidence store. No baseline changed.

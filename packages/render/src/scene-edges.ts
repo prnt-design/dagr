@@ -3,7 +3,7 @@ import type { UniformNode } from 'three/webgpu';
 import { attribute, uniform, varying, vec3 } from 'three/tsl';
 import { linearFromHex } from './instance-attributes.js';
 import { ribbonAlpha, ribbonArcPixels, ribbonWorldPosition } from './ribbon-nodes.js';
-import { requireRibbonStyle, tessellateRibbons } from './ribbon.js';
+import { fitsAsSpare, requireRibbonStyle, spareFloats, tessellateRibbons } from './ribbon.js';
 import type {
   RibbonGeometry,
   RibbonOptions,
@@ -272,6 +272,12 @@ class EdgeGroup implements GpuResource {
   #previous: RibbonGeometry | undefined;
   /** The last build's colours, so an edge whose colour and vertex count held is copied. */
   #previousColors: EdgeColors | undefined;
+  /**
+   * The build before the last, whose geometry was disposed when the last one
+   * replaced it. Weak retention lets GC reclaim this cache between builds.
+   * The current build stays strong and is never overwritten.
+   */
+  #spare: WeakRef<SpareBuild> | undefined;
   #disposed = false;
   /**
    * Where each edge's vertices are, from the last {@link setEdges}, so an
@@ -283,7 +289,7 @@ class EdgeGroup implements GpuResource {
    */
   #ranges: readonly RibbonRange[] = [];
   /** The live intensity values, one per vertex, mirrored by the GPU attribute. */
-  #intensity = new Float32Array(0);
+  #intensity: Float32Array = new Float32Array(0);
   /** The attribute wrapping {@link #intensity}, for the update range. */
   #intensityAttribute: BufferAttribute | null = null;
   /** The span of VERTICES written since the last flush. See {@link #flushIntensity}. */
@@ -347,14 +353,17 @@ class EdgeGroup implements GpuResource {
    * arrays.
    */
   setEdges(edges: readonly SceneEdge[]): void {
+    const spare = this.#spare?.deref();
     const tessellated = tessellateRibbons(
       edges,
       this.#curve === undefined ? undefined : { curve: this.#curve },
       this.#sizeHint,
       this.#previous,
+      spare?.geometry,
     );
     this.#sizeHint = { vertexCount: tessellated.vertexCount, indexCount: tessellated.indexCount };
-    const colors = colorsFor(edges, tessellated, this.#previousColors);
+    const retainSpare = tessellated.copiedVertices > 0 && typeof WeakRef === 'function';
+    const colors = colorsFor(edges, tessellated, this.#previousColors, spare?.colors, retainSpare);
 
     // Every edge at full intensity, which is the drawing a group has when
     // nobody has highlighted anything, and it is REBUILT here rather than
@@ -362,7 +371,9 @@ class EdgeGroup implements GpuResource {
     // highlight would land on whatever edge now occupies those vertices. A
     // caller that wants a highlight to survive a re-layout re-applies it, which
     // is one call over data it already holds.
-    const intensity = new Float32Array(tessellated.vertexCount).fill(FULL_INTENSITY);
+    const intensity = spareFloats(spare?.intensity, tessellated.vertexCount, retainSpare).fill(
+      FULL_INTENSITY,
+    );
     const intensityAttribute = new BufferAttribute(intensity, 1);
 
     const geometry = new BufferGeometry();
@@ -380,6 +391,15 @@ class EdgeGroup implements GpuResource {
     this.mesh.geometry = geometry;
     previous.dispose();
 
+    // Reuse helped partial motion, while fully changed builds paid a whole-frame
+    // cost. Do not retain a cache when no drawn vertices were copied.
+    this.#spare =
+      !retainSpare ||
+      this.#previous === undefined ||
+      this.#previousColors === undefined ||
+      !fitsAsSpare(this.#previous, this.#sizeHint)
+        ? undefined
+        : new WeakRef({ geometry: this.#previous, colors: this.#previousColors.values, intensity: this.#intensity });
     this.#previous = tessellated;
     this.#previousColors = colors;
     this.#ranges = tessellated.ranges;
@@ -486,6 +506,7 @@ class EdgeGroup implements GpuResource {
   dispose(): void {
     if (this.#disposed) return;
     this.#disposed = true;
+    this.#spare = undefined;
     this.mesh.geometry.dispose();
     this.mesh.material.dispose();
   }
@@ -505,8 +526,12 @@ function colorsFor(
   edges: readonly SceneEdge[],
   geometry: RibbonGeometry,
   previous: EdgeColors | undefined,
+  spare: Float32Array | undefined,
+  headroom: boolean,
 ): EdgeColors {
-  const colors = new Float32Array(geometry.vertexCount * 3);
+  // Every vertex belongs to one edge's range and every edge's range is written
+  // below, so a spare's old values never survive into the result.
+  const colors = spareFloats(spare, geometry.vertexCount * 3, headroom);
   const { ranges } = geometry;
   const hexes = new Float64Array(ranges.length).fill(Number.NaN);
   // A slice depends only on its edge's colour and vertex count, so where both
@@ -561,6 +586,13 @@ function colorsFor(
   }
   flush();
   return { values: colors, hexes, ranges };
+}
+
+/** The arrays of a build no geometry holds any more. */
+interface SpareBuild {
+  readonly geometry: RibbonGeometry;
+  readonly colors: Float32Array;
+  readonly intensity: Float32Array;
 }
 
 /** A build's colour buffer, with the colour and range each edge was given. */

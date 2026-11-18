@@ -398,6 +398,9 @@ export interface RibbonGeometry {
 
   /** Every route's points as given, for the next build to compare against. */
   readonly given: RibbonGiven;
+
+  /** Vertices copied from unchanged routes in the previous build. */
+  readonly copiedVertices: number;
 }
 
 /**
@@ -436,7 +439,9 @@ class RibbonBuilder {
   vertexCount = 0;
   indexCount = 0;
 
-  constructor(hint: RibbonSizeHint | undefined) {
+  constructor(hint: RibbonSizeHint | undefined, spare: RibbonGeometry | undefined) {
+    const [leastVertices, mostVertices] = spareWindow(hint?.vertexCount, INITIAL_BUILDER_VERTICES);
+    const [leastIndices, mostIndices] = spareWindow(hint?.indexCount, INITIAL_BUILDER_VERTICES * 3);
     const vertices = Math.max(
       Math.ceil((hint?.vertexCount ?? 0) * HINT_HEADROOM),
       INITIAL_BUILDER_VERTICES,
@@ -445,11 +450,17 @@ class RibbonBuilder {
       Math.ceil((hint?.indexCount ?? 0) * HINT_HEADROOM),
       INITIAL_BUILDER_VERTICES * 3,
     );
-    this.position = new Float32Array(vertices * 2);
-    this.offset = new Float32Array(vertices * 2);
-    this.across = new Float32Array(vertices);
-    this.arc = new Float32Array(vertices);
-    this.index = new Uint32Array(indices);
+    this.position =
+      spareBuffer(spare?.position, leastVertices * 2, mostVertices * 2) ??
+      new Float32Array(vertices * 2);
+    this.offset =
+      spareBuffer(spare?.offset, leastVertices * 2, mostVertices * 2) ??
+      new Float32Array(vertices * 2);
+    this.across =
+      spareBuffer(spare?.across, leastVertices, mostVertices) ?? new Float32Array(vertices);
+    this.arc = spareBuffer(spare?.arc, leastVertices, mostVertices) ?? new Float32Array(vertices);
+    this.index =
+      spareBuffer(spare?.index, leastIndices, mostIndices) ?? new Uint32Array(indices);
   }
 
   vertex(x: number, y: number, offsetX: number, offsetY: number, across: number, arc: number): number {
@@ -570,8 +581,8 @@ const INITIAL_BUILDER_VERTICES = 4096;
  * every array seven times on every call, and the copies and the garbage they
  * left were about a sixth of `setEdges` in Node. A hint rather than a builder
  * kept between calls, because a kept builder holds its largest size for the
- * life of the group: at 10,000 smooth nodes that doubled the edges' retained
- * heap.
+ * life of the group. A caller may keep a second build of about the current
+ * size as a spare: see `tessellateRibbons`.
  */
 export interface RibbonSizeHint {
   readonly vertexCount: number;
@@ -602,6 +613,63 @@ function fitted<T extends Float32Array | Uint32Array>(array: T, length: number):
   return (array.length <= length * VIEW_SLACK
     ? array.subarray(0, length)
     : array.slice(0, length)) as T;
+}
+
+/**
+ * Half of {@link HINT_HEADROOM}, as the least a spare buffer has to hold over a
+ * hint: a spare is taken while a scene grows by up to about 6% a build, and one
+ * cut to its exact size, which the next larger build would outgrow and double at
+ * once, is not.
+ */
+const SPARE_FLOOR = 1.0625;
+
+/**
+ * The sizes a spare buffer is taken at, for a hint. The top is
+ * {@link VIEW_SLACK} over the hint, so a build of about the hinted size is
+ * still returned as a view of the spare rather than copied out of it.
+ */
+function spareWindow(hinted: number | undefined, initial: number): [number, number] {
+  const least = Math.max(Math.ceil((hinted ?? 0) * SPARE_FLOOR), initial);
+  return [least, Math.max(Math.floor((hinted ?? 0) * VIEW_SLACK), least)];
+}
+
+/**
+ * Whether a build hinted with `hint` would write into `spare`, so a caller
+ * holding a spare it would never use can let it go.
+ */
+export function fitsAsSpare(spare: RibbonGeometry, hint: RibbonSizeHint): boolean {
+  const [least, most] = spareWindow(hint.vertexCount, INITIAL_BUILDER_VERTICES);
+  return spareBuffer(spare.position, least * 2, most * 2) !== undefined;
+}
+
+/**
+ * The whole buffer behind `spare`, when it holds between `least` and `most`
+ * elements, and `undefined` otherwise.
+ *
+ * The upper bound is what keeps a spare from pinning memory: a group that
+ * shrinks lets its old buffers go rather than drawing a few edges out of
+ * megabytes.
+ */
+export function spareBuffer<T extends Float32Array | Uint32Array>(
+  spare: T | undefined,
+  least: number,
+  most: number,
+): T | undefined {
+  if (spare === undefined) return undefined;
+  const whole = new (spare.constructor as new (buffer: ArrayBufferLike) => T)(spare.buffer);
+  return whole.length >= least && whole.length <= most ? whole : undefined;
+}
+
+/**
+ * `length` elements over {@link spareBuffer}'s buffer when it fits, and over a
+ * new one otherwise. Partial-motion builds request {@link HINT_HEADROOM},
+ * so a scene whose size moves a little can still use it on the next build.
+ */
+export function spareFloats(spare: Float32Array | undefined, length: number, headroom: boolean): Float32Array {
+  const whole =
+    spareBuffer(spare, length, length * VIEW_SLACK) ??
+    new Float32Array(headroom ? Math.ceil(length * HINT_HEADROOM) : length);
+  return whole.subarray(0, length);
 }
 
 function grown<T extends Float32Array | Float64Array | Uint32Array>(array: T, length: number): T {
@@ -1470,15 +1538,24 @@ function requireRibbonOptions(options: RibbonOptions | undefined): {
  * from it rather than tessellated again, which is the same result: a route's
  * vertices depend on nothing but its own points and the options. A scene in
  * which only some edges move then walks only those.
+ * @param spare An earlier build that nothing reads any more, not `previous`,
+ * whose buffers this one may overwrite when they are about the size it needs.
+ * At 10,000 smooth nodes a tessellation's arrays are about 10 MB, and allocating them
+ * on every frame of motion set off a mark-compact every few frames.
  */
 export function tessellateRibbons(
   routes: Iterable<RibbonRoute>,
   options?: RibbonOptions,
   sizeHint?: RibbonSizeHint,
   previous?: RibbonGeometry,
+  spare?: RibbonGeometry,
 ): RibbonGeometry {
   const resolved = requireRibbonOptions(options);
-  const out = new RibbonBuilder(sizeHint);
+  // Overwriting the build it copies from would copy what it had just written.
+  const out = new RibbonBuilder(
+    sizeHint,
+    spare !== undefined && spare.position.buffer === previous?.position.buffer ? undefined : spare,
+  );
   const ranges: RibbonRange[] = [];
   const record: number[] = [];
   const starts: number[] = [];
@@ -1507,6 +1584,7 @@ export function tessellateRibbons(
   };
 
   let position = 0;
+  let copiedVertices = 0;
   for (const route of routes) {
     let reused: RibbonRange | undefined;
     if (previous !== undefined) {
@@ -1518,6 +1596,7 @@ export function tessellateRibbons(
     position += 1;
     starts.push(record.length);
     if (reused !== undefined) {
+      copiedVertices += reused.vertexCount;
       // A build's ranges advance vertices and indices together, so meeting on
       // the vertex is meeting on both.
       if (reused.vertexStart !== run.vertexStart + run.vertexCount) {
@@ -1576,6 +1655,7 @@ export function tessellateRibbons(
     vertexCount: out.vertexCount,
     indexCount: out.indexCount,
     given: { coordinates: record, starts },
+    copiedVertices,
   };
 }
 
