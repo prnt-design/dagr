@@ -29,9 +29,8 @@ Dagr is becoming a general data visualization toolkit, retaining graph/layout
 stability and animated rendering as strengths. Graph owns identity and patches;
 layout owns geometry; renderer owns drawing and motion; React binds them;
 Explorer adds graph reading/navigation; VDSL adapts consumer-defined node and
-connection types. The private chart package supports bar and line charts with
-GPU or SVG rendering. It remains outside the published umbrella until a
-separately authorized release. No additional visualization families are promised.
+connection types. The published chart package supports bar and line charts with
+GPU or SVG rendering. It is installed separately from the umbrella. No additional visualization families are promised.
 
 One scheduled daily owner resumes eligible existing PRs across tracks before
 new feature work, including existing R1 report-format delivery. New R-track
@@ -97,7 +96,7 @@ the WebGPU renderer first within that track. A [daily report track](#daily-repor
 repository's own activity runs in parallel, never ahead of the queue.
 
 The published npm packages use `@prnt/dagr-*`, with the
-`@prnt/dagr` umbrella. All seven packages are published at **0.1.4**
+`@prnt/dagr` umbrella. All eight packages are published at **0.2.0**, under both `latest` and `next`
 (2026-10-07). `@prnt/dagr-explorer` (M5.6, new in 0.1.3) is also exposed by
 the umbrella as `@prnt/dagr/explorer`; 0.1.4 makes its camera frame the part
 of the graph the open drawer leaves uncovered. `three` is an optional peer, so
@@ -109,11 +108,11 @@ focus.
 Shared click-versus-pan and controlled selection now ship from the React package
 through a caller-supplied, displayed-revision hit provider, and `DagrCanvas`
 now supplies exact CPU node hits (M5.2b, released in 0.1.3) with opt-in navigation,
-camera flights and zoom-tiered node rendering. CPU edge hits are implemented in
-current source but unreleased since 0.1.4; port hits remain planned. Edge styles
+camera flights and zoom-tiered node rendering. CPU edge hits ship in
+0.2.0; port hits remain planned. Edge styles
 still change geometry without obstacle avoidance. Visual
 groups are annotations, not compound layout or enforced boundaries. GPU
-picking is `Renderer.pickNode` (unreleased), which `DagrCanvas` uses only
+picking is `Renderer.pickNode` (released in 0.2.0), which `DagrCanvas` uses only
 behind an opt-in `hitTesting="gpu"`, priced on one device (AMD RDNA 2,
 Chrome 156, WebGPU) and off by default. Do not mark
 M5.2 or M7 complete based on the shared contract or demos.
