@@ -1,0 +1,8 @@
+body { margin: 0; font: 1rem/1.6 system-ui; color: #172333; background: #fafbfd; }
+main { max-width: 72rem; padding: 1.5rem; margin: auto; }
+article { padding: 1rem; margin-block: 1rem; border: 1px solid #acb9c9; border-radius: .5rem; }
+button, a { touch-action: manipulation; }
+button { padding: .6rem; font: inherit; }
+a { color: #164eb0; overflow-wrap: anywhere; }
+pre { overflow: auto; }
+:focus-visible { outline: 3px solid #944b00; outline-offset: 3px; }

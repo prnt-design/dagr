@@ -27,6 +27,31 @@ importers:
         specifier: ^4.1.10
         version: 4.1.10(@types/node@26.1.1)(jsdom@30.0.1)(vite@8.1.5(@types/node@26.1.1)(jiti@1.21.7)(terser@5.49.0))
 
+  apps/briefing:
+    dependencies:
+      '@prnt/dagr-explorer':
+        specifier: 0.2.0
+        version: 0.2.0(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(three@0.185.1)
+      react:
+        specifier: ^19.2.8
+        version: 19.2.8
+      react-dom:
+        specifier: ^19.2.8
+        version: 19.2.8(react@19.2.8)
+    devDependencies:
+      '@types/react':
+        specifier: ^19.2.17
+        version: 19.2.17
+      '@types/react-dom':
+        specifier: ^19.2.3
+        version: 19.2.3(@types/react@19.2.17)
+      '@vitejs/plugin-react':
+        specifier: ^6.0.4
+        version: 6.0.4(vite@8.1.5(@types/node@26.1.1)(jiti@1.21.7)(terser@5.49.0))
+      vite:
+        specifier: ^8.1.5
+        version: 8.1.5(@types/node@26.1.1)(jiti@1.21.7)(terser@5.49.0)
+
   apps/demo:
     dependencies:
       '@dagr/campaign':
@@ -1975,6 +2000,28 @@ packages:
 
   '@polka/url@1.0.0-next.29':
     resolution: {integrity: sha512-wwQAWhWSuHaag8c4q/KN/vCoeOJYshAIvMQwD4GpSb3OiZklFfvAgmj0VCBBImRpuF/aFgIRzllXlVX93Jevww==}
+
+  '@prnt/dagr-explorer@0.2.0':
+    resolution: {integrity: sha512-dlW1tB2UaYRZW7lV78sBltltrHwk2kQWUCyzHDowceGbttx+0JJFkTnEWCJiIW/Q1KN0D6g36oSOsMXYuDnucA==}
+    peerDependencies:
+      react: '>=18.2.0 <20.0.0'
+      react-dom: '>=18.2.0 <20.0.0'
+
+  '@prnt/dagr-graph@0.2.0':
+    resolution: {integrity: sha512-SzwK5Eya1/Dzu7TXFx0DZYZNzthH+AxK6NqMHTlh/VyY8PgaeEwdma4m0Fo847KhwU7QfdRQ7sXB7aFKeatlYw==}
+
+  '@prnt/dagr-layout@0.2.0':
+    resolution: {integrity: sha512-zEo9utF82NZ8JMcrBj+7hwwX+mVBhT1HWlDvve5oFT8kiLUsZSmIZf3dcjaSSLPG9+Uo0Ijnh3sz9X7iQTEGCA==}
+    peerDependencies:
+      '@prnt/dagr-graph': ^0.2.0
+
+  '@prnt/dagr-render@0.2.0':
+    resolution: {integrity: sha512-HoIbj7qm2m1nspvlsAcgEcP89BSC0Omj+8lE+tFStzwtrcUQhRGDoox5T8Ph2sfAoC2RV/1FR2O7SY0H6OMUCw==}
+    peerDependencies:
+      three: '>=0.180.0 <1.0.0'
+    peerDependenciesMeta:
+      three:
+        optional: true
 
   '@publint/pack@0.1.7':
     resolution: {integrity: sha512-4EDEmvxWtgsCnnVeBvtFIFZtUhPPt1+bA9JrSwU4Sa//6oKtzCSlGGXYJr44OD9aGISymbieJ4mCKHUygUDU+g==}
@@ -9159,6 +9206,26 @@ snapshots:
       config-chain: 1.1.13
 
   '@polka/url@1.0.0-next.29': {}
+
+  '@prnt/dagr-explorer@0.2.0(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(three@0.185.1)':
+    dependencies:
+      '@prnt/dagr-graph': 0.2.0
+      '@prnt/dagr-layout': 0.2.0(@prnt/dagr-graph@0.2.0)
+      '@prnt/dagr-render': 0.2.0(three@0.185.1)
+      react: 19.2.8
+      react-dom: 19.2.8(react@19.2.8)
+    transitivePeerDependencies:
+      - three
+
+  '@prnt/dagr-graph@0.2.0': {}
+
+  '@prnt/dagr-layout@0.2.0(@prnt/dagr-graph@0.2.0)':
+    dependencies:
+      '@prnt/dagr-graph': 0.2.0
+
+  '@prnt/dagr-render@0.2.0(three@0.185.1)':
+    optionalDependencies:
+      three: 0.185.1
 
   '@publint/pack@0.1.7':
     dependencies:
