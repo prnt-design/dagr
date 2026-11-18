@@ -97,8 +97,8 @@ A second skill, [dagr-chart](skills/dagr-chart/SKILL.md), covers bar, line and
 combined charts with `DagrChart`, with a [typed example](skills/dagr-chart/references/chart.tsx).
 It installs the same way, with `dagr-chart` in place of
 `dagr-learning-explorer` in the commands above, and the same CSS types note
-applies. Installing the skill does not install `@prnt/dagr-chart`, which
-is not on npm yet.
+applies. Installing the skill does not install `@prnt/dagr-chart`. Install the published
+chart package separately; it is not forwarded by the umbrella.
 
 ## Mobile framework support
 
