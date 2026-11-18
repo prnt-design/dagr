@@ -654,8 +654,9 @@ branches never enter public docs, source, npm artifacts, or job fixtures.
     3.6% to 3.9% at `fit`, 6.8% to 16.0% against 4.3% to 12.3% at zoom 1.
     The tiers' timed steps add 1.6 to 2.2 ms between retargets to a frame
     whose steps already sum to 14.2 to 16.2 ms. The gap shows at `fit` too,
-    where no label is attached (the Apple M4 was not paired at `fit`). GPU median and p95 about 1.4
-    ms or less, timestamps still rounded to 1,024 ns. See
+    where no label is attached (the Apple M4 was not paired at `fit`). GPU
+    median and p95 about 1.4 ms or less, timestamps still rounded to 1,024
+    ns. See
     [rich nodes on the NVIDIA adapter](bench/browser/README.md#rich-nodes-at-10000-on-the-nvidia-rtx-4090-2026-11-18).
 
   Remaining task: `tsk_ad4b7ce0d93b` (Backlog, behind the 2026-10-29 priority

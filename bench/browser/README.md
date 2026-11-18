@@ -5329,9 +5329,10 @@ the start of each (read from `/proc/loadavg`), which was not controlled.
 Columns as [on the Apple M4](#rich-nodes-at-10000-on-the-apple-m4-2026-11-14).
 
 **Both launches paced at the slower rate.** The control tick read 17.5 to
-17.8 ms in every run, the `--gpu` runs below included, not 16.7, and the interval median 17.5 to 18.0 on
-every row, so ticks are counted at that rate, as in the runs that paced
-that way [below 10,000](#sizes-below-10000-on-the-nvidia-rtx-4090-2026-11-17).
+17.8 ms in every run, not 16.7, the `--gpu` runs below included, and the
+interval median 17.5 to 18.0 on every row, so ticks are counted at that
+rate, as in the runs that paced that way [below
+10,000](#sizes-below-10000-on-the-nvidia-rtx-4090-2026-11-17).
 The cause is still not traced.
 
 | DPR | Zoom | Edges | Motion | Interval p95 | Past one tick | `apply` | `advance` | `setNodes` | `setEdges` | `richNodes` | `sync` | `render` | Holds the tick |
@@ -5426,19 +5427,18 @@ sections; not traced.
   retarget's `apply` 1.0 ms higher to 4.6 ms lower), and the tiers'
   `richNodes` and `sync` added 1.6 to 2.2 ms between retargets, so the
   step sum rose by 0.3 to 2.2 ms, to 15.5 to 16.6 ms against this launch's
-  17.5 to 17.8 ms tick. Across the twelve
-  table runs, the smooth all-moving step sum was 14.3 to 18.6 ms, and the
-  runs at 17 ms or more missed 12.1% to 21.7% of ticks, those below 16.5
-  ms 4.3% to 8.1%.
+  17.5 to 17.8 ms tick. Across the twelve table runs, the smooth all-moving
+  step sum was 14.3 to 18.6 ms, and the runs at 17 ms or more missed 12.1%
+  to 21.7% of ticks, those below 16.5 ms 4.3% to 8.1%.
 - **Against the unpaired plain-shape rows, the ranges overlap.** The
   2026-10-30 matrix's `fit` row missed 3.9% to 9.3%, and on the same day as
   these rows, in an earlier launch, the [zoom 1
   section](#zoom-1-at-10000-nodes-on-the-nvidia-rtx-4090-2026-11-18)'s row
   missed 11.5% to 18.0% and its undisturbed `fit` readings 7.1% to 16.1%,
   all counted against a 16.7 ms control tick. These are unpaired with these
-  rows and paced at another rate, and they read above this launch's paired
-  `shapes` at `fit` (3.6% to 3.9%), so the pairs above are the comparison
-  to use.
+  rows and paced at another rate, and they read at or above this launch's
+  paired `shapes` at `fit` (3.6% to 3.9%), so the pairs above are the
+  comparison to use.
 - **The GPU frame is not what misses the tick.** It is about 1.4 ms or
   less at the median and p95 on every row, and the tiers' labels are DOM,
   which these timestamps do not see.
