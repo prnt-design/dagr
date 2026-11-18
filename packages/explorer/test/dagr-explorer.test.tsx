@@ -627,14 +627,23 @@ describe('DagrExplorer: map or outline', () => {
     expect(part('details-body').scrollTop).toBe(0);
   });
 
-  it('leaves the outline room to scroll clear of an open drawer', async () => {
+  it('leaves the outline room to scroll clear of a drawer docked below it, and none beside it', async () => {
     await ready({ defaultMode: 'outline' });
     const scroller = part('outline').parentElement;
     expect(scroller?.style.overflowY).toBe('auto');
     expect(scroller?.style.scrollPaddingBottom).toBe('');
     await flush(() => outlineItem('d').click());
+    await resizeTo(800, 480);
+    expect(part('details').dataset.placement).toBe('right');
+    expect(scroller?.style.scrollPaddingBottom).toBe('');
+    expect(scroller?.lastElementChild).toBe(part('outline'));
+    await resizeTo(400, 480);
+    expect(part('details').dataset.placement).toBe('bottom');
     expect(scroller?.style.scrollPaddingBottom).toBe('50%');
     expect((scroller?.lastElementChild as HTMLElement | null)?.style.height).toBe('50%');
+    await resizeTo(800, 480);
+    expect(scroller?.style.scrollPaddingBottom).toBe('');
+    expect(scroller?.lastElementChild).toBe(part('outline'));
   });
 
   it('puts the outline back where it was scrolled after the map', async () => {

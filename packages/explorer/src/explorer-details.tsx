@@ -29,7 +29,7 @@
  */
 
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
-import type { CSSProperties, KeyboardEvent, ReactElement, ReactNode } from 'react';
+import type { CSSProperties, KeyboardEvent, ReactElement, ReactNode, RefObject } from 'react';
 import { useExplorerContext } from './context.js';
 import { CloseIcon } from './icons.js';
 import { useIsomorphicLayoutEffect } from './isomorphic-layout-effect.js';
@@ -66,6 +66,33 @@ export interface ExplorerDetailsProps<N extends ExplorerNode = ExplorerNode, E e
   readonly style?: CSSProperties | undefined;
 }
 
+/**
+ * Whether a drawer placed beside `ref`'s element docks to the bottom: its
+ * containing surface, the element's parent, is under 720 CSS pixels wide.
+ * Measured while `active`. A zero width (hidden, or not laid out) keeps the
+ * last answer.
+ */
+export function useDocksBelow(ref: RefObject<HTMLElement | null>, active: boolean): boolean {
+  const [below, setBelow] = useState(false);
+  // Observe the containing surface, never the panel itself: changing docking
+  // must not feed back into the measurement. The initial server render is
+  // deterministic, and the first client measurement runs before paint.
+  useIsomorphicLayoutEffect(() => {
+    const parent = ref.current?.parentElement;
+    if (!active || parent === undefined || parent === null) return undefined;
+    const measure = (): void => {
+      const width = parent.getBoundingClientRect().width;
+      if (width > 0) setBelow(width < 720);
+    };
+    measure();
+    if (typeof ResizeObserver === 'undefined') return undefined;
+    const observer = new ResizeObserver(measure);
+    observer.observe(parent);
+    return () => observer.disconnect();
+  }, [active, ref]);
+  return below;
+}
+
 export function ExplorerDetails<N extends ExplorerNode = ExplorerNode, E extends ExplorerEdge = ExplorerEdge>(
   props: ExplorerDetailsProps<N, E>,
 ): ReactElement | null {
@@ -81,24 +108,7 @@ export function ExplorerDetails<N extends ExplorerNode = ExplorerNode, E extends
   const asideRef = useRef<HTMLElement>(null);
   const revealedOnOpen = useRef(false);
   const open = node !== null;
-  const [compact, setCompact] = useState(false);
-
-  // Observe the containing surface, never the panel itself: changing docking
-  // must not feed back into the measurement. The initial server render is
-  // deterministic, and the first client measurement runs before paint.
-  useIsomorphicLayoutEffect(() => {
-    const parent = asideRef.current?.parentElement;
-    if (!open || parent === undefined || parent === null) return undefined;
-    const measure = (): void => {
-      const width = parent.getBoundingClientRect().width;
-      if (width > 0) setCompact(width < 720);
-    };
-    measure();
-    if (typeof ResizeObserver === 'undefined') return undefined;
-    const observer = new ResizeObserver(measure);
-    observer.observe(parent);
-    return () => observer.disconnect();
-  }, [open]);
+  const compact = useDocksBelow(asideRef, open);
 
   // Before paint, so the camera has made room for the drawer by the frame it shows in.
   useIsomorphicLayoutEffect(() => {

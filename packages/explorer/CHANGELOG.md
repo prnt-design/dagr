@@ -1,5 +1,11 @@
 # @prnt/dagr-explorer
 
+## Unreleased
+
+- Over the outline, only a drawer docked below the list leaves it room to
+  scroll clear. A drawer docked to the side spans the full height, so the
+  extra room after the last item could not uncover anything, and it is gone.
+
 ## 0.2.0
 
 - `DagrExplorer` lets the reader choose the map or an outline of the same
