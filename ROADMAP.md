@@ -635,8 +635,8 @@ branches never enter public docs, source, npm artifacts, or job fixtures.
     Chrome 157 headed on the Windows side of the WSL2 machine, `nvidia`
     `lovelace`, WebGPU, not a fallback adapter, DPR 1 and 2, three runs
     each. The same rows hold the tick as at `fit`. Smooth edges with every
-    node moving misses 11.5% to 18.0% of ticks, mostly above the 2026-10-30
-    `fit` rows, but `fit` and zoom 1 measured in one launch the same day did
+    node moving misses 11.5% to 18.0% of ticks, above the 2026-10-30 `fit`
+    rows' 3.9% to 9.3%, but `fit` and zoom 1 measured in one launch the same day did
     not separate (7.1% to 16.1% against 6.9% to 10.2%, three readings near
     56% set aside as disturbance). The CPU steps do not depend on the camera,
     since every node and edge is updated; `setEdges` is 8.4 to 10.2 ms

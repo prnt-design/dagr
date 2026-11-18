@@ -5285,9 +5285,9 @@ frame was 5.6 ms.
   shorter at DPR 2 on every row but smooth edges with every node moving
   (0.85 against 0.51 at the median); the rest read 0.27 to 0.90 against 0.54
   to 2.79. That fits most of the graph being off screen at zoom 1, as on the
-  Apple M4, though the 2026-10-30 section saw the GPU clock down when the
-  frame leaves it idle, which these readings cannot separate. At DPR 1 the
-  two overlap.
+  Apple M4, though the 2026-10-30 section's readings fit the GPU clocking
+  down when the frame leaves it idle, which these readings cannot separate.
+  At DPR 1 zoom 1 reads the same as `fit` or lower at the median.
 
 Hit testing is not in these rows. Still not covered, all on the NVIDIA
 adapter: unrounded GPU timestamps, rich nodes and the WebGL2 fallback.
