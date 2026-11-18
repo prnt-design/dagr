@@ -1,0 +1,65 @@
+{
+  "brief": "codebase",
+  "condition": "guided",
+  "direction": "Read each edge as source, relationship, target. Ownership and dependency do not imply runtime order.",
+  "nodes": [
+    {
+      "id": "graph",
+      "label": "Graph",
+      "summary": "Owns typed directed graph identity.",
+      "explanation": "Owns typed directed graph identity. Source: packages/graph/package.json",
+      "example": "Illustrative study question: explain graph to a teammate.",
+      "source": "packages/graph/package.json"
+    },
+    {
+      "id": "layout",
+      "label": "Layout",
+      "summary": "Owns headless incremental layout.",
+      "explanation": "Owns headless incremental layout. Source: packages/layout/package.json",
+      "example": "Illustrative study question: explain layout to a teammate.",
+      "source": "packages/layout/package.json"
+    },
+    {
+      "id": "render",
+      "label": "Render",
+      "summary": "Owns the three.js rendering package.",
+      "explanation": "Owns the three.js rendering package. Source: packages/render/package.json",
+      "example": "Illustrative study question: explain render to a teammate.",
+      "source": "packages/render/package.json"
+    },
+    {
+      "id": "explorer",
+      "label": "Explorer",
+      "summary": "Owns views, search and details.",
+      "explanation": "Owns views, search and details. Source: packages/explorer/package.json",
+      "example": "Illustrative study question: explain explorer to a teammate.",
+      "source": "packages/explorer/package.json"
+    }
+  ],
+  "edges": [
+    {
+      "id": "layout-graph",
+      "source": "layout",
+      "target": "graph",
+      "label": "uses graph model"
+    },
+    {
+      "id": "explorer-graph",
+      "source": "explorer",
+      "target": "graph",
+      "label": "depends on"
+    },
+    {
+      "id": "explorer-layout",
+      "source": "explorer",
+      "target": "layout",
+      "label": "depends on"
+    },
+    {
+      "id": "explorer-render",
+      "source": "explorer",
+      "target": "render",
+      "label": "depends on"
+    }
+  ]
+}
