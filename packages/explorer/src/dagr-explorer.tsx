@@ -15,12 +15,13 @@
  * hidden, so it is out of the tab order and keeps its camera, which a zero
  * size leaves where it was (see `use-explorer-camera.ts`). The outline mounts
  * the first time it is chosen and is kept after, hidden, for its tab stop and
- * its scroll offset. The toolbar is hidden with the map, and the drawer goes with
- * whichever presentation shows, keeping its scroll and the control focused in
- * it; docked below the outline it leaves scroll room after the last item. Other focus
- * on a switch stays where it is, unless it was in the presentation that left:
- * then it moves to the same node in the other one if that has a control for
- * it, else to the other's tab stop, else to the pressed button.
+ * its scroll offset. The toolbar is hidden with the map, and the drawer goes
+ * with whichever presentation shows, keeping its scroll and the control
+ * focused in it; docked below the outline it leaves scroll room after the
+ * last item. Other focus on a switch stays where it is, unless it was in the
+ * presentation that left: then it moves to the same node in the other one if
+ * that has a control for it, else to the other's tab stop, else to the
+ * pressed button.
  */
 
 import { Component, useRef, useState } from 'react';
@@ -106,8 +107,8 @@ function ModeButtons(props: {
 /**
  * The outline's scroll area. An open drawer docked over the lower half leaves the items room to scroll clear of it. A
  * side panel spans the full height, where no scrolling clears it, so it leaves none. The area measures the surface the
- * drawer measures. A browser drops the offset of a box `display: none` removes, so the area keeps its own and puts it
- * back when shown.
+ * drawer measures, while shown, since a hidden one has no width. A browser drops the offset of a box `display: none`
+ * removes, so the area keeps its own and puts it back when shown.
  */
 function OutlineScroll<N extends ExplorerNode>(props: {
   readonly nodeAriaLabel: ExplorerOutlineProps<N>['nodeAriaLabel'];
@@ -115,11 +116,19 @@ function OutlineScroll<N extends ExplorerNode>(props: {
 }): ReactElement {
   const { detailsOpen } = useExplorer();
   const scrollRef = useRef<HTMLDivElement>(null);
-  const room = useDocksBelow(scrollRef, detailsOpen) && detailsOpen;
+  const room = useDocksBelow(scrollRef, detailsOpen && props.shown) && detailsOpen;
   const offset = useRef(0);
+  // On a switch the room arrives a render after the offset is restored and focus has scrolled its item into view, so
+  // both run again with it.
   useIsomorphicLayoutEffect(() => {
-    if (props.shown && scrollRef.current !== null) scrollRef.current.scrollTop = offset.current;
-  }, [props.shown]);
+    const scroller = scrollRef.current;
+    if (!props.shown || scroller === null) return;
+    scroller.scrollTop = offset.current;
+    const active = scroller.ownerDocument.activeElement;
+    if (room && active instanceof HTMLElement && scroller.contains(active) && typeof active.scrollIntoView === 'function') {
+      active.scrollIntoView({ block: 'nearest' });
+    }
+  }, [props.shown, room]);
   return (
     <div
       ref={scrollRef}
