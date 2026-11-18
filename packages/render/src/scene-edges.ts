@@ -274,9 +274,10 @@ class EdgeGroup implements GpuResource {
   #previousColors: EdgeColors | undefined;
   /**
    * The build before the last, whose geometry was disposed when the last one
-   * replaced it, so the next build writes into its arrays rather than new ones.
+   * replaced it. Weak retention lets GC reclaim this cache between builds.
+   * The current build stays strong and is never overwritten.
    */
-  #spare: SpareBuild | undefined;
+  #spare: WeakRef<SpareBuild> | undefined;
   #disposed = false;
   /**
    * Where each edge's vertices are, from the last {@link setEdges}, so an
@@ -352,15 +353,16 @@ class EdgeGroup implements GpuResource {
    * arrays.
    */
   setEdges(edges: readonly SceneEdge[]): void {
+    const spare = this.#spare?.deref();
     const tessellated = tessellateRibbons(
       edges,
       this.#curve === undefined ? undefined : { curve: this.#curve },
       this.#sizeHint,
       this.#previous,
-      this.#spare?.geometry,
+      spare?.geometry,
     );
     this.#sizeHint = { vertexCount: tessellated.vertexCount, indexCount: tessellated.indexCount };
-    const colors = colorsFor(edges, tessellated, this.#previousColors, this.#spare?.colors);
+    const colors = colorsFor(edges, tessellated, this.#previousColors, spare?.colors);
 
     // Every edge at full intensity, which is the drawing a group has when
     // nobody has highlighted anything, and it is REBUILT here rather than
@@ -368,7 +370,7 @@ class EdgeGroup implements GpuResource {
     // highlight would land on whatever edge now occupies those vertices. A
     // caller that wants a highlight to survive a re-layout re-applies it, which
     // is one call over data it already holds.
-    const intensity = spareFloats(this.#spare?.intensity, tessellated.vertexCount).fill(
+    const intensity = spareFloats(spare?.intensity, tessellated.vertexCount).fill(
       FULL_INTENSITY,
     );
     const intensityAttribute = new BufferAttribute(intensity, 1);
@@ -393,7 +395,7 @@ class EdgeGroup implements GpuResource {
       this.#previousColors === undefined ||
       !fitsAsSpare(this.#previous, this.#sizeHint)
         ? undefined
-        : { geometry: this.#previous, colors: this.#previousColors.values, intensity: this.#intensity };
+        : new WeakRef({ geometry: this.#previous, colors: this.#previousColors.values, intensity: this.#intensity });
     this.#previous = tessellated;
     this.#previousColors = colors;
     this.#ranges = tessellated.ranges;

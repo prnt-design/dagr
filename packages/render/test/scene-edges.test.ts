@@ -1,6 +1,6 @@
 import { AttributeNode, BufferAttribute, Color } from 'three/webgpu';
 import type { Node } from 'three/webgpu';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { SceneEdges } from '../src/scene-edges.js';
 import type { SceneEdge, SceneEdgeGroup } from '../src/scene-edges.js';
 import type { Vec2 } from '../src/types.js';
@@ -394,6 +394,66 @@ describe('SceneEdges', () => {
     }
     expect(same(reused.meshes[1]!.geometry.index!.array, fresh.meshes[1]!.geometry.index!.array)).toBe(true);
     reused.dispose();
+    fresh.dispose();
+  });
+
+  it('rebuilds correctly when GC has discarded the spare', () => {
+    const scene = new SceneEdges(groups());
+    const before = [edge('a', straight), edge('b', straight, 0x219ebc)];
+    scene.setEdges(ROUTED, before);
+    scene.setEdges(ROUTED, before);
+    const discarded = vi.spyOn(WeakRef.prototype, 'deref').mockReturnValue(undefined);
+    const fresh = new SceneEdges(groups());
+    try {
+      const after = [edge('b', straight, 0x219ebc), edge('a', straight, 0x023047)];
+      scene.setEdges(ROUTED, after);
+      fresh.setEdges(ROUTED, after);
+      for (const [name, attribute] of Object.entries(scene.meshes[0]!.geometry.attributes)) {
+        expect(Array.from(attribute.array), name).toEqual(Array.from(fresh.meshes[0]!.geometry.getAttribute(name).array));
+      }
+      expect(Array.from(scene.meshes[0]!.geometry.index!.array)).toEqual(Array.from(fresh.meshes[0]!.geometry.index!.array));
+    } finally {
+      discarded.mockRestore();
+      scene.dispose();
+      fresh.dispose();
+    }
+  });
+
+  it('keeps live geometry intact when a rebuild into a spare rejects a colour', () => {
+    const fan = (dy: number, lastColor = 0xffb703): SceneEdge[] =>
+      Array.from({ length: 400 }, (_, i) =>
+        edge(`e${String(i)}`, [{ x: i, y: 0 }, { x: i + 20, y: 30 + dy }, { x: i, y: 60 }], i === 399 ? lastColor : 0x219ebc),
+      );
+    const scene = new SceneEdges(groups());
+    for (const dy of [0, 1, 2]) scene.setEdges(OVERLAY, fan(dy));
+    scene.setEdgeIntensity(OVERLAY, () => 0.25);
+    const mesh = scene.meshes[1]!;
+    const live = mesh.geometry;
+    const attributes = Object.fromEntries(
+      Object.entries(live.attributes).map(([name, attribute]) => [name, Array.from(attribute.array)]),
+    );
+    const index = Array.from(live.index!.array);
+    let disposals = 0;
+    live.addEventListener('dispose', () => { disposals += 1; });
+
+    expect(() => scene.setEdges(OVERLAY, fan(3, -1))).toThrow();
+    expect(mesh.geometry === live).toBe(true);
+    expect(disposals).toBe(0);
+    for (const [name, values] of Object.entries(attributes)) {
+      expect(Array.from(live.getAttribute(name).array), name).toEqual(values);
+    }
+    expect(Array.from(live.index!.array)).toEqual(index);
+
+    const after = fan(4);
+    scene.setEdges(OVERLAY, after);
+    expect(disposals).toBe(1);
+    const fresh = new SceneEdges(groups());
+    fresh.setEdges(OVERLAY, after);
+    for (const [name, attribute] of Object.entries(mesh.geometry.attributes)) {
+      expect(Array.from(attribute.array), name).toEqual(Array.from(fresh.meshes[1]!.geometry.getAttribute(name).array));
+    }
+    expect(Array.from(mesh.geometry.index!.array)).toEqual(Array.from(fresh.meshes[1]!.geometry.index!.array));
+    scene.dispose();
     fresh.dispose();
   });
 
