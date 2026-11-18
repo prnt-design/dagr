@@ -62,8 +62,8 @@ and `onModeChange`. The selection, the query, trace and the drawer carry
 across a switch. The map stays mounted, hidden, while the outline shows, so
 it keeps its camera through the switch and a resize or a turn while hidden
 (a node chosen in the outline is revealed on it),
-and it leaves the tab order; the toolbar is hidden with it. Over the
-outline, the drawer leaves the list room to scroll its items clear, and the
+and it leaves the tab order; the toolbar is hidden with it. Docked below
+the outline, the drawer leaves the list room to scroll its items clear, and the
 list keeps its scroll position while the map shows, unless focus moving to
 a node needs that node in view. The drawer keeps its scroll position, and
 focus in it stays on the same control. Focus elsewhere in the presentation

@@ -10,7 +10,7 @@ import { DEFAULT_EXPLORER_LABELS } from '../src/labels.js';
 import type { ExplorerLabels } from '../src/labels.js';
 import { layoutView } from '../src/layout.js';
 import type { ExplorerEdge, ExplorerNode } from '../src/types.js';
-import { flush, installDom, mount, resizeTo, runFramesUntilIdle, uninstallDom } from './dom.js';
+import { flush, installDom, mount, resizeTo, runFramesUntilIdle, setSize, uninstallDom } from './dom.js';
 import type { Mounted } from './dom.js';
 import { detail, empty, overview } from './fixtures.js';
 import type { Item } from './fixtures.js';
@@ -627,14 +627,62 @@ describe('DagrExplorer: map or outline', () => {
     expect(part('details-body').scrollTop).toBe(0);
   });
 
-  it('leaves the outline room to scroll clear of an open drawer', async () => {
+  it('leaves the outline room to scroll clear of a drawer docked below it, and none beside it', async () => {
     await ready({ defaultMode: 'outline' });
     const scroller = part('outline').parentElement;
     expect(scroller?.style.overflowY).toBe('auto');
     expect(scroller?.style.scrollPaddingBottom).toBe('');
     await flush(() => outlineItem('d').click());
+    await resizeTo(800, 480);
+    expect(part('details').dataset.placement).toBe('right');
+    expect(scroller?.style.scrollPaddingBottom).toBe('');
+    expect(scroller?.lastElementChild).toBe(part('outline'));
+    await resizeTo(400, 480);
+    expect(part('details').dataset.placement).toBe('bottom');
     expect(scroller?.style.scrollPaddingBottom).toBe('50%');
     expect((scroller?.lastElementChild as HTMLElement | null)?.style.height).toBe('50%');
+    await resizeTo(800, 480);
+    expect(scroller?.style.scrollPaddingBottom).toBe('');
+    expect(scroller?.lastElementChild).toBe(part('outline'));
+  });
+
+  it('measures the outline again when shown, after a resize while hidden', async () => {
+    await ready({ defaultMode: 'outline' });
+    const scroller = part('outline').parentElement;
+    await flush(() => outlineItem('d').click());
+    await resizeTo(400, 480);
+    expect(scroller?.style.scrollPaddingBottom).toBe('50%');
+    await flush(() => mode('map').click());
+    const reader = scroller?.parentElement;
+    if (reader === null || reader === undefined) throw new Error('no reader');
+    setSize(reader, 900, 480);
+    await flush(() => mode('outline').click());
+    expect(part('details').dataset.placement).toBe('right');
+    expect(scroller?.style.scrollPaddingBottom).toBe('');
+  });
+
+  it('scrolls the focused item clear of a drawer docked below once a switch gives the outline its room', async () => {
+    let shown: 'map' | 'outline' = 'outline';
+    const render = () => <DagrExplorer label="Map" views={[overview, detail]} apiRef={apiRef} mode={shown} />;
+    tree = await mount(render());
+    await resizeTo(800, 480);
+    await runFramesUntilIdle();
+    const scroller = part('outline').parentElement;
+    const reader = scroller?.parentElement;
+    if (scroller === null || reader === null || reader === undefined) throw new Error('no reader');
+    shown = 'map';
+    await tree.rerender(render());
+    await resizeTo(400, 480);
+    setSize(reader, 400, 480);
+    await flush(() => api().inspect('d'));
+    graphNode('d').focus();
+    const scroll = vi.fn();
+    outlineItem('d').scrollIntoView = scroll;
+    shown = 'outline';
+    await tree.rerender(render());
+    expect(document.activeElement).toBe(outlineItem('d'));
+    expect(scroller.style.scrollPaddingBottom).toBe('50%');
+    expect(scroll).toHaveBeenCalledWith({ block: 'nearest' });
   });
 
   it('puts the outline back where it was scrolled after the map', async () => {
