@@ -362,7 +362,8 @@ class EdgeGroup implements GpuResource {
       spare?.geometry,
     );
     this.#sizeHint = { vertexCount: tessellated.vertexCount, indexCount: tessellated.indexCount };
-    const colors = colorsFor(edges, tessellated, this.#previousColors, spare?.colors);
+    const retainSpare = tessellated.copiedVertices > 0 && typeof WeakRef === 'function';
+    const colors = colorsFor(edges, tessellated, this.#previousColors, spare?.colors, retainSpare);
 
     // Every edge at full intensity, which is the drawing a group has when
     // nobody has highlighted anything, and it is REBUILT here rather than
@@ -370,7 +371,7 @@ class EdgeGroup implements GpuResource {
     // highlight would land on whatever edge now occupies those vertices. A
     // caller that wants a highlight to survive a re-layout re-applies it, which
     // is one call over data it already holds.
-    const intensity = spareFloats(spare?.intensity, tessellated.vertexCount, tessellated.copiedVertices > 0).fill(
+    const intensity = spareFloats(spare?.intensity, tessellated.vertexCount, retainSpare).fill(
       FULL_INTENSITY,
     );
     const intensityAttribute = new BufferAttribute(intensity, 1);
@@ -393,7 +394,7 @@ class EdgeGroup implements GpuResource {
     // Reuse helped partial motion, while fully changed builds paid a whole-frame
     // cost. Do not retain a cache when no drawn vertices were copied.
     this.#spare =
-      tessellated.copiedVertices === 0 ||
+      !retainSpare ||
       this.#previous === undefined ||
       this.#previousColors === undefined ||
       !fitsAsSpare(this.#previous, this.#sizeHint)
@@ -526,10 +527,11 @@ function colorsFor(
   geometry: RibbonGeometry,
   previous: EdgeColors | undefined,
   spare: Float32Array | undefined,
+  headroom: boolean,
 ): EdgeColors {
   // Every vertex belongs to one edge's range and every edge's range is written
   // below, so a spare's old values never survive into the result.
-  const colors = spareFloats(spare, geometry.vertexCount * 3, geometry.copiedVertices > 0);
+  const colors = spareFloats(spare, geometry.vertexCount * 3, headroom);
   const { ranges } = geometry;
   const hexes = new Float64Array(ranges.length).fill(Number.NaN);
   // A slice depends only on its edge's colour and vertex count, so where both

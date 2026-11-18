@@ -48,6 +48,13 @@ function edge(id: string, points: readonly Vec2[], color = 0xffb703): SceneEdge 
   return { id, points, color };
 }
 
+function movingEdges(count: number, shift: number, moving: number, prefix = 'e'): SceneEdge[] {
+  return Array.from({ length: count }, (_, i) => {
+    const y = i < moving ? shift : 0;
+    return edge(`${prefix}${String(i)}`, [{ x: i * 2, y }, { x: i * 2 + 100, y }]);
+  });
+}
+
 /** A straight two point route, which tessellates to four vertices and two triangles. */
 const straight: readonly Vec2[] = [
   { x: 0, y: 0 },
@@ -415,6 +422,88 @@ describe('SceneEdges', () => {
       expect(array.buffer.byteLength, name).toBe(array.byteLength);
     }
     scene.dispose();
+  });
+
+  it('allocates fresh exact attributes when WeakRef is unavailable', () => {
+    const scene = new SceneEdges(groups());
+    const fresh = new SceneEdges(groups());
+    vi.stubGlobal('WeakRef', undefined);
+    try {
+      let previous: ArrayBufferLike | undefined;
+      for (const shift of [0, 1, 2, 3]) {
+        const edges = movingEdges(1200, shift, 200);
+        scene.setEdges(OVERLAY, edges);
+        const buffer = attributeOf(scene, 1, 'ribbonPosition').buffer;
+        expect(buffer === previous).toBe(false);
+        previous = buffer;
+      }
+      fresh.setEdges(OVERLAY, movingEdges(1200, 3, 200));
+      for (const [name, attribute] of Object.entries(scene.meshes[1]!.geometry.attributes)) {
+        expect(Array.from(attribute.array), name).toEqual(Array.from(fresh.meshes[1]!.geometry.getAttribute(name).array));
+      }
+      for (const name of ['ribbonColor', 'ribbonIntensity']) {
+        const array = attributeOf(scene, 1, name);
+        expect(array.buffer.byteLength, name).toBe(array.byteLength);
+      }
+      expect(scene.meshes[1]!.geometry.drawRange).toEqual(fresh.meshes[1]!.geometry.drawRange);
+      expect(Array.from(scene.meshes[1]!.geometry.index!.array)).toEqual(Array.from(fresh.meshes[1]!.geometry.index!.array));
+    } finally {
+      vi.unstubAllGlobals();
+      scene.dispose();
+      fresh.dispose();
+    }
+  });
+
+  it('resumes reuse after full motion and rebuilds topology, shrink, empty and regrow correctly', () => {
+    const scene = new SceneEdges(groups());
+    const check = (edges: SceneEdge[]): void => {
+      scene.setEdges(OVERLAY, edges);
+      const fresh = new SceneEdges(groups());
+      fresh.setEdges(OVERLAY, edges);
+      for (const [name, attribute] of Object.entries(scene.meshes[1]!.geometry.attributes)) {
+        expect(Array.from(attribute.array), name).toEqual(Array.from(fresh.meshes[1]!.geometry.getAttribute(name).array));
+      }
+      expect(Array.from(scene.meshes[1]!.geometry.index!.array)).toEqual(Array.from(fresh.meshes[1]!.geometry.index!.array));
+      fresh.dispose();
+    };
+    for (const shift of [0, 1, 2]) check(movingEdges(1200, shift, 1200));
+    for (const shift of [3, 4]) check(movingEdges(1200, shift, 200));
+    const spare = attributeOf(scene, 1, 'ribbonPosition').buffer;
+    for (const shift of [5, 6]) check(movingEdges(1200, shift, 200));
+    expect(attributeOf(scene, 1, 'ribbonPosition').buffer === spare).toBe(true);
+    check(movingEdges(1200, 7, 200, 'new'));
+    check(movingEdges(1200, 8, 200, 'other'));
+    for (const name of ['ribbonColor', 'ribbonIntensity']) {
+      const array = attributeOf(scene, 1, name);
+      expect(array.buffer.byteLength, name).toBe(array.byteLength);
+    }
+    check(movingEdges(12, 9, 2));
+    check([]);
+    check(movingEdges(1200, 10, 200));
+    scene.dispose();
+  });
+
+  it('keeps the partial-motion cache policy when a fully changed rebuild fails', () => {
+    const scene = new SceneEdges(groups());
+    scene.setEdges(OVERLAY, movingEdges(1200, 0, 200));
+    scene.setEdges(OVERLAY, movingEdges(1200, 1, 200));
+    const spare = attributeOf(scene, 1, 'ribbonPosition').buffer;
+    scene.setEdges(OVERLAY, movingEdges(1200, 2, 200));
+    const live = scene.meshes[1]!.geometry;
+    const bad = movingEdges(1200, 3, 1200);
+    bad[1199] = { ...bad[1199]!, color: -1 };
+    expect(() => scene.setEdges(OVERLAY, bad)).toThrow();
+    expect(scene.meshes[1]!.geometry === live).toBe(true);
+    const next = movingEdges(1200, 4, 200);
+    scene.setEdges(OVERLAY, next);
+    expect(attributeOf(scene, 1, 'ribbonPosition').buffer === spare).toBe(true);
+    const fresh = new SceneEdges(groups());
+    fresh.setEdges(OVERLAY, next);
+    for (const [name, attribute] of Object.entries(scene.meshes[1]!.geometry.attributes)) {
+      expect(Array.from(attribute.array), name).toEqual(Array.from(fresh.meshes[1]!.geometry.getAttribute(name).array));
+    }
+    scene.dispose();
+    fresh.dispose();
   });
 
   it('rebuilds correctly when GC has discarded the spare', () => {

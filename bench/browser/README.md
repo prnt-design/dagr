@@ -5612,15 +5612,20 @@ A standalone deterministic follow-up after the first window refused its
 The distinct narrowed-policy campaign later included the deterministic
 supplement. All 36 measurement commands and both probes exited zero.
 
-Native `WeakRef` is required. Its constructor and `deref` are supported from
+Native `WeakRef` enables the cache. If its constructor is unavailable,
+builds retain no spare and allocate fresh exact colour/intensity arrays.
+This compatibility guard was added after the timings above; the measured
+native-WeakRef policy is unchanged. The constructor and `deref` are supported from
 Chrome 84, Firefox 79, Safari 14.1 and Node 14.6 according to
 [MDN compatibility data](https://github.com/mdn/browser-compat-data/blob/main/javascript/builtins/WeakRef.json).
 The shipped renderer already uses native private methods, whose engine
 floors are Chrome 84, Firefox 90, Safari 15 and Node 14.6 in
 [MDN's class compatibility data](https://github.com/mdn/browser-compat-data/blob/main/javascript/classes.json).
 This comparison does not validate GC behavior on those browsers. Runtime
-checks here used Chrome 157 and Node 22.22.1; downleveling syntax alone does
-not supply `WeakRef`.
+checks here used Chrome 157 and Node 22.22.1. Tests also cover an unavailable
+constructor, a discarded target, full-to-partial resumption, topology
+replacement, shrink/empty/regrow, and failed rebuilds that would change
+the cache policy.
 
 The [readable summary](results/pr159-2026-11-18.summary.json),
 [manifest and checksums](results/pr159-2026-11-18.manifest.json), and
