@@ -17,6 +17,10 @@ export async function loadArchive(directory: string) {
   const reports = [];
   for (const [date, input] of raw) {
     const previousDate = input && typeof input === 'object' && 'previousDate' in input ? input.previousDate : null;
+    if (typeof previousDate === 'string' && !raw.has(previousDate)) {
+      errors[date] = ['Named baseline report is missing or unreadable'];
+      continue;
+    }
     const result = validateReport(input, typeof previousDate === 'string' ? raw.get(previousDate) : undefined);
     if (!result.ok) errors[date] = result.errors;
     else if (result.report.date !== date) errors[date] = ['Filename/date mismatch'];

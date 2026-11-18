@@ -1,4 +1,4 @@
-import { mkdtemp, copyFile, writeFile, symlink, rm } from 'node:fs/promises';
+import { mkdtemp, copyFile, writeFile, symlink, rm, readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -18,6 +18,15 @@ describe('private archive boundary', () => {
     expect(feed.dates.at(-1)).toBe('2026-10-30');
     expect(feed.errors['2026-10-30']?.length).toBeGreaterThan(0);
     expect(feed.errors['2026-10-31']).toBeUndefined();
+  });
+  it('rejects a missing named baseline even when every comparison status is unknown', async () => {
+    const d = await archive();
+    const report = JSON.parse(await readFile(new URL('../../reports/fixtures/day-2.json', import.meta.url), 'utf8'));
+    for (const node of report.nodes) node.previousStatus = 'unknown';
+    await writeFile(join(d, '2026-10-29.json'), JSON.stringify(report));
+    const feed = await loadArchive(d);
+    expect(feed.reports).toEqual([]);
+    expect(feed.errors['2026-10-29']).toEqual(['Named baseline report is missing or unreadable']);
   });
   it('rejects escaping symlinks and missing comparison baselines', async () => {
     const d = await archive();
