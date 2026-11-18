@@ -584,7 +584,8 @@ never picked later, since the camera may have moved by then, so re-query the
 resting pointer from `onPicked`. The pick is exact to the device pixel under the
 pointer and has none of the CPU index's touch tolerance. `DagrCanvas` wires
 this provider in behind `hitTesting="gpu"` (next section). At 10,000 nodes a
-pick took about 0.1 to 0.2 ms of CPU on one device, on WebGPU (see
+pick took at most 0.2 ms of CPU at the median on AMD RDNA 2 and Apple M4,
+on WebGPU in Chrome 156 (2026-10-28 and 2026-10-29) (see
 `bench/browser/README.md`, "What a pick costs a frame").
 
 ## Navigation, node events and camera control
@@ -871,7 +872,8 @@ data and not the only way to reach it.
 
 - **Port hits (edges stay on the CPU).** Exact CPU node hits ship with `DagrCanvas`.
   Ports are M6.3a. GPU node picks are opt-in through `hitTesting="gpu"`
-  (M4.8b), priced on one device at about 0.1 to 0.2 ms of CPU per pick. Edge
+  (M4.8b), priced on AMD RDNA 2 and Apple M4 at no more than 0.2 ms of CPU per pick
+  at the median. Edge
   hits on `DagrCanvas` are CPU only. At 10,000 nodes a query takes 0.2 ms
   or less, but rebuilding the index while edges glide took 2 ms at one
   segment per edge and 12 to 14 ms at three, on one device. A cheaper build
