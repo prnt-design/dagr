@@ -477,6 +477,11 @@ branches never enter public docs, source, npm artifacts, or job fixtures.
   they upload, and rich-node tiers retain 1.0 KB of heap a node with no tier
   open. GPU time per pass is left to M4.10.
 
+PR #159 remains an unmerged experiment. Its 2026-10-26 Apple M4 measurements
+reduced partial-motion `setEdges` to 1.8 to 2.0 ms from 3.0 to 3.1, at
+retained moving-edge memory of 33.6 MB against 16.4. These historical results
+do not validate the current integration or accept its memory trade.
+
 <a id="m410-current-outcome"></a>
 
 - [ ] **M4.10** Performance: 10k nodes at 60fps, animating with springs in
