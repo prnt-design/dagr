@@ -477,7 +477,7 @@ are refused while attached, because the helper chose the mode. Their page
 still comes from the static server in WSL, which the Windows side reaches as
 `127.0.0.1:8733`. When the helper runs from an SSH session, its Chrome,
 headed or headless, lands in Windows session 0, where a WebGPU canvas
-presents nothing; [the NVIDIA
+presents nothing and `frame-profile.mjs` exits non-zero; [the NVIDIA
 rows below 10,000](#sizes-below-10000-on-the-nvidia-rtx-4090-2026-11-17) say
 how to start it in the signed-in session. `gpu-hover.mjs`,
 `mobile-core-check.mjs` and `mobile-budget.mjs` also attach through
@@ -948,7 +948,16 @@ come up on `webgpu` through it. So when the adapter reports
 `isFallbackAdapter` the runner says so on stderr before it measures, and exits
 non-zero even if every row then comes up on `webgpu`. On `webgpu`, outside
 `--memory`, it also exits non-zero unless every device the page created reports
-`isFallbackAdapter: false`. Each size, edge style, node mode, part and motion runs two modes for 300 frames after 60 of warm-up. `still` calls `render()` every frame.
+`isFallbackAdapter: false`. A hardware adapter and `renderer.backend`
+`webgpu` are still not enough: a Chrome in Windows session 0 has both and
+presents nothing (see [the NVIDIA rows below
+10,000](#sizes-below-10000-on-the-nvidia-rtx-4090-2026-11-17)). So outside
+`--memory` each row reports `lit`, the pixels its first frame drew brighter than the clear colour,
+by `backend-probe.html`'s margin, and the runner exits non-zero when a row lit
+none. Started from SSH in session 0 on the RTX 4090 on 2026-11-17 UTC, a
+1,000 and 10,000 node run lit 0 on both rows and exited 1 on that alone,
+with intervals that looked healthy (p95 16.7 and 16.8 ms); started in the
+signed-in session, the same run lit 249,599 and 348,126 and passed. Each size, edge style, node mode, part and motion runs two modes for 300 frames after 60 of warm-up. `still` calls `render()` every frame.
 `animated` also replaces every node centre and every edge route each frame
 through `setNodes` and `setEdges`, from a sway computed from the clock: the
 renderer's half of a frame with every spring in flight, without the scene
@@ -4953,7 +4962,8 @@ pixels. A WebGPU render pass
 read back through a buffer held its clear colour, and the same pass copied
 out of a WebGPU canvas read as zeros, so the device worked and the canvas
 presented nothing. `frame-profile.mjs` would have timed those empty frames
-without complaint. Pointing `WSL_INTEROP` at the interop socket of a WSL
+without complaint; since a later change the same day it refuses them (see
+[the frame profile](#frame-profile-on-webgpu-m410a)). Pointing `WSL_INTEROP` at the interop socket of a WSL
 process started from the signed-in session (here `/run/WSL/1_interop`, which
 the Windows sign-in task's WSL owns; `(Get-Process -Id $PID).SessionId` in a
 PowerShell started through a socket says which session it lands in) starts

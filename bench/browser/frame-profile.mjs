@@ -35,7 +35,10 @@
  * the page created, reports `isFallbackAdapter`. With `--backend=webgl2` the
  * page asks for `backend: 'webgl2'`, and the runner exits non-zero when no
  * WebGL2 context names its GPU or one names a software renderer, since Chrome
- * falls back to SwiftShader there too.
+ * falls back to SwiftShader there too. Outside `--memory`, every row also counts
+ * the pixels its first frame lit, and the runner exits non-zero when a row lit
+ * none: a WebGPU
+ * canvas can present nothing while `renderer.backend` still says `webgpu`.
  *
  * `DAGR_CDP`, a DevTools endpoint such as `windows-chrome.mjs` prints, attaches
  * to a running Chrome instead of launching one.
@@ -89,6 +92,9 @@ const PARTS = ['all', 'nodes', 'edges'];
 const partsList = option('parts', 'all').split(',');
 for (const parts of partsList) {
   if (!PARTS.includes(parts)) throw new Error(`--parts takes ${PARTS.join(', ')}, got ${parts}`);
+}
+if (sizes.some((size) => size < 4) && partsList.includes('edges')) {
+  throw new Error('--parts=edges requires --sizes of at least 4 nodes so the scene contains an edge');
 }
 const MOTIONS = ['sway', 'springs'];
 const motions = option('motion', 'sway').split(',');
@@ -427,6 +433,7 @@ const rows = runs.map((run) => ({
           ]),
         ),
   backend: run.backend,
+  lit: run.lit,
   zoom: Math.round(run.zoom * 10_000) / 10_000,
   buildMs: Math.round(run.buildMs),
   heapMb: Object.fromEntries(
@@ -451,6 +458,13 @@ const report = {
 };
 console.log(JSON.stringify(report, null, 1));
 reportWrongBackend(rows, backend);
+const dark = rows.filter((row) => row.lit === 0);
+if (dark.length > 0) {
+  console.error(
+    `${dark.length} of ${rows.length} rows lit no pixel on their first frame, so the canvas presented nothing; see each row's lit`,
+  );
+  process.exitCode = 1;
+}
 if (backend === 'webgpu' && (deviceAdapters.length === 0 || deviceAdapters.some((a) => a.isFallbackAdapter !== false))) {
   console.error('a device was created on an adapter not known to be hardware, or none was created; see deviceAdapters');
   process.exitCode = 1;
