@@ -1,13 +1,15 @@
-# Findings, 2026-11-18
+# Same-context pilot findings, 2026-11-18
 
 ## Decision
 
-Keep the canonical skill and reference unchanged. This run demonstrates that
+No canonical change is justified by this pilot. This run demonstrates that
 six content variants can use the published 0.2.0 API, but cannot attribute any
 improvement to guidance. The baseline was contaminated by prior skill exposure;
 identical outputs were retained rather than constructing an artificially weak
-control. A fresh-context authoring study and human learner study remain useful
-follow-ups, not verified outcomes of this run.
+control. The independent authoring comparison remains required to satisfy M5.7d-2.
+The parent coordinates fresh baseline and guided sessions using independent/.
+Human learner evidence remains unverified. This pilot does not establish
+incremental skill effect or support a broader no-change conclusion.
 
 ## Agent rubric
 
