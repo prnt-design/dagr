@@ -93,8 +93,8 @@ const partsList = option('parts', 'all').split(',');
 for (const parts of partsList) {
   if (!PARTS.includes(parts)) throw new Error(`--parts takes ${PARTS.join(', ')}, got ${parts}`);
 }
-if (sizes.includes(1) && partsList.includes('edges')) {
-  throw new Error('--parts=edges requires --sizes of at least 2 nodes so the scene contains an edge');
+if (sizes.some((size) => size < 4) && partsList.includes('edges')) {
+  throw new Error('--parts=edges requires --sizes of at least 4 nodes so the scene contains an edge');
 }
 const MOTIONS = ['sway', 'springs'];
 const motions = option('motion', 'sway').split(',');
