@@ -5164,3 +5164,130 @@ Hit testing is not in these rows. Still not covered, all on the NVIDIA
 adapter: a zoom other than `fit`, unrounded GPU timestamps (the disturbed
 mode above reading at 32 ns is the only finer grain seen, not explained by
 any flag), rich nodes and the WebGL2 fallback.
+
+### Zoom 1 at 10,000 nodes on the NVIDIA RTX 4090 (2026-11-18)
+
+`tsk_ad4b7ce0d93b`, the matrix's first zoom other than `fit` on its first
+machine. The rows [at 10,000](#results-matrix-at-10000-nodes-m410-2026-10-30)
+at zoom 1, as [on the Apple
+M4](#zoom-1-at-10000-nodes-on-the-apple-m4-2026-11-13), on main `6167fd6`,
+nothing changed.
+
+```
+export WSL_INTEROP=/run/WSL/1_interop          # only from an SSH session
+node bench/browser/windows-chrome.mjs          # headed, left running
+DAGR_CDP=http://127.0.0.1:9445 node bench/browser/backend-probe.mjs --parity
+DAGR_CDP=http://127.0.0.1:9445 node bench/browser/frame-profile.mjs \
+  --motion=springs --sizes=10000 --edges=straight,smooth --moving=1,0.1 --frames=1200 --zoom=1 --dpr=1   # then --dpr=2
+```
+
+The WSL2 machine (AMD Ryzen 9 9900X), driven over SSH from the Mac mini and
+started in the signed-in session as [the smaller
+sizes](#sizes-below-10000-on-the-nvidia-rtx-4090-2026-11-17) describe,
+driving Google Chrome 157.0.8103.79 on the Windows side, headed, no flags
+beyond the helper's. The adapter, probed at run time, was `nvidia`
+`lovelace`, not a fallback (the `--gpu` runs, with developer features on,
+also report `NVIDIA GeForce RTX 4090`, device `0x2684`), and
+`renderer.backend` was `webgpu` on every row of every run. The parity check
+passed before each launch, and every row's first frame lit pixels (about
+350,000 at DPR 1 and 1.4 million at DPR 2), so none of these frames is the
+empty canvas of session 0. Viewport 1280 by 720, zoom 1 about the fitted
+view's centre, where `fit` is 0.0715. 13,169 edges, 60 warm-up and 1,200
+measured frames per mode, control tick 16.7 ms in every run. Three runs at
+each DPR, DPR 1 and 2 alternating, one at a time, load average 0.2 to 5.2 at
+the start of each measured run (read with `uptime`), which was not
+controlled. The first DPR 1 run timed out waiting for the page to load and
+measured nothing; it was run again in a fresh launch after the `--gpu` runs
+below and is run 1 in the table. Columns
+as at 10,000.
+
+| DPR | Edges | Motion | Interval p95 | Past one tick | `apply` | `advance` | `setNodes` | `setEdges` | `render` | Holds the tick |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 1 | straight | still | 16.8 | 0% | | | | | 0.2 to 0.3 | yes |
+| 1 | straight | all moving | 16.8 | 0.1%, 0.3%, 0% | 12.3 to 14.0 | 2.2 to 2.9 | 1.2 to 1.4 | 1.3 to 1.5 | 0.5 to 0.6 | yes |
+| 1 | straight | a tenth | 16.8 | 0%, 0%, 0% | 1.3 to 1.6 | 0.4 to 0.5 | 1.2 to 1.5 | 0.9 to 1.1 | 0.4 to 0.6 | yes |
+| 1 | smooth | still | 16.8 | 0% | | | | | 0.2 to 0.3 | yes |
+| 1 | smooth | all moving | 33.4 | 16.8%, 15.3%, 17.3% | 19.9 to 20.4 | 4.2 to 4.3 | 1.4 | 10.2 | 1.1 | **no** |
+| 1 | smooth | a tenth | 16.8 | 0%, 0%, 0% | 1.9 to 2.3 | 0.5 to 0.6 | 1.3 to 1.4 | 3.1 to 3.2 | 1.1 | yes |
+| 2 | straight | still | 16.8 | 0% | | | | | 0.2 | yes |
+| 2 | straight | all moving | 16.8 | 0%, 0%, 0% | 14.6 to 14.8 | 2.0 to 2.3 | 1.3 | 1.2 to 1.3 | 0.5 | yes |
+| 2 | straight | a tenth | 16.8 | 0%, 0%, 0% | 1.4 to 1.5 | 0.5 to 0.6 | 1.2 to 1.3 | 1.0 | 0.4 to 0.5 | yes |
+| 2 | smooth | still | 16.8 | 0% | | | | | 0.2 | yes |
+| 2 | smooth | all moving | 33.4 to 33.5 | 11.5%, 16.8%, 18.0% | 19.8 to 20.7 | 4.2 to 4.3 | 1.3 to 1.4 | 8.4 to 10.0 | 1.1 | **no** |
+| 2 | smooth | a tenth | 16.8 | 0%, 0%, 0% | 2.0 to 2.4 | 0.5 to 0.7 | 1.4 to 1.6 | 3.3 to 3.5 | 1.1 to 1.3 | yes |
+
+`input` was 0.5 to 0.7 ms on every animated row. The interval median was
+16.7 ms on every row of every run, so none of these runs paced at the slower
+rate the smaller sizes saw. Where a row other than smooth edges with every
+node moving missed ticks, it was one to four intervals in 1,200, none longer
+than 33.4 ms.
+
+**Zoom 1 against `fit` in one launch.** The table's smooth all-moving row
+misses more than the same row at `fit` [on
+2026-10-30](#results-matrix-at-10000-nodes-m410-2026-10-30) (3.9% to 5.1%
+at DPR 1, 7.4% to 9.3% at DPR 2), but that was another date and Chrome 156.
+So straight after the runs above, one more launch measured that row alone,
+`--edges=smooth --moving=1`, at `fit` and then zoom 1, at DPR 1 and then 2,
+twice over. Missed ticks, with `setEdges` between retargets in brackets:
+
+| Pair | DPR | `fit` | Zoom 1 | Load at start (`fit`, zoom 1) |
+| --- | --- | --- | --- | --- |
+| 1 | 1 | 9.0% (7.6 ms) | 6.9% (8.1) | 2.6, 1.0 |
+| 1 | 2 | 16.1% (8.0) | 56.9% (12.3) | 0.7, 2.5 |
+| 2 | 1 | 56.3% (12.5) | 56.5% (12.1) | 14.8, 22.4 |
+| 2 | 2 | 7.1% (7.8) | 10.2% (8.2) | 23.8, 13.6 |
+
+The load rose during pair 1 at DPR 2 (14.8 by the next start). The three
+readings near 56% came with `setEdges` and `advance` at about one and a half
+times their other runs' readings (12.1 to 12.5 ms against 7.6 to 8.2, and
+6.6 to 7.3 against 4.0 to 4.5) and every other step up too, which fits the
+CPU being shared, so they are counted as disturbance. Load at a run's start
+did not predict it: pair 2 at DPR 2 began at 23.8 and was not disturbed. In the
+other five, `fit` missed 7.1% to 16.1% and zoom 1 6.9% to 10.2%.
+
+**GPU time per frame**, from `--gpu` with the helper started with
+`DAGR_CHROMIUM_ARGS=--enable-webgpu-developer-features`, one run at each DPR
+straight after the first five table runs, before run 1 at DPR 1 was
+repeated. As at `fit`, the runner exits non-zero on
+both, because the timestamps were still rounded to 1,024 ns. Medians / 95th
+percentiles of the frame's passes summed, in milliseconds:
+
+| DPR | Edges | Still | All moving | A tenth moving |
+| --- | --- | --- | --- | --- |
+| 1 | straight | 0.15 to 0.16 / 0.29 to 0.31 | 0.10 / 0.27 | 0.11 / 0.16 |
+| 1 | smooth | 0.58 to 0.59 / 1.59 to 1.62 | 0.40 / 0.58 | 0.44 / 0.57 |
+| 2 | straight | 0.74 to 0.75 / 0.79 to 0.82 | 0.69 / 0.81 | 0.83 / 0.91 |
+| 2 | smooth | 0.89 to 0.90 / 0.93 | 0.85 / 1.24 | 0.27 / 0.77 |
+
+With timestamp queries on, the smooth all-moving rows missed 16.9% (DPR 1)
+and 17.6% (DPR 2) of ticks and every other row none. The longest single GPU
+frame was 5.6 ms.
+
+- **Zoom 1 holds the same rows as `fit`.** Every row holds the tick except
+  smooth edges with every node moving, which misses 15.3% to 17.3% of ticks
+  at DPR 1 and 11.5% to 18.0% at DPR 2, with an interval p95 of two ticks.
+- **Zoom 1 does not separate from `fit` on that row.** In the same launch,
+  the five undisturbed readings put `fit` at 7.1% to 16.1% and zoom 1 at
+  6.9% to 10.2%. All but one read above the 2026-10-30 matrix's `fit` at
+  their DPR (pair 2's 7.1% at DPR 2 is below that date's 7.4% to 9.3%),
+  unpaired with it and on another Chrome; why was not traced. As on the
+  Apple M4, the CPU steps do not depend on the camera, since every node and
+  edge is updated: in the same launch, undisturbed, `setEdges` read 7.6 to
+  8.0 ms at `fit` against 8.1 to 8.2 at zoom 1. Across dates the table's
+  `setEdges` is 8.4 to 10.2 ms and `advance` 4.2 to 4.3, against 7.5 to 9.0
+  and 3.8 to 4.8 at `fit` on 2026-10-30, and a retarget's `apply` 19.8 to
+  20.7 against 17.6 to 22.5. Summed per run, the step medians between
+  retargets come to 17.5 to 17.7 ms at DPR 1 and 15.7 to 17.3 at DPR 2,
+  past one tick in five of six runs; the run at 15.7 missed the fewest
+  ticks (11.5%).
+- **The GPU frame is not what misses the tick.** It is about 1.6 ms or less
+  at the median and p95 on every row. Against `fit` on 2026-10-30 it is
+  shorter at DPR 2 on every row but smooth edges with every node moving
+  (0.85 against 0.51 at the median); the rest read 0.27 to 0.90 against 0.54
+  to 2.79. That fits most of the graph being off screen at zoom 1, as on the
+  Apple M4, though the 2026-10-30 section's readings fit the GPU clocking
+  down when the frame leaves it idle, which these readings cannot separate.
+  At DPR 1 zoom 1 reads the same as `fit` or lower at the median.
+
+Hit testing is not in these rows. Still not covered, all on the NVIDIA
+adapter: unrounded GPU timestamps, rich nodes and the WebGL2 fallback.
