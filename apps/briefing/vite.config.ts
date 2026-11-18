@@ -1,5 +1,6 @@
 import { realpath } from 'node:fs/promises';
-import { isAbsolute, relative, resolve } from 'node:path';
+import { isAbsolute, relative, sep } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import { loadArchive } from './src/archive.js';
@@ -11,9 +12,9 @@ export default defineConfig({
       const configured = process.env.DAGR_REPORTS_DIR;
       if (!configured || !isAbsolute(configured)) throw new Error('Set DAGR_REPORTS_DIR to an absolute private directory outside the checkout');
       const directory = await realpath(configured);
-      const checkout = await realpath(resolve('../..'));
+      const checkout = await realpath(fileURLToPath(new URL('../..', import.meta.url)));
       const inside = relative(checkout, directory);
-      if (!inside.startsWith('..') && !isAbsolute(inside)) throw new Error('Reports must be outside the checkout');
+      if (inside !== '..' && !inside.startsWith(`..${sep}`) && !isAbsolute(inside)) throw new Error('Reports must be outside the checkout');
       server.middlewares.use('/api/reports', async (req, res) => {
         res.setHeader('Cache-Control', 'no-store');
         res.setHeader('Content-Type', 'application/json');

@@ -18,8 +18,8 @@ The overview, tour transcripts, full node content, status and source list are
 visible without opening the graph. Tour controls call ExplorerApi to select a
 view and inspect its highlighted item. The Explorer starts in outline mode and
 supports its shipped map and keyboard controls. Inspect links preserve repository,
-date and canonical node ID. A linked item is named on reload and can be opened
-with its button. Previous/next navigate available archive days, including invalid
+date and canonical node ID. A linked item opens on reload and also has an explicit inspect
+button. Previous/next navigate available archive days, including invalid
 entries. Reports older than today's UTC day are explicitly stale. Source dates
 remain visible. Coverage is partial (at most 50 PR records), and missing nodes
 never imply deletion or completion.
