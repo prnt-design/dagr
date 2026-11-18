@@ -646,15 +646,15 @@ branches never enter public docs, source, npm artifacts, or job fixtures.
   - Rich nodes at 10,000 on the NVIDIA RTX 4090, 2026-11-18 UTC on main
     `3fe6d80`: Chrome 157 headed on the Windows side of the WSL2 machine,
     `nvidia` `lovelace`, WebGPU, not a fallback adapter, `fit` and zoom 1,
-    DPR 1 and 2, three runs each, every node moving, in a launch that paced
+    DPR 1 and 2, three runs each, every node moving, in launches that paced
     at a 17.5 to 17.8 ms tick. Straight edges hold the tick at both zooms.
     Smooth edges with every node moving miss 5.6% to 18.1% of ticks at `fit`
     and 4.3% to 21.7% at zoom 1, and in six same-launch pairs at DPR 1 (rich
     second) rich missed more every time: 5.3% to 16.6% against plain shapes'
     3.6% to 3.9% at `fit`, 6.8% to 16.0% against 4.3% to 12.3% at zoom 1.
     The tiers' timed steps add 1.6 to 2.2 ms between retargets to a frame
-    whose steps already sum to 14.2 to 16.2 ms; unlike the Apple M4, the gap
-    shows at `fit`, where no label is attached. GPU median and p95 about 1.4
+    whose steps already sum to 14.2 to 16.2 ms. The gap shows at `fit` too,
+    where no label is attached (the Apple M4 was not paired at `fit`). GPU median and p95 about 1.4
     ms or less, timestamps still rounded to 1,024 ns. See
     [rich nodes on the NVIDIA adapter](bench/browser/README.md#rich-nodes-at-10000-on-the-nvidia-rtx-4090-2026-11-18).
 

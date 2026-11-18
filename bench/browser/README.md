@@ -5328,8 +5328,8 @@ zoom 1 DPR 2, three times over, one at a time, load average 0.1 to 6.6 at
 the start of each (read from `/proc/loadavg`), which was not controlled.
 Columns as [on the Apple M4](#rich-nodes-at-10000-on-the-apple-m4-2026-11-14).
 
-**This launch paced at the slower rate.** The control tick read 17.5 to
-17.8 ms in every run, not 16.7, and the interval median 17.5 to 18.0 on
+**Both launches paced at the slower rate.** The control tick read 17.5 to
+17.8 ms in every run, the `--gpu` runs below included, not 16.7, and the interval median 17.5 to 18.0 on
 every row, so ticks are counted at that rate, as in the runs that paced
 that way [below 10,000](#sizes-below-10000-on-the-nvidia-rtx-4090-2026-11-17).
 The cause is still not traced.
@@ -5403,10 +5403,14 @@ milliseconds:
 The longest single GPU frame was 2.49 ms. With timestamp queries on, the
 smooth all-moving rows missed 5.5% and 15.7% of ticks at `fit` (DPR 1 and
 2) and 14.6% and 19.0% at zoom 1, and the straight rows at most 0.3%. The
-overlay is DOM, which these timestamps do not see.
+overlay is DOM, which these timestamps do not see. Straight edges at `fit`
+and DPR 2 read 0.21 ms still against 1.27 moving, which fits the GPU
+clocking down when the frame leaves it idle, as in the earlier NVIDIA
+sections; not traced.
 
 - **Straight edges hold the tick with rich nodes at both zooms and both
-  DPRs.** No straight row missed more than one interval in 1,200.
+  DPRs.** No straight row in the table missed more than one interval in
+  1,200, and none in the `--gpu` runs more than 0.3%.
 - **Smooth edges with every node moving miss more with rich nodes, at
   both zooms.** That row missed 5.6% to 18.1% of ticks at `fit` and 4.3% to
   21.7% at zoom 1, and in every one of the six same-launch pairs `rich`
@@ -5417,22 +5421,27 @@ overlay is DOM, which these timestamps do not see.
   labels does not explain it there. `rich` ran second in every pair, so an
   order effect is not ruled out.
 - **The timed tier work lands on a frame already near the tick.** The
-  shared steps did not rise with them in `rich` (`setEdges` within 0.7 ms
-  of the same run's `shapes`, `advance` the same or lower, a retarget's
-  `apply` 1.0 ms higher to 4.6 ms lower), and the tiers' `richNodes` and
-  `sync` added 1.6 to 2.2 ms between retargets, so the step sum rose by 0.3 to 2.2 ms, to 15.5
-  to 16.6 ms against this launch's 17.5 to 17.8 ms tick. Across the twelve
+  shared steps barely moved in `rich` (`setEdges` 0.2 ms lower to 0.7 ms
+  higher than the same run's `shapes`, `advance` the same or lower, a
+  retarget's `apply` 1.0 ms higher to 4.6 ms lower), and the tiers'
+  `richNodes` and `sync` added 1.6 to 2.2 ms between retargets, so the
+  step sum rose by 0.3 to 2.2 ms, to 15.5 to 16.6 ms against this launch's
+  17.5 to 17.8 ms tick. Across the twelve
   table runs, the smooth all-moving step sum was 14.3 to 18.6 ms, and the
   runs at 17 ms or more missed 12.1% to 21.7% of ticks, those below 16.5
   ms 4.3% to 8.1%.
-- **Against the plain-shape rows of other dates, the ranges overlap.** The
-  2026-10-30 matrix's `fit` row missed 3.9% to 9.3% and the 2026-11-18 zoom
-  1 row 11.5% to 18.0%, both at a 16.7 ms tick; these are unpaired with
-  today's rows and paced at another rate, so the pairs above are the
-  comparison to use.
+- **Against the unpaired plain-shape rows, the ranges overlap.** The
+  2026-10-30 matrix's `fit` row missed 3.9% to 9.3%, and on the same day as
+  these rows, in an earlier launch, the [zoom 1
+  section](#zoom-1-at-10000-nodes-on-the-nvidia-rtx-4090-2026-11-18)'s row
+  missed 11.5% to 18.0% and its undisturbed `fit` readings 7.1% to 16.1%,
+  all counted against a 16.7 ms control tick. These are unpaired with these
+  rows and paced at another rate, and they read above this launch's paired
+  `shapes` at `fit` (3.6% to 3.9%), so the pairs above are the comparison
+  to use.
 - **The GPU frame is not what misses the tick.** It is about 1.4 ms or
-  less at the median and p95 on every row, and the tiers' labels are DOM, which
-  these timestamps do not see.
+  less at the median and p95 on every row, and the tiers' labels are DOM,
+  which these timestamps do not see.
 
 Hit testing is not in these rows. Still not covered, all on the NVIDIA
 adapter: unrounded GPU timestamps and the WebGL2 fallback.
