@@ -1,0 +1,539 @@
+import type { ExplorerEdge, ExplorerNode, ExplorerView } from '@prnt/dagr-explorer';
+
+export type StepKind = 'step' | 'check' | 'review' | 'outcome' | 'rule';
+
+export interface SourceRef {
+  /** Section of AGENTS.md at snapshot ccb66cad9dfc3baf650d65338e2bb2ae6c38aae2. */
+  readonly section: string;
+  /** Verbatim excerpt (line breaks collapsed to spaces). */
+  readonly quote: string;
+}
+
+export interface ProcessNode extends ExplorerNode {
+  readonly kind: StepKind;
+  /** One line, shown on the node at the rich tier. */
+  readonly summary: string;
+  readonly explanation: string;
+  readonly whyItMatters: string;
+  readonly command?: string | undefined;
+  readonly sources: readonly SourceRef[];
+  readonly terms?: readonly string[] | undefined;
+}
+
+export interface ProcessEdge extends ExplorerEdge {
+  readonly label: string;
+}
+
+const HOW = 'AGENTS.md › How work reaches main';
+const COMMANDS = 'AGENTS.md › Commands';
+const UNATTENDED = 'AGENTS.md › What agents may do unattended';
+
+const KIND_COLOR: Record<StepKind, string> = {
+  step: '#2563eb',
+  check: '#0f766e',
+  review: '#7c3aed',
+  outcome: '#b45309',
+  rule: '#b91c1c',
+};
+
+export const KIND_LABEL: Record<StepKind, string> = {
+  step: 'Step',
+  check: 'Check',
+  review: 'Review',
+  outcome: 'Outcome',
+  rule: 'Rule',
+};
+
+function node(n: Omit<ProcessNode, 'color'>): ProcessNode {
+  return { ...n, color: KIND_COLOR[n.kind] };
+}
+
+// Each concept is defined once; views pick from this table so an id always
+// means the same thing in every view.
+const N = {
+  localGate: node({
+    id: 'local-gate',
+    label: '1. Run the full local gate',
+    kind: 'step',
+    summary: 'Five commands from the repo root; all must pass.',
+    explanation:
+      'From the repo root, run typecheck, test, lint, build and the bench gate in sequence. All five must pass. A skip that bench:gate explicitly prints counts as a pass.',
+    whyItMatters:
+      'Lint and build are included because CI runs them, so skipping them locally is a way to turn main red. The bench gate runs locally rather than on CI because the committed baseline is machine-matched.',
+    command: 'pnpm typecheck && pnpm test && pnpm lint && pnpm build && pnpm bench:gate',
+    terms: ['gate', 'pnpm', 'local checks'],
+    sources: [
+      {
+        section: `${HOW}, step 1`,
+        quote:
+          'Run the full local gate from the repo root: `pnpm typecheck && pnpm test && pnpm lint && pnpm build && pnpm bench:gate`. All five must pass, including a skip explicitly printed by `bench:gate`.',
+      },
+      {
+        section: `${HOW}, step 1`,
+        quote:
+          'Lint and build are in this list because CI runs them, so skipping them locally is a way to turn main red.',
+      },
+    ],
+  }),
+  rebase: node({
+    id: 'rebase',
+    label: '2. Rebase onto origin/main',
+    kind: 'step',
+    summary: 'Pull in what landed on main since you branched.',
+    explanation:
+      'Rebase your branch onto origin/main. If the rebase brought in changes, reinstall with the frozen lockfile and run the full gate again before pushing.',
+    whyItMatters:
+      'The changes a rebase pulls in are exactly the ones your local gate has never seen. Rebasing is not a formality.',
+    terms: ['origin/main', 'rebase', 'sync'],
+    sources: [
+      {
+        section: `${HOW}, step 2`,
+        quote:
+          'Rebasing is not a formality: the changes it pulls in are exactly the ones your local gate has never seen.',
+      },
+    ],
+  }),
+  reinstall: node({
+    id: 'reinstall',
+    label: 'Reinstall: frozen lockfile',
+    kind: 'step',
+    summary: 'Only when the rebase brought in changes.',
+    explanation:
+      'A rebase can bring in a new lockfile. Run pnpm install --frozen-lockfile, then run the full local gate again.',
+    whyItMatters:
+      'A stale node_modules against a new lockfile fails in a way that looks exactly like broken code, not a stale install.',
+    command: 'pnpm install --frozen-lockfile',
+    terms: ['lockfile', 'node_modules', 'install', 'stale'],
+    sources: [
+      {
+        section: `${HOW}, step 2`,
+        quote:
+          'If the rebase brought in changes, run `pnpm install --frozen-lockfile` before running the gate again. A rebase can bring in a new lockfile, and a stale `node_modules` against it fails in a way that looks exactly like broken code, not a stale install.',
+      },
+    ],
+  }),
+  openPr: node({
+    id: 'open-pr',
+    label: '3. Push and open a PR',
+    kind: 'step',
+    summary: 'Every change reaches main through a pull request.',
+    explanation:
+      'Push the branch and open a pull request. This is the only route to main: no agent pushes to main directly.',
+    whyItMatters:
+      'The PR is where reviews are recorded and where CI runs before anything merges.',
+    terms: ['pull request', 'push', 'branch'],
+    sources: [
+      { section: `${HOW}, step 3`, quote: 'Push the branch and open a pull request.' },
+      {
+        section: HOW,
+        quote: 'Every change reaches `main` through a pull request. No agent pushes to `main` directly.',
+      },
+    ],
+  }),
+  recordReviews: node({
+    id: 'record-reviews',
+    label: '4. Record reviews in the PR body',
+    kind: 'review',
+    summary: 'Which reviews ran, what each found, how each was resolved.',
+    explanation:
+      'The PR body records this run\'s reviews: which ran, what each found, and how every finding was resolved, or accepted with a reason. Two reviews are the floor: one over the diff and one over the merged tree.',
+    whyItMatters:
+      'The PR is the consolidated record of the run, so a later reader should not have to reconstruct the review from anywhere else.',
+    terms: ['PR body', 'findings', 'review record'],
+    sources: [
+      {
+        section: `${HOW}, step 4`,
+        quote:
+          'The PR body records this run\'s reviews: which reviews ran, what each found, and how every finding was resolved, or accepted with a reason.',
+      },
+      {
+        section: `${HOW}, step 4`,
+        quote:
+          'The PR is the consolidated record of the run, so someone reading it later should not have to reconstruct the review from anywhere else.',
+      },
+    ],
+  }),
+  diffReview: node({
+    id: 'diff-review',
+    label: 'Diff review',
+    kind: 'review',
+    summary: 'Asks whether the change is right.',
+    explanation:
+      'One of the two required reviews. It reads the diff and asks whether the change itself is right.',
+    whyItMatters:
+      'It is half of the floor. On its own it cannot show problems that only appear in the merged result.',
+    terms: ['diff', 'required review'],
+    sources: [
+      {
+        section: `${HOW}, step 4`,
+        quote:
+          'Two reviews are the floor: one over the DIFF, and one over the MERGED TREE the diff produces. A diff review asks whether the change is right;',
+      },
+    ],
+  }),
+  treeReview: node({
+    id: 'tree-review',
+    label: 'Merged-tree review',
+    kind: 'review',
+    summary: 'Asks whether the result is right.',
+    explanation:
+      'The second required review reads the merged tree the diff produces and asks whether the result is right.',
+    whyItMatters:
+      'It catches stale numbers that predate the change, ordering bugs a diff cannot show, and a defect the diff review\'s own fix introduced.',
+    terms: ['merged tree', 'tree review', 'required review', 'stale numbers', 'ordering bugs'],
+    sources: [
+      {
+        section: `${HOW}, step 4`,
+        quote:
+          'a tree review asks whether the result is, and it is the one that catches stale numbers that predate the change, ordering bugs a diff cannot show, and a defect the diff review\'s own fix introduced.',
+      },
+    ],
+  }),
+  personaReview: node({
+    id: 'persona-review',
+    label: 'Persona reviews (optional)',
+    kind: 'review',
+    summary: 'Welcome on top of the two required reviews.',
+    explanation:
+      'Persona reviews are optional extras. When they run, they are recorded in the PR body the same way as the required reviews.',
+    whyItMatters: 'They add to the floor; they do not replace either required review.',
+    terms: ['persona', 'optional review'],
+    sources: [
+      {
+        section: `${HOW}, step 4`,
+        quote: 'Persona reviews are welcome on top and are recorded the same way.',
+      },
+    ],
+  }),
+  waitCi: node({
+    id: 'wait-ci',
+    label: '5. Wait for CI to conclude',
+    kind: 'check',
+    summary: 'A CI run on the PR takes about 90 seconds.',
+    explanation:
+      'Wait for CI to conclude on the PR. A run takes about 90 seconds. Never merge a PR whose checks have not concluded.',
+    whyItMatters: 'Merging depends on a concluded, green CI result on the PR.',
+    terms: ['CI', 'checks', 'continuous integration', '90 seconds'],
+    sources: [
+      {
+        section: `${HOW}, step 5`,
+        quote: 'Wait for CI to conclude on the PR. A run takes about 90 seconds.',
+      },
+    ],
+  }),
+  merge: node({
+    id: 'merge',
+    label: '6. Green CI merges the PR',
+    kind: 'outcome',
+    summary: 'The PR merges and the branch is deleted.',
+    explanation:
+      'Green CI merges the PR and deletes the branch. Agents may merge their own pull request unattended, but only with a green local gate and green CI on the PR.',
+    whyItMatters: 'This is the only way the change lands on main.',
+    terms: ['merge', 'green', 'delete branch'],
+    sources: [
+      { section: `${HOW}, step 6`, quote: 'Green CI merges the PR and deletes the branch.' },
+      {
+        section: UNATTENDED,
+        quote:
+          'Merge their own pull request, but only with a green local gate and green CI on the PR.',
+      },
+    ],
+  }),
+  fixRed: node({
+    id: 'fix-red',
+    label: 'Red CI: fix on the branch',
+    kind: 'check',
+    summary: 'Red CI does not merge. Fix it and push again.',
+    explanation:
+      'If CI is red the PR does not merge. Fix the problem on the branch and push again, then wait for CI to conclude again.',
+    whyItMatters: 'Fixes happen on the branch, so main never sees the red state.',
+    terms: ['red', 'failing CI', 'fix'],
+    sources: [
+      {
+        section: `${HOW}, step 6`,
+        quote: 'Red CI does not merge: fix it on the branch and push again.',
+      },
+    ],
+  }),
+  blocker: node({
+    id: 'blocker',
+    label: 'Blocked: leave the PR open',
+    kind: 'outcome',
+    summary: 'Record the blocker, release the claim, and stop.',
+    explanation:
+      'If green cannot be reached, leave the PR open, record the blocker, release the workboard claim, and stop.',
+    whyItMatters: 'An open PR with a written blocker is a good outcome. A red main is not.',
+    terms: ['blocker', 'workboard', 'claim', 'stop'],
+    sources: [
+      {
+        section: `${HOW}, step 6`,
+        quote:
+          'If green cannot be reached, leave the PR open, record the blocker, release the workboard claim, and stop. An open PR with a written blocker is a good outcome. A red `main` is not.',
+      },
+    ],
+  }),
+  mainMoves: node({
+    id: 'main-moves',
+    label: 'main moves: rebase the open PR',
+    kind: 'step',
+    summary: 'Rebase onto the new main and let CI run again.',
+    explanation:
+      'If main moves while the PR is open, rebase onto it and push to the open PR with --force-with-lease. CI then runs again.',
+    whyItMatters:
+      'A rebase rewrites the branch, so this push is the one force-push the workflow permits.',
+    terms: ['main moved', 'force-with-lease', 'rebase'],
+    sources: [
+      {
+        section: HOW,
+        quote: 'If `main` moves while the PR is open, rebase onto it and let CI run again.',
+      },
+    ],
+  }),
+  main: node({
+    id: 'main',
+    label: 'main',
+    kind: 'outcome',
+    summary: 'Changes arrive only through merged pull requests.',
+    explanation:
+      'main receives changes only through pull requests. No agent pushes to it directly, and nothing force-pushes to it.',
+    whyItMatters: 'An open PR with a written blocker is a good outcome. A red main is not.',
+    terms: ['main branch', 'trunk'],
+    sources: [
+      {
+        section: HOW,
+        quote: 'Every change reaches `main` through a pull request. No agent pushes to `main` directly.',
+      },
+    ],
+  }),
+  typecheck: node({
+    id: 'typecheck',
+    label: 'pnpm typecheck',
+    kind: 'check',
+    summary: 'First of the five gate commands.',
+    explanation: 'One of the five canonical commands run from the repo root as part of the local gate.',
+    whyItMatters: 'All five gate commands must pass before the branch is pushed.',
+    command: 'pnpm typecheck',
+    terms: ['types', 'typescript'],
+    sources: [{ section: COMMANDS, quote: 'The canonical commands from the repo root are:' }],
+  }),
+  test: node({
+    id: 'test',
+    label: 'pnpm test',
+    kind: 'check',
+    summary: 'Second of the five gate commands.',
+    explanation: 'One of the five canonical commands run from the repo root as part of the local gate.',
+    whyItMatters: 'All five gate commands must pass before the branch is pushed.',
+    command: 'pnpm test',
+    terms: ['tests'],
+    sources: [{ section: COMMANDS, quote: 'The canonical commands from the repo root are:' }],
+  }),
+  lint: node({
+    id: 'lint',
+    label: 'pnpm lint',
+    kind: 'check',
+    summary: 'CI runs it too, so do not skip it locally.',
+    explanation: 'Part of the local gate. CI also runs lint on the PR.',
+    whyItMatters: 'Skipping lint locally is a way to turn main red, because CI runs it.',
+    command: 'pnpm lint',
+    terms: ['lint'],
+    sources: [
+      {
+        section: `${HOW}, step 1`,
+        quote:
+          'Lint and build are in this list because CI runs them, so skipping them locally is a way to turn main red.',
+      },
+    ],
+  }),
+  build: node({
+    id: 'build',
+    label: 'pnpm build',
+    kind: 'check',
+    summary: 'CI runs it too, so do not skip it locally.',
+    explanation: 'Part of the local gate. CI also runs build on the PR.',
+    whyItMatters: 'Skipping build locally is a way to turn main red, because CI runs it.',
+    command: 'pnpm build',
+    terms: ['build'],
+    sources: [
+      {
+        section: `${HOW}, step 1`,
+        quote:
+          'Lint and build are in this list because CI runs them, so skipping them locally is a way to turn main red.',
+      },
+    ],
+  }),
+  benchGate: node({
+    id: 'bench-gate',
+    label: 'pnpm bench:gate',
+    kind: 'check',
+    summary: 'Diff-selected perf checks; a printed skip is a pass.',
+    explanation:
+      'bench:gate selects performance checks from the diff against origin/main. A skip it prints counts as a pass; never skip it by hand. bench:ci remains the full benchmark suite.',
+    whyItMatters:
+      'It runs locally rather than on CI because the committed baseline is machine-matched (see bench/README.md in the repository).',
+    command: 'pnpm bench:gate',
+    terms: ['benchmark', 'performance', 'bench:ci', 'baseline', 'skip'],
+    sources: [
+      {
+        section: COMMANDS,
+        quote:
+          '`bench:gate` selects performance checks from the diff against `origin/main`. A printed skip is a pass; never skip it by hand. `bench:ci` remains the full benchmark suite.',
+      },
+      {
+        section: `${HOW}, step 1`,
+        quote:
+          'The bench gate runs here rather than on CI because the committed baseline is machine-matched;',
+      },
+    ],
+  }),
+  noDirectPush: node({
+    id: 'no-direct-push',
+    label: 'No direct pushes to main',
+    kind: 'rule',
+    summary: 'Every change goes through a pull request.',
+    explanation: 'No agent pushes to main directly. Every change reaches main through a pull request.',
+    whyItMatters: 'It makes the PR, its reviews and its CI result the only way in.',
+    terms: ['protected', 'push to main'],
+    sources: [
+      {
+        section: HOW,
+        quote: 'Every change reaches `main` through a pull request. No agent pushes to `main` directly.',
+      },
+    ],
+  }),
+  forceWithLease: node({
+    id: 'force-with-lease',
+    label: 'One permitted force-push',
+    kind: 'rule',
+    summary: '--force-with-lease, own PR branch, after a rebase.',
+    explanation:
+      'Pushing a rebased branch to its open PR is the one force-push this workflow permits: --force-with-lease, to your own PR branch, never to main.',
+    whyItMatters: 'A rebase rewrites the branch, so the push needs force; nothing else does.',
+    terms: ['force push', 'force-with-lease'],
+    sources: [
+      {
+        section: HOW,
+        quote:
+          'A rebase rewrites the branch, and pushing it to the open PR is the ONE force-push this workflow permits: `--force-with-lease`, to your own PR branch, never to `main`.',
+      },
+    ],
+  }),
+  appendOnly: node({
+    id: 'append-only',
+    label: 'Review rounds are new commits',
+    kind: 'rule',
+    summary: 'Follow-up commits, never an amend.',
+    explanation:
+      'Apart from the rebase force-push, everything stays append-only. Each review round is a follow-up commit, never an amend.',
+    whyItMatters: 'A rewritten commit erases the record of what the review changed.',
+    terms: ['amend', 'append-only', 'follow-up commit', 'history'],
+    sources: [
+      {
+        section: HOW,
+        quote:
+          'Everything else stays append-only: review rounds are follow-up commits, never an amend, because a rewritten commit erases the record of what the review changed.',
+      },
+    ],
+  }),
+  concludedChecks: node({
+    id: 'concluded-checks',
+    label: 'Never merge before checks conclude',
+    kind: 'rule',
+    summary: 'Pending checks are not green.',
+    explanation: 'Never merge a PR whose checks have not concluded.',
+    whyItMatters: 'Only a concluded green CI run allows a merge.',
+    terms: ['pending', 'checks', 'merge'],
+    sources: [{ section: HOW, quote: 'Never merge a PR whose checks have not concluded.' }],
+  }),
+} satisfies Record<string, ProcessNode>;
+
+const STEP_SIZE = { width: 260, height: 132 };
+
+export const VIEWS: readonly ExplorerView<ProcessNode, ProcessEdge>[] = [
+  {
+    id: 'path',
+    label: 'Path to main',
+    description: 'The six steps from a finished change to main, with the loops back.',
+    layout: { direction: 'right', nodeSize: STEP_SIZE },
+    nodes: [
+      N.localGate,
+      N.rebase,
+      N.reinstall,
+      N.openPr,
+      N.recordReviews,
+      N.waitCi,
+      N.fixRed,
+      N.mainMoves,
+      N.blocker,
+      N.merge,
+      N.main,
+    ],
+    edges: [
+      { id: 'gate-then-rebase', source: 'local-gate', target: 'rebase', label: 'then' },
+      { id: 'rebase-reinstall', source: 'rebase', target: 'reinstall', label: 'if it brought in changes' },
+      { id: 'reinstall-regate', source: 'reinstall', target: 'local-gate', label: 'then run again' },
+      { id: 'rebase-then-pr', source: 'rebase', target: 'open-pr', label: 'then, with a passing gate' },
+      { id: 'pr-reviews', source: 'open-pr', target: 'record-reviews', label: 'then' },
+      { id: 'reviews-ci', source: 'record-reviews', target: 'wait-ci', label: 'then' },
+      { id: 'ci-green', source: 'wait-ci', target: 'merge', label: 'if green' },
+      { id: 'ci-red', source: 'wait-ci', target: 'fix-red', label: 'if red' },
+      { id: 'fix-push', source: 'fix-red', target: 'wait-ci', label: 'push again, then' },
+      { id: 'fix-blocked', source: 'fix-red', target: 'blocker', label: 'if green cannot be reached' },
+      { id: 'pr-main-moves', source: 'open-pr', target: 'main-moves', label: 'if main moves while open' },
+      { id: 'main-moves-ci', source: 'main-moves', target: 'wait-ci', label: 'CI runs again, then' },
+      { id: 'merge-main', source: 'merge', target: 'main', label: 'lands the change on' },
+    ],
+  },
+  {
+    id: 'gate',
+    label: 'The local gate',
+    description: 'What step 1 runs, and why each command is there.',
+    layout: { direction: 'right', nodeSize: STEP_SIZE },
+    nodes: [N.localGate, N.typecheck, N.test, N.lint, N.build, N.benchGate, N.waitCi],
+    edges: [
+      { id: 'gate-typecheck', source: 'local-gate', target: 'typecheck', label: 'runs' },
+      { id: 'gate-test', source: 'local-gate', target: 'test', label: 'runs' },
+      { id: 'gate-lint', source: 'local-gate', target: 'lint', label: 'runs' },
+      { id: 'gate-build', source: 'local-gate', target: 'build', label: 'runs' },
+      { id: 'gate-bench', source: 'local-gate', target: 'bench-gate', label: 'runs' },
+      { id: 'lint-ci', source: 'lint', target: 'wait-ci', label: 'is also run by' },
+      { id: 'build-ci', source: 'build', target: 'wait-ci', label: 'is also run by' },
+    ],
+  },
+  {
+    id: 'reviews',
+    label: 'Reviews',
+    description: 'What step 4 records, and what each review catches.',
+    layout: { direction: 'right', nodeSize: STEP_SIZE },
+    nodes: [N.diffReview, N.treeReview, N.personaReview, N.appendOnly, N.recordReviews],
+    edges: [
+      { id: 'diff-recorded', source: 'diff-review', target: 'record-reviews', label: 'is recorded in' },
+      { id: 'tree-recorded', source: 'tree-review', target: 'record-reviews', label: 'is recorded in' },
+      { id: 'persona-recorded', source: 'persona-review', target: 'record-reviews', label: 'is recorded the same way in' },
+      { id: 'tree-catches-diff-fix', source: 'tree-review', target: 'diff-review', label: 'catches defects introduced by fixes from' },
+      { id: 'append-preserves', source: 'append-only', target: 'record-reviews', label: 'preserves what changed for' },
+    ],
+  },
+  {
+    id: 'rules',
+    label: 'Guardrails',
+    description: 'Rules that hold at every step.',
+    layout: { direction: 'right', nodeSize: STEP_SIZE },
+    nodes: [
+      N.noDirectPush,
+      N.forceWithLease,
+      N.appendOnly,
+      N.concludedChecks,
+      N.main,
+      N.mainMoves,
+      N.recordReviews,
+      N.merge,
+    ],
+    edges: [
+      { id: 'protects-main', source: 'no-direct-push', target: 'main', label: 'protects' },
+      { id: 'lease-for-rebase', source: 'force-with-lease', target: 'main-moves', label: 'applies only to' },
+      { id: 'lease-never-main', source: 'force-with-lease', target: 'main', label: 'never targets' },
+      { id: 'append-reviews', source: 'append-only', target: 'record-reviews', label: 'preserves what changed for' },
+      { id: 'concluded-merge', source: 'concluded-checks', target: 'merge', label: 'must hold before' },
+    ],
+  },
+];

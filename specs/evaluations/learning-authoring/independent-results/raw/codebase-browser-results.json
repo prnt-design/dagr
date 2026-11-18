@@ -1,0 +1,50 @@
+[
+  {
+    "name": "baseline-desktop",
+    "followed": "@prnt/dagr-explorer",
+    "focusAfterClose": {
+      "tag": "BUTTON",
+      "label": null,
+      "text": "@prnt/dagr-graph"
+    },
+    "empty": "No matches",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "name": "baseline-phone",
+    "followed": "@prnt/dagr-explorer",
+    "focusAfterClose": {
+      "tag": "BUTTON",
+      "label": null,
+      "text": "@prnt/dagr-graph"
+    },
+    "empty": "No matches",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "name": "guided-desktop",
+    "followed": "@prnt/dagr-explorer",
+    "focusAfterClose": {
+      "tag": "BUTTON",
+      "label": null,
+      "text": "@prnt/dagr-graph"
+    },
+    "empty": "No matches",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "name": "guided-phone",
+    "followed": "@prnt/dagr-explorer",
+    "focusAfterClose": {
+      "tag": "BUTTON",
+      "label": null,
+      "text": "@prnt/dagr-graph"
+    },
+    "empty": "No matches",
+    "overflow": false,
+    "errors": []
+  }
+]

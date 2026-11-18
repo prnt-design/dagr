@@ -1,0 +1,50 @@
+[
+  {
+    "name": "baseline-desktop",
+    "followed": "The required label",
+    "focusAfterClose": {
+      "tag": "BUTTON",
+      "label": null,
+      "text": "Install and requirements"
+    },
+    "empty": "No matches",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "name": "baseline-phone",
+    "followed": "The required label",
+    "focusAfterClose": {
+      "tag": "BUTTON",
+      "label": null,
+      "text": "Install and requirements"
+    },
+    "empty": "No matches",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "name": "guided-desktop",
+    "followed": "Install and stylesheet",
+    "focusAfterClose": {
+      "tag": "BUTTON",
+      "label": null,
+      "text": "React 18 or 19 host"
+    },
+    "empty": "No matches",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "name": "guided-phone",
+    "followed": "Install and stylesheet",
+    "focusAfterClose": {
+      "tag": "BUTTON",
+      "label": null,
+      "text": "React 18 or 19 host"
+    },
+    "empty": "No matches",
+    "overflow": false,
+    "errors": []
+  }
+]

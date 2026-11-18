@@ -1,0 +1,38 @@
+[
+  {
+    "brief": "codebase",
+    "condition": "baseline",
+    "agentId": "agt_32615f171976",
+    "inputsVerified": true
+  },
+  {
+    "brief": "codebase",
+    "condition": "guided",
+    "agentId": "agt_9fb3fcd3ab68",
+    "inputsVerified": true
+  },
+  {
+    "brief": "prerequisites",
+    "condition": "baseline",
+    "agentId": "agt_cee47463470b",
+    "inputsVerified": true
+  },
+  {
+    "brief": "prerequisites",
+    "condition": "guided",
+    "agentId": "agt_be0c6ec8f0dc",
+    "inputsVerified": true
+  },
+  {
+    "brief": "process",
+    "condition": "baseline",
+    "agentId": "agt_a41630a965ab",
+    "inputsVerified": true
+  },
+  {
+    "brief": "process",
+    "condition": "guided",
+    "agentId": "agt_a68ef2ad58e0",
+    "inputsVerified": true
+  }
+]

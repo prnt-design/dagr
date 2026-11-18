@@ -1,0 +1,328 @@
+[
+  {
+    "arm": "baseline",
+    "views": [
+      {
+        "id": "path",
+        "nodes": 14,
+        "edges": 15,
+        "uniqueNodes": true,
+        "uniqueEdges": true,
+        "endpoints": true
+      },
+      {
+        "id": "gate",
+        "nodes": 7,
+        "edges": 6,
+        "uniqueNodes": true,
+        "uniqueEdges": true,
+        "endpoints": true
+      },
+      {
+        "id": "reviews",
+        "nodes": 6,
+        "edges": 7,
+        "uniqueNodes": true,
+        "uniqueEdges": true,
+        "endpoints": true
+      },
+      {
+        "id": "rules",
+        "nodes": 7,
+        "edges": 0,
+        "uniqueNodes": true,
+        "uniqueEdges": true,
+        "endpoints": true
+      }
+    ],
+    "quotes": [
+      {
+        "node": "path-branch",
+        "matched": true
+      },
+      {
+        "node": "path-gate",
+        "matched": true
+      },
+      {
+        "node": "path-rebase",
+        "matched": true
+      },
+      {
+        "node": "path-rebase-changed",
+        "matched": true
+      },
+      {
+        "node": "path-install",
+        "matched": true
+      },
+      {
+        "node": "path-regate",
+        "matched": true
+      },
+      {
+        "node": "path-push",
+        "matched": true
+      },
+      {
+        "node": "path-reviews",
+        "matched": true
+      },
+      {
+        "node": "path-main-moved",
+        "matched": true
+      },
+      {
+        "node": "path-ci",
+        "matched": true
+      },
+      {
+        "node": "path-ci-result",
+        "matched": true
+      },
+      {
+        "node": "path-merged",
+        "matched": true
+      },
+      {
+        "node": "path-red",
+        "matched": true
+      },
+      {
+        "node": "path-blocked",
+        "matched": true
+      },
+      {
+        "node": "gate-typecheck",
+        "matched": true
+      },
+      {
+        "node": "gate-test",
+        "matched": true
+      },
+      {
+        "node": "gate-lint",
+        "matched": true
+      },
+      {
+        "node": "gate-build",
+        "matched": true
+      },
+      {
+        "node": "gate-bench",
+        "matched": true
+      },
+      {
+        "node": "gate-pass",
+        "matched": true
+      },
+      {
+        "node": "gate-bench-ci",
+        "matched": true
+      },
+      {
+        "node": "rev-record",
+        "matched": true
+      },
+      {
+        "node": "rev-diff",
+        "matched": true
+      },
+      {
+        "node": "rev-tree",
+        "matched": true
+      },
+      {
+        "node": "rev-persona",
+        "matched": true
+      },
+      {
+        "node": "rev-findings",
+        "matched": true
+      },
+      {
+        "node": "rev-followup",
+        "matched": true
+      },
+      {
+        "node": "rule-no-main-push",
+        "matched": true
+      },
+      {
+        "node": "rule-one-force-push",
+        "matched": true
+      },
+      {
+        "node": "rule-append-only",
+        "matched": true
+      },
+      {
+        "node": "rule-ci-concluded",
+        "matched": true
+      },
+      {
+        "node": "rule-self-merge",
+        "matched": true
+      },
+      {
+        "node": "rule-bench-skip",
+        "matched": true
+      },
+      {
+        "node": "rule-red-main",
+        "matched": true
+      }
+    ]
+  },
+  {
+    "arm": "guided",
+    "views": [
+      {
+        "id": "path",
+        "nodes": 11,
+        "edges": 13,
+        "uniqueNodes": true,
+        "uniqueEdges": true,
+        "endpoints": true
+      },
+      {
+        "id": "gate",
+        "nodes": 7,
+        "edges": 7,
+        "uniqueNodes": true,
+        "uniqueEdges": true,
+        "endpoints": true
+      },
+      {
+        "id": "reviews",
+        "nodes": 5,
+        "edges": 5,
+        "uniqueNodes": true,
+        "uniqueEdges": true,
+        "endpoints": true
+      },
+      {
+        "id": "rules",
+        "nodes": 8,
+        "edges": 5,
+        "uniqueNodes": true,
+        "uniqueEdges": true,
+        "endpoints": true
+      }
+    ],
+    "quotes": [
+      {
+        "node": "local-gate",
+        "matched": true
+      },
+      {
+        "node": "local-gate",
+        "matched": true
+      },
+      {
+        "node": "rebase",
+        "matched": true
+      },
+      {
+        "node": "reinstall",
+        "matched": true
+      },
+      {
+        "node": "open-pr",
+        "matched": true
+      },
+      {
+        "node": "open-pr",
+        "matched": true
+      },
+      {
+        "node": "record-reviews",
+        "matched": true
+      },
+      {
+        "node": "record-reviews",
+        "matched": true
+      },
+      {
+        "node": "wait-ci",
+        "matched": true
+      },
+      {
+        "node": "fix-red",
+        "matched": true
+      },
+      {
+        "node": "main-moves",
+        "matched": true
+      },
+      {
+        "node": "blocker",
+        "matched": true
+      },
+      {
+        "node": "merge",
+        "matched": true
+      },
+      {
+        "node": "merge",
+        "matched": true
+      },
+      {
+        "node": "main",
+        "matched": true
+      },
+      {
+        "node": "typecheck",
+        "matched": true
+      },
+      {
+        "node": "test",
+        "matched": true
+      },
+      {
+        "node": "lint",
+        "matched": true
+      },
+      {
+        "node": "build",
+        "matched": true
+      },
+      {
+        "node": "bench-gate",
+        "matched": true
+      },
+      {
+        "node": "bench-gate",
+        "matched": true
+      },
+      {
+        "node": "diff-review",
+        "matched": true
+      },
+      {
+        "node": "tree-review",
+        "matched": true
+      },
+      {
+        "node": "persona-review",
+        "matched": true
+      },
+      {
+        "node": "append-only",
+        "matched": true
+      },
+      {
+        "node": "no-direct-push",
+        "matched": true
+      },
+      {
+        "node": "force-with-lease",
+        "matched": true
+      },
+      {
+        "node": "concluded-checks",
+        "matched": true
+      }
+    ]
+  }
+]

@@ -1,0 +1,60 @@
+[
+  {
+    "arm": "baseline",
+    "views": [
+      {
+        "id": "runtime",
+        "nodes": 8,
+        "edges": 12,
+        "uniqueNodes": true,
+        "uniqueEdges": true,
+        "endpoints": true
+      },
+      {
+        "id": "dev",
+        "nodes": 17,
+        "edges": 24,
+        "uniqueNodes": true,
+        "uniqueEdges": true,
+        "endpoints": true
+      },
+      {
+        "id": "packaging",
+        "nodes": 12,
+        "edges": 7,
+        "uniqueNodes": true,
+        "uniqueEdges": true,
+        "endpoints": true
+      }
+    ]
+  },
+  {
+    "arm": "guided",
+    "views": [
+      {
+        "id": "packages",
+        "nodes": 5,
+        "edges": 7,
+        "uniqueNodes": true,
+        "uniqueEdges": true,
+        "endpoints": true
+      },
+      {
+        "id": "externals",
+        "nodes": 11,
+        "edges": 12,
+        "uniqueNodes": true,
+        "uniqueEdges": true,
+        "endpoints": true
+      },
+      {
+        "id": "flow",
+        "nodes": 7,
+        "edges": 7,
+        "uniqueNodes": true,
+        "uniqueEdges": true,
+        "endpoints": true
+      }
+    ]
+  }
+]

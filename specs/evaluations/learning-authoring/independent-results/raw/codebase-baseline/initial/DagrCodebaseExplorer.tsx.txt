@@ -1,0 +1,266 @@
+import { useCallback, useRef, useState } from 'react';
+import type { CSSProperties, MouseEvent, ReactNode } from 'react';
+import { DagrExplorer } from '@prnt/dagr-explorer';
+import type { ExplorerApi, ExplorerDetailsContext } from '@prnt/dagr-explorer';
+import '@prnt/dagr-explorer/styles.css';
+import {
+  KIND_COLOR,
+  KIND_TEXT,
+  QUIZ,
+  RELATION_TEXT,
+  REPOSITORY_URL,
+  SNAPSHOT_COMMIT,
+  TOUR,
+  VIEWS,
+} from './codebase-data';
+import type { CodebaseEdge, CodebaseNode, NodeKind } from './codebase-data';
+
+const S = {
+  page: {
+    fontFamily: 'system-ui, -apple-system, "Segoe UI", sans-serif',
+    color: '#1f2937',
+    maxWidth: 1200,
+    margin: '0 auto',
+    padding: 16,
+    display: 'grid',
+    gap: 16,
+  },
+  header: { display: 'grid', gap: 4 },
+  h1: { fontSize: 22, margin: 0 },
+  muted: { color: '#4b5563', fontSize: 14, margin: 0 },
+  layout: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 300px), 1fr))',
+    gap: 16,
+    alignItems: 'start',
+  },
+  panel: {
+    border: '1px solid #d1d5db',
+    borderRadius: 8,
+    padding: 12,
+    background: '#fff',
+    display: 'grid',
+    gap: 8,
+  },
+  h2: { fontSize: 16, margin: 0 },
+  stepButton: {
+    textAlign: 'left',
+    minHeight: 44,
+    padding: '8px 10px',
+    borderRadius: 6,
+    border: '1px solid #d1d5db',
+    background: '#f9fafb',
+    cursor: 'pointer',
+    font: 'inherit',
+  },
+  stepActive: { borderColor: '#2f6fde', background: '#eef4ff' },
+  nodeCard: { display: 'grid', gap: 2, textAlign: 'left', lineHeight: 1.25 },
+  badge: {
+    display: 'inline-block',
+    fontSize: 11,
+    fontWeight: 600,
+    color: '#fff',
+    borderRadius: 4,
+    padding: '1px 6px',
+    justifySelf: 'start',
+  },
+  dl: { display: 'grid', gridTemplateColumns: 'max-content 1fr', gap: '4px 12px', margin: 0, fontSize: 13 },
+  dt: { color: '#4b5563' },
+  dd: { margin: 0, overflowWrap: 'anywhere', fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' },
+  connButton: {
+    width: '100%',
+    textAlign: 'left',
+    minHeight: 44,
+    padding: '6px 8px',
+    borderRadius: 6,
+    border: '1px solid #e5e7eb',
+    background: '#fff',
+    cursor: 'pointer',
+    font: 'inherit',
+    fontSize: 13,
+  },
+} satisfies Record<string, CSSProperties>;
+
+const LEGEND: readonly NodeKind[] = ['package', 'workspace', 'external', 'entry'];
+
+function Badge({ kind }: { readonly kind: NodeKind }): ReactNode {
+  return <span style={{ ...S.badge, background: KIND_COLOR[kind] }}>{KIND_TEXT[kind]}</span>;
+}
+
+function renderNode(node: CodebaseNode, context: { readonly tier: 'summary' | 'rich' }): ReactNode {
+  if (context.tier === 'summary') return node.label;
+  return (
+    <span style={S.nodeCard}>
+      <Badge kind={node.kind} />
+      <strong>{node.label}</strong>
+      <span style={{ fontSize: 12, color: '#4b5563' }}>{node.summary}</span>
+    </span>
+  );
+}
+
+function searchText(node: CodebaseNode): string {
+  return [node.id, node.label, node.summary, ...node.facts.map((f) => f.value)].join(' ');
+}
+
+function Details({ node, connections, follow }: ExplorerDetailsContext<CodebaseNode, CodebaseEdge>): ReactNode {
+  return (
+    <div style={{ display: 'grid', gap: 12 }}>
+      <div style={{ display: 'grid', gap: 4 }}>
+        <Badge kind={node.kind} />
+        <h3 style={{ margin: 0, fontSize: 16 }}>{node.label}</h3>
+        <p style={S.muted}>{node.summary}</p>
+      </div>
+      {node.facts.length > 0 && (
+        <dl style={S.dl}>
+          {node.facts.map((fact) => (
+            <div key={fact.label} style={{ display: 'contents' }}>
+              <dt style={S.dt}>{fact.label}</dt>
+              <dd style={S.dd}>{fact.value}</dd>
+            </div>
+          ))}
+        </dl>
+      )}
+      {connections.length > 0 && (
+        <section style={{ display: 'grid', gap: 6 }}>
+          <h4 style={{ margin: 0, fontSize: 14 }}>Connections in this view</h4>
+          <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'grid', gap: 6 }}>
+            {connections.map(({ edge, node: other }) => {
+              const outgoing = edge.source === node.id;
+              const sentence = outgoing
+                ? `Declares ${other.label} in ${RELATION_TEXT[edge.relation]}`
+                : `Declared by ${other.label} in ${RELATION_TEXT[edge.relation]}`;
+              return (
+                <li key={edge.id}>
+                  <button type="button" style={S.connButton} onClick={() => follow(other.id)}>
+                    <span aria-hidden="true">{outgoing ? '→ ' : '← '}</span>
+                    {sentence}: <code>{edge.range}</code>
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+      )}
+      <p style={{ ...S.muted, fontSize: 12 }}>Source: {node.manifest.join(', ')}</p>
+    </div>
+  );
+}
+
+const renderDetails = (context: ExplorerDetailsContext<CodebaseNode, CodebaseEdge>): ReactNode => (
+  <Details {...context} />
+);
+
+export default function DagrCodebaseExplorer(): ReactNode {
+  const api = useRef<ExplorerApi | null>(null);
+  const [viewId, setViewId] = useState(VIEWS[0]!.id);
+  const [step, setStep] = useState<number | null>(null);
+
+  const goTo = useCallback((index: number, trigger: HTMLElement) => {
+    const target = TOUR[index]!;
+    const explorer = api.current;
+    setStep(index);
+    if (!explorer) return;
+    explorer.selectView(target.viewId);
+    explorer.inspect(target.nodeId, trigger);
+    requestAnimationFrame(() => explorer.reveal(target.nodeId));
+  }, []);
+
+  const current = step === null ? null : TOUR[step]!;
+  const activeView = VIEWS.find((v) => v.id === viewId);
+
+  return (
+    <div style={S.page}>
+      <header style={S.header}>
+        <h1 style={S.h1}>Dagr codebase: how the packages fit together</h1>
+        <p style={S.muted}>
+          Five packages from the {REPOSITORY_URL.replace(/^git\+/, '').replace(/\.git$/, '')} repository, all at version
+          0.2.0, as declared in their package.json files at snapshot <code>{SNAPSHOT_COMMIT.slice(0, 12)}</code>.
+        </p>
+      </header>
+
+      <div style={S.layout}>
+        <section style={{ ...S.panel, gridColumn: '1 / -1' }} aria-label="Dagr packages graph">
+          {activeView && typeof activeView.description === 'string' && (
+            <p style={S.muted}>
+              <strong>{activeView.label}.</strong> {activeView.description}
+            </p>
+          )}
+          <DagrExplorer
+            label="Dagr packages"
+            views={VIEWS}
+            apiRef={api}
+            onViewChange={setViewId}
+            renderNode={renderNode}
+            renderDetails={renderDetails}
+            searchText={searchText}
+            labels={{ search: 'Find a package, entry point or version range' }}
+          />
+          <ul
+            aria-label="Legend"
+            style={{ display: 'flex', flexWrap: 'wrap', gap: 12, listStyle: 'none', margin: 0, padding: 0, fontSize: 12 }}
+          >
+            {LEGEND.map((kind) => (
+              <li key={kind}>
+                <Badge kind={kind} />
+              </li>
+            ))}
+            <li>Solid line: dependencies or peerDependencies</li>
+            <li>Dashed line: devDependencies or an optional peer</li>
+          </ul>
+        </section>
+
+        <section style={S.panel} aria-labelledby="tour-heading">
+          <h2 id="tour-heading" style={S.h2}>
+            Guided tour
+          </h2>
+          <ol style={{ margin: 0, padding: 0, listStyle: 'none', display: 'grid', gap: 6 }}>
+            {TOUR.map((t, index) => (
+              <li key={t.title}>
+                <button
+                  type="button"
+                  aria-current={step === index ? 'step' : undefined}
+                  style={{ ...S.stepButton, ...(step === index ? S.stepActive : null), width: '100%' }}
+                  onClick={(event: MouseEvent<HTMLButtonElement>) => goTo(index, event.currentTarget)}
+                >
+                  {index + 1}. {t.title}
+                </button>
+              </li>
+            ))}
+          </ol>
+        </section>
+
+        <section style={S.panel} aria-live="polite" aria-labelledby="step-heading">
+          <h2 id="step-heading" style={S.h2}>
+            {current ? current.title : 'How to use this explorer'}
+          </h2>
+          <p style={{ margin: 0, fontSize: 14 }}>
+            {current
+              ? current.text
+              : 'Pick a tour step, or switch views above the graph. Select a node to open its details: the facts from its package.json and a button for each connection. Search finds every node, including ones too small to show.'}
+          </p>
+          {step !== null && step + 1 < TOUR.length && (
+            <button
+              type="button"
+              style={S.stepButton}
+              onClick={(event: MouseEvent<HTMLButtonElement>) => goTo(step + 1, event.currentTarget)}
+            >
+              Next: {TOUR[step + 1]!.title}
+            </button>
+          )}
+        </section>
+
+        <section style={S.panel} aria-labelledby="check-heading">
+          <h2 id="check-heading" style={S.h2}>
+            Check your understanding
+          </h2>
+          {QUIZ.map((q) => (
+            <details key={q.question} style={{ fontSize: 14 }}>
+              <summary style={{ cursor: 'pointer', minHeight: 24 }}>{q.question}</summary>
+              <p style={{ margin: '6px 0 0' }}>{q.answer}</p>
+            </details>
+          ))}
+        </section>
+      </div>
+    </div>
+  );
+}

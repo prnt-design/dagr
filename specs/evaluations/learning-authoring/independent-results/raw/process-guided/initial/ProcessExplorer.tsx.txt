@@ -1,0 +1,120 @@
+import { DagrExplorer } from '@prnt/dagr-explorer';
+import '@prnt/dagr-explorer/styles.css';
+import { KIND_LABEL, VIEWS, type ProcessNode } from './process-data';
+
+const SOURCE_SNAPSHOT = 'ccb66cad9dfc3baf650d65338e2bb2ae6c38aae2';
+
+const CSS = `
+.process-explorer { font-family: system-ui, sans-serif; color: var(--dagr-explorer-fg, #1f2937); }
+.process-explorer__intro { margin: 0 0 12px; max-width: 70ch; line-height: 1.5; }
+.process-explorer__node { display: flex; flex-direction: column; gap: 4px; height: 100%; overflow: hidden; text-align: left; }
+.process-explorer__kind { font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; font-weight: 600; }
+.process-explorer__label { font-size: 15px; line-height: 1.25; }
+.process-explorer__summary { font-size: 13px; line-height: 1.35; color: var(--dagr-explorer-fg-muted, #4b5563);
+  display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.process-explorer__details h3 { margin: 0 0 4px; font-size: 18px; }
+.process-explorer__details h4 { margin: 16px 0 4px; font-size: 14px; }
+.process-explorer__details p { margin: 0 0 8px; line-height: 1.5; }
+.process-explorer__details pre { white-space: pre-wrap; word-break: break-word; margin: 0 0 8px; padding: 8px;
+  background: var(--dagr-explorer-bg-subtle, #f3f4f6); border-radius: 6px; font-size: 13px; }
+.process-explorer__details ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.process-explorer__details button { min-height: 44px; width: 100%; text-align: left; padding: 8px 10px; cursor: pointer;
+  border: 1px solid var(--dagr-explorer-border, #d1d5db); border-radius: 6px; background: var(--dagr-explorer-bg, #fff);
+  color: inherit; font: inherit; }
+.process-explorer__details blockquote { margin: 0 0 8px; padding-left: 10px; border-left: 3px solid var(--dagr-explorer-border, #d1d5db); }
+.process-explorer__details cite { display: block; font-size: 12px; font-style: normal; color: var(--dagr-explorer-fg-muted, #4b5563); }
+`;
+
+function searchText(node: ProcessNode): string {
+  return [
+    node.label,
+    KIND_LABEL[node.kind],
+    node.summary,
+    node.explanation,
+    node.whyItMatters,
+    node.command ?? '',
+    ...(node.terms ?? []),
+  ].join(' ');
+}
+
+export function ProcessExplorer() {
+  return (
+    <section className="process-explorer">
+      <style>{CSS}</style>
+      <p className="process-explorer__intro">
+        How a change reaches <code>main</code> in this repository. Every arrow reads as a sentence
+        from its start node to its end node, for example &ldquo;Run the full local gate
+        &rarr; then &rarr; Rebase onto origin/main&rdquo;. Loops back are real: the process is not
+        a straight line. Search, the outline, or a node&rsquo;s details reach every step; each
+        detail quotes AGENTS.md at snapshot <code>{SOURCE_SNAPSHOT.slice(0, 7)}</code>.
+      </p>
+      <DagrExplorer
+        label="How work reaches main. Arrows point from a step to what follows it, or from a rule to what it governs."
+        views={VIEWS}
+        defaultViewId="path"
+        searchText={searchText}
+        nodeAriaLabel={(node) => `${KIND_LABEL[node.kind]}: ${node.label}`}
+        renderNode={(node, { tier }) => (
+          <span className="process-explorer__node">
+            <span className="process-explorer__kind" style={{ color: node.color }}>
+              {KIND_LABEL[node.kind]}
+            </span>
+            <strong className="process-explorer__label">{node.label}</strong>
+            {tier === 'rich' && <span className="process-explorer__summary">{node.summary}</span>}
+          </span>
+        )}
+        renderDetails={({ node, connections, follow }) => (
+          <div className="process-explorer__details">
+            <p className="process-explorer__kind" style={{ color: node.color }}>
+              {KIND_LABEL[node.kind]}
+            </p>
+            <h3>{node.label}</h3>
+            <p>{node.explanation}</p>
+            {node.command !== undefined && <pre><code>{node.command}</code></pre>}
+
+            <h4>Why it matters</h4>
+            <p>{node.whyItMatters}</p>
+
+            {connections.length > 0 && (
+              <>
+                <h4>Connected steps</h4>
+                <ul>
+                  {connections.map(({ edge, node: other }) => {
+                    const outgoing = edge.source === node.id;
+                    return (
+                      <li key={edge.id}>
+                        <button type="button" onClick={() => follow(other.id)}>
+                          {outgoing ? (
+                            <>
+                              <span aria-hidden="true">&rarr; </span>
+                              {edge.label}: <strong>{other.label}</strong>
+                            </>
+                          ) : (
+                            <>
+                              <span aria-hidden="true">&larr; </span>
+                              <strong>{other.label}</strong> {edge.label} this
+                            </>
+                          )}
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </>
+            )}
+
+            <h4>Source</h4>
+            {node.sources.map((source) => (
+              <blockquote key={`${source.section}:${source.quote}`}>
+                <p>{source.quote}</p>
+                <cite>{source.section}</cite>
+              </blockquote>
+            ))}
+          </div>
+        )}
+      />
+    </section>
+  );
+}
+
+export default ProcessExplorer;

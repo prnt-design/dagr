@@ -1,0 +1,80 @@
+[
+  {
+    "arm": "baseline",
+    "views": [
+      {
+        "id": "path",
+        "nodes": 23,
+        "edges": 32,
+        "uniqueNodes": true,
+        "uniqueEdges": true,
+        "endpoints": true
+      },
+      {
+        "id": "data",
+        "nodes": 10,
+        "edges": 13,
+        "uniqueNodes": true,
+        "uniqueEdges": true,
+        "endpoints": true
+      },
+      {
+        "id": "ui",
+        "nodes": 13,
+        "edges": 13,
+        "uniqueNodes": true,
+        "uniqueEdges": true,
+        "endpoints": true
+      }
+    ],
+    "domainSearch": []
+  },
+  {
+    "arm": "guided",
+    "views": [
+      {
+        "id": "start",
+        "nodes": 9,
+        "edges": 11,
+        "uniqueNodes": true,
+        "uniqueEdges": true,
+        "endpoints": true
+      },
+      {
+        "id": "data",
+        "nodes": 9,
+        "edges": 11,
+        "uniqueNodes": true,
+        "uniqueEdges": true,
+        "endpoints": true
+      },
+      {
+        "id": "reading",
+        "nodes": 9,
+        "edges": 9,
+        "uniqueNodes": true,
+        "uniqueEdges": true,
+        "endpoints": true
+      },
+      {
+        "id": "composing",
+        "nodes": 4,
+        "edges": 3,
+        "uniqueNodes": true,
+        "uniqueEdges": true,
+        "endpoints": true
+      },
+      {
+        "id": "all",
+        "nodes": 20,
+        "edges": 25,
+        "uniqueNodes": true,
+        "uniqueEdges": true,
+        "endpoints": true
+      }
+    ],
+    "domainSearch": [
+      "explorer-edge"
+    ]
+  }
+]

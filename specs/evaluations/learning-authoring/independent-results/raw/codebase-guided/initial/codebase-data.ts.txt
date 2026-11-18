@@ -1,0 +1,452 @@
+import type { ExplorerEdge, ExplorerNode, ExplorerView } from '@prnt/dagr-explorer';
+
+/** Snapshot every claim below was read from. */
+export const SNAPSHOT = 'ccb66cad9dfc3baf650d65338e2bb2ae6c38aae2';
+
+export interface SourceRef {
+  readonly file: string;
+  readonly field: string;
+}
+
+export type NodeKind = 'package' | 'external' | 'stage';
+
+export interface CodebaseNode extends ExplorerNode {
+  readonly kind: NodeKind;
+  /** One line, shown on the node at the rich tier. */
+  readonly summary: string;
+  /** What is it? */
+  readonly explanation: string;
+  /** Why does it matter to a new contributor? */
+  readonly whyItMatters: string;
+  /** Where it lives in the repository, when the packet says so. */
+  readonly location?: string | undefined;
+  /** Marked as an illustration in the drawer; not a claim from the packet. */
+  readonly example?: string | undefined;
+  /** What the packet does not settle. */
+  readonly uncertainty?: string | undefined;
+  readonly terms: readonly string[];
+  readonly sources: readonly SourceRef[];
+}
+
+export type EdgeKind = 'dependency' | 'peer' | 'optional-peer' | 'dev' | 'flow';
+
+export interface CodebaseEdge extends ExplorerEdge {
+  readonly kind: EdgeKind;
+  readonly label: string;
+  readonly detail: string;
+  readonly inferred?: boolean | undefined;
+  readonly sources: readonly SourceRef[];
+}
+
+const pj = (dir: string, field: string): SourceRef => ({
+  file: `packages/${dir}/package.json`,
+  field,
+});
+const ALL_PACKAGES = ['graph', 'layout', 'render', 'react', 'explorer'] as const;
+const inEvery = (field: string): readonly SourceRef[] => ALL_PACKAGES.map((dir) => pj(dir, field));
+
+// ---------------------------------------------------------------- packages
+
+const graph: CodebaseNode = {
+  id: 'pkg-graph',
+  label: '@prnt/dagr-graph',
+  kind: 'package',
+  summary: 'Typed directed graph model: stable node identity, zero dependencies.',
+  explanation:
+    'The package description reads: "Typed directed graph model for Dagr: stable node identity, zero dependencies." Its package.json declares no dependencies and no peerDependencies, only devDependencies (@dagr/bench and fast-check).',
+  whyItMatters:
+    'It is the one Dagr package here that needs no other Dagr package. @prnt/dagr-layout and @prnt/dagr-react take it as a peer dependency and @prnt/dagr-explorer as a regular dependency, so it is a sensible first package to read.',
+  location: 'packages/graph',
+  terms: ['graph', 'model', 'node identity', 'zero dependencies', 'directed graph', 'fast-check'],
+  sources: [pj('graph', 'description'), pj('graph', 'devDependencies'), pj('graph', 'repository.directory')],
+};
+
+const layout: CodebaseNode = {
+  id: 'pkg-layout',
+  label: '@prnt/dagr-layout',
+  kind: 'package',
+  summary: 'Headless Sugiyama layout pipeline; incremental and animation first.',
+  explanation:
+    'The package description reads: "Headless Sugiyama layout pipeline for Dagr, the dagre successor: incremental and animation first." It declares @prnt/dagr-graph as a peer dependency (workspace:^) and has no regular dependencies.',
+  whyItMatters:
+    'It sits between the graph model and the two UI packages: @prnt/dagr-react and @prnt/dagr-explorer both list it under dependencies. "Headless" in its description marks it as layout without rendering.',
+  location: 'packages/layout',
+  uncertainty:
+    'It pins @dagrejs/dagre 3.1.1 as a devDependency. The packet does not say what that dev copy is used for.',
+  terms: ['layout', 'Sugiyama', 'dagre', 'successor', 'headless', 'incremental', 'animation'],
+  sources: [pj('layout', 'description'), pj('layout', 'peerDependencies'), pj('layout', 'devDependencies')],
+};
+
+const render: CodebaseNode = {
+  id: 'pkg-render',
+  label: '@prnt/dagr-render',
+  kind: 'package',
+  summary: 'WebGPU renderer: three.js WebGPURenderer scene, SDF shapes, springs.',
+  explanation:
+    'The package description reads: "WebGPU renderer for Dagr: a three.js WebGPURenderer scene with SDF shapes and spring animation." It is the only package here with two entry points in its exports map: "." and "./core". It declares three as an optional peer dependency and no Dagr package at all.',
+  whyItMatters:
+    'Both UI packages build on it: @prnt/dagr-react as a peer dependency, @prnt/dagr-explorer as a regular dependency. Because three is an optional peer, installing it is left to the consumer.',
+  location: 'packages/render',
+  uncertainty:
+    'The packet shows that a "./core" entry exists (dist/core.js and dist/core.d.ts) but not what it contains or which consumers use it.',
+  terms: ['render', 'renderer', 'WebGPU', 'three', 'three.js', 'WebGPURenderer', 'SDF', 'spring', 'core entry'],
+  sources: [pj('render', 'description'), pj('render', 'exports'), pj('render', 'peerDependencies'), pj('render', 'peerDependenciesMeta')],
+};
+
+const react: CodebaseNode = {
+  id: 'pkg-react',
+  label: '@prnt/dagr-react',
+  kind: 'package',
+  summary: 'React bindings: the DagrCanvas component and hooks. React 19 only.',
+  explanation:
+    'The package description reads: "React bindings for Dagr: the DagrCanvas component and hooks." It depends on @prnt/dagr-layout, and takes @prnt/dagr-graph, @prnt/dagr-render, react and react-dom (>=19.0.0 <20.0.0) as peer dependencies.',
+  whyItMatters:
+    'Like the explorer, it names graph, layout and render, but splits them differently: layout is a regular dependency it installs itself, while graph and render must be provided alongside it.',
+  location: 'packages/react',
+  terms: ['react', 'bindings', 'DagrCanvas', 'hooks', 'React 19', 'react-dom'],
+  sources: [pj('react', 'description'), pj('react', 'dependencies'), pj('react', 'peerDependencies')],
+};
+
+const explorer: CodebaseNode = {
+  id: 'pkg-explorer',
+  label: '@prnt/dagr-explorer',
+  kind: 'package',
+  summary: 'Interactive graph explorer: views, search, tracing, groups, details.',
+  explanation:
+    'The package description reads: "An interactive graph explorer for Dagr: views, search, connection tracing, groups and a details drawer, with virtualized node content." It lists @prnt/dagr-graph, @prnt/dagr-layout and @prnt/dagr-render under dependencies, and react and react-dom (>=18.2.0 <20.0.0) as peers.',
+  whyItMatters:
+    'Unlike @prnt/dagr-react, it takes the Dagr packages as regular dependencies and accepts React 18 as well as 19. Its test script runs vitest twice, once with vitest.react18.config.ts, and its devDependencies alias react-18 and react-dom-18 to React 18.3.',
+  location: 'packages/explorer',
+  uncertainty:
+    'It does not list @prnt/dagr-react in any dependency field. It has a bench script but, unlike the other four packages, does not list @dagr/bench as a devDependency; the packet does not explain either.',
+  terms: ['explorer', 'views', 'search', 'connection tracing', 'groups', 'details drawer', 'virtualized', 'styles.css', 'React 18'],
+  sources: [
+    pj('explorer', 'description'),
+    pj('explorer', 'dependencies'),
+    pj('explorer', 'peerDependencies'),
+    pj('explorer', 'scripts.test'),
+    pj('explorer', 'devDependencies'),
+  ],
+};
+
+const packages = [graph, layout, render, react, explorer] as const;
+
+// --------------------------------------------------------------- externals
+
+const three: CodebaseNode = {
+  id: 'ext-three',
+  label: 'three',
+  kind: 'external',
+  summary: 'Optional peer of the renderer (>=0.180.0 <1.0.0).',
+  explanation:
+    '@prnt/dagr-render declares three as a peer dependency with range >=0.180.0 <1.0.0 and marks it optional in peerDependenciesMeta. For its own development it installs three ^0.185.1 and @types/three ^0.185.0.',
+  whyItMatters:
+    'The renderer\'s description names a three.js WebGPURenderer scene, so this is the library that scene is built on. No other package in the packet mentions three.',
+  terms: ['three', 'three.js', 'optional peer', 'peerDependenciesMeta'],
+  sources: [pj('render', 'peerDependencies'), pj('render', 'peerDependenciesMeta'), pj('render', 'devDependencies')],
+};
+
+const reactLib: CodebaseNode = {
+  id: 'ext-react',
+  label: 'react + react-dom',
+  kind: 'external',
+  summary: 'Peer of both UI packages, with different ranges.',
+  explanation:
+    '@prnt/dagr-react requires react and react-dom >=19.0.0 <20.0.0. @prnt/dagr-explorer accepts >=18.2.0 <20.0.0. Both develop against react ^19.2.8, and the explorer also installs React 18.3 under the aliases react-18 and react-dom-18.',
+  whyItMatters:
+    'A change to the explorer has to keep working on React 18: its test script runs a second pass with vitest.react18.config.ts.',
+  terms: ['react', 'react-dom', 'React 18', 'React 19', 'peer range', 'react-18 alias'],
+  sources: [pj('react', 'peerDependencies'), pj('explorer', 'peerDependencies'), pj('explorer', 'devDependencies'), pj('explorer', 'scripts.test')],
+};
+
+const dagre: CodebaseNode = {
+  id: 'ext-dagre',
+  label: '@dagrejs/dagre',
+  kind: 'external',
+  summary: 'Pinned at exactly 3.1.1 as a layout devDependency.',
+  explanation:
+    '@prnt/dagr-layout lists @dagrejs/dagre 3.1.1 under devDependencies, with an exact version rather than a range. Its own description calls Dagr "the dagre successor".',
+  whyItMatters: 'It is not a runtime dependency: consumers of @prnt/dagr-layout do not install it.',
+  uncertainty: 'The packet does not say what the layout package uses this dev copy for.',
+  terms: ['dagre', '@dagrejs/dagre', 'successor', 'pinned'],
+  sources: [pj('layout', 'devDependencies'), pj('layout', 'description')],
+};
+
+const fastCheck: CodebaseNode = {
+  id: 'ext-fast-check',
+  label: 'fast-check',
+  kind: 'external',
+  summary: 'devDependency of the graph package (^4.9.0).',
+  explanation: '@prnt/dagr-graph lists fast-check ^4.9.0 under devDependencies. No other package in the packet lists it.',
+  whyItMatters: 'Dev-only: it does not affect the graph package\'s "zero dependencies" claim for consumers.',
+  uncertainty: 'The packet does not show how the graph package uses it.',
+  terms: ['fast-check', 'test tooling'],
+  sources: [pj('graph', 'devDependencies')],
+};
+
+const jsdom: CodebaseNode = {
+  id: 'ext-jsdom',
+  label: 'jsdom',
+  kind: 'external',
+  summary: 'devDependency (^30.0.1) of render, react and explorer.',
+  explanation:
+    'jsdom ^30.0.1 appears in the devDependencies of @prnt/dagr-render, @prnt/dagr-react and @prnt/dagr-explorer, the three packages that the packet ties to rendering or React. graph and layout do not list it.',
+  whyItMatters: 'It marks which packages\' development setup goes beyond plain data and layout code.',
+  uncertainty: 'The packet does not show the test configuration that uses it.',
+  terms: ['jsdom', 'test tooling', 'DOM'],
+  sources: [pj('render', 'devDependencies'), pj('react', 'devDependencies'), pj('explorer', 'devDependencies')],
+};
+
+const bench: CodebaseNode = {
+  id: 'ext-bench',
+  label: '@dagr/bench',
+  kind: 'external',
+  summary: 'Workspace-only dev package (workspace:*) for four packages.',
+  explanation:
+    'graph, layout, render and react list @dagr/bench under devDependencies with the specifier workspace:*. It uses the @dagr scope, not @prnt like the published packages, and its own package.json is not in the packet.',
+  whyItMatters:
+    'Every package has a bench script, "vitest bench --run --outputJson bench-report.json", so benchmarks are part of the normal package workflow.',
+  uncertainty:
+    'Whether @dagr/bench is published, and what it provides, is not in the packet. @prnt/dagr-explorer has a bench script but does not list it.',
+  terms: ['bench', 'benchmark', '@dagr/bench', 'workspace', 'bench-report.json'],
+  sources: [pj('graph', 'devDependencies'), pj('layout', 'devDependencies'), pj('render', 'devDependencies'), pj('react', 'devDependencies'), ...inEvery('scripts.bench')],
+};
+
+// ------------------------------------------------------------------ stages
+
+const srcStage: CodebaseNode = {
+  id: 'stage-src',
+  label: 'src/',
+  kind: 'stage',
+  summary: 'Each package\'s source directory, also shipped in the package.',
+  explanation:
+    'Every package lists "src" in its files field next to "dist", so the published package carries its sources as well as its build output.',
+  whyItMatters: 'This is where a contribution starts; the scripts in the next steps all work from the package directory.',
+  uncertainty: 'The packet lists no file inside src/. That it is TypeScript is inferred from the tsc scripts.',
+  terms: ['src', 'source', 'files'],
+  sources: inEvery('files'),
+};
+
+const checksStage: CodebaseNode = {
+  id: 'stage-checks',
+  label: 'typecheck + test',
+  kind: 'stage',
+  summary: '"tsc --noEmit" and "vitest run" in every package.',
+  explanation:
+    'Every package defines typecheck as "tsc --noEmit" and test as "vitest run". @prnt/dagr-explorer\'s test runs vitest a second time with --config vitest.react18.config.ts, and it also has a test:react18 script for that pass alone.',
+  whyItMatters: 'These are the per-package checks a contributor can run before proposing a change.',
+  example: 'Illustration: from packages/explorer, running its "test" script runs both the default and the React 18 vitest configurations.',
+  terms: ['typecheck', 'tsc', 'noEmit', 'test', 'vitest', 'react18'],
+  sources: [...inEvery('scripts.typecheck'), ...inEvery('scripts.test'), pj('explorer', 'scripts.test:react18')],
+};
+
+const benchStage: CodebaseNode = {
+  id: 'stage-bench',
+  label: 'bench',
+  kind: 'stage',
+  summary: '"vitest bench --run --outputJson bench-report.json" everywhere.',
+  explanation: 'Every package defines the same bench script, which writes its result to bench-report.json.',
+  whyItMatters: 'Performance has a script of its own in every package, beside typecheck and test.',
+  uncertainty: 'The packet does not show the benchmark files or how reports are compared.',
+  terms: ['bench', 'benchmark', 'vitest bench', 'bench-report.json'],
+  sources: inEvery('scripts.bench'),
+};
+
+const buildStage: CodebaseNode = {
+  id: 'stage-build',
+  label: 'build',
+  kind: 'stage',
+  summary: '"tsc -p tsconfig.build.json" in every package.',
+  explanation: 'Every package builds with the TypeScript compiler using a separate tsconfig.build.json.',
+  whyItMatters: 'The published entry points refer to ./dist, so the package is only usable by consumers after this step.',
+  uncertainty: 'tsconfig.build.json itself is not in the packet, so its output directory is inferred from the entry points, not read.',
+  terms: ['build', 'tsc', 'tsconfig.build.json', 'compile'],
+  sources: inEvery('scripts.build'),
+};
+
+const distStage: CodebaseNode = {
+  id: 'stage-dist',
+  label: 'dist/',
+  kind: 'stage',
+  summary: 'Build output: dist/index.js and dist/index.d.ts are the entry.',
+  explanation:
+    'main, module and types point at ./dist/index.js and ./dist/index.d.ts in every package. @prnt/dagr-render also has dist/core.js and dist/core.d.ts for its "./core" entry.',
+  whyItMatters: 'What consumers import is this directory, not src/.',
+  terms: ['dist', 'index.js', 'index.d.ts', 'types', 'main', 'module'],
+  sources: [...inEvery('main'), ...inEvery('types'), pj('render', 'exports')],
+};
+
+const entryStage: CodebaseNode = {
+  id: 'stage-entry',
+  label: 'exports map',
+  kind: 'stage',
+  summary: 'ESM-only entry points: types, import and default conditions.',
+  explanation:
+    'Every package is "type": "module" and its exports "." entry has types, import and default conditions, all into dist. render adds "./core"; explorer adds "./styles.css" and marks only *.css as having side effects, where the other four set "sideEffects": false.',
+  whyItMatters: 'A new public file needs an exports entry, and the explorer\'s stylesheet is the one non-JavaScript export.',
+  example:
+    'Illustration, under standard Node package resolution (not stated in the packet): importing "@prnt/dagr-explorer" resolves the "." entry\'s import condition to ./dist/index.js.',
+  terms: ['exports', 'ESM', 'type module', 'sideEffects', 'styles.css', 'core', 'conditions'],
+  sources: [...inEvery('type'), ...inEvery('exports'), ...inEvery('sideEffects')],
+};
+
+const publishStage: CodebaseNode = {
+  id: 'stage-publish',
+  label: 'published package',
+  kind: 'stage',
+  summary: 'Public, MIT, version 0.2.0; ships dist, src, docs and LICENSE.',
+  explanation:
+    'Every package is MIT-licensed, at version 0.2.0, with publishConfig access "public". Its files field ships dist, src, CHANGELOG.md, README.md and LICENSE; the explorer also ships styles.css. Each repository field points at github.com/prnt-design/dagr with the package\'s own directory.',
+  whyItMatters: 'All five packages share one version number, and each keeps its own CHANGELOG.md and README.md.',
+  uncertainty: 'The packet does not say how versions are bumped or releases are made.',
+  terms: ['publish', 'npm', 'MIT', 'version', '0.2.0', 'CHANGELOG', 'README', 'LICENSE', 'repository'],
+  sources: [...inEvery('version'), ...inEvery('license'), ...inEvery('publishConfig'), ...inEvery('files'), ...inEvery('repository')],
+};
+
+// ------------------------------------------------------------------- edges
+
+const ws = 'workspace:^';
+
+const workspaceEdges: readonly CodebaseEdge[] = [
+  {
+    id: 'layout-peers-graph', source: 'pkg-layout', target: 'pkg-graph', kind: 'peer', label: 'peer-depends on',
+    detail: `peerDependencies "${ws}"; also a devDependency for its own development.`,
+    sources: [pj('layout', 'peerDependencies'), pj('layout', 'devDependencies')],
+  },
+  {
+    id: 'react-needs-layout', source: 'pkg-react', target: 'pkg-layout', kind: 'dependency', label: 'depends on',
+    detail: `dependencies "${ws}": installed with @prnt/dagr-react.`,
+    sources: [pj('react', 'dependencies')],
+  },
+  {
+    id: 'react-peers-graph', source: 'pkg-react', target: 'pkg-graph', kind: 'peer', label: 'peer-depends on',
+    detail: `peerDependencies "${ws}": the consumer provides it.`,
+    sources: [pj('react', 'peerDependencies')],
+  },
+  {
+    id: 'react-peers-render', source: 'pkg-react', target: 'pkg-render', kind: 'peer', label: 'peer-depends on',
+    detail: `peerDependencies "${ws}": the consumer provides it.`,
+    sources: [pj('react', 'peerDependencies')],
+  },
+  {
+    id: 'explorer-needs-graph', source: 'pkg-explorer', target: 'pkg-graph', kind: 'dependency', label: 'depends on',
+    detail: `dependencies "${ws}".`,
+    sources: [pj('explorer', 'dependencies')],
+  },
+  {
+    id: 'explorer-needs-layout', source: 'pkg-explorer', target: 'pkg-layout', kind: 'dependency', label: 'depends on',
+    detail: `dependencies "${ws}".`,
+    sources: [pj('explorer', 'dependencies')],
+  },
+  {
+    id: 'explorer-needs-render', source: 'pkg-explorer', target: 'pkg-render', kind: 'dependency', label: 'depends on',
+    detail: `dependencies "${ws}".`,
+    sources: [pj('explorer', 'dependencies')],
+  },
+];
+
+const devDep = (pkg: string, ext: string, version: string): CodebaseEdge => ({
+  id: `${pkg}-dev-${ext}`,
+  source: `pkg-${pkg}`,
+  target: `ext-${ext}`,
+  kind: 'dev',
+  label: 'dev-depends on',
+  dash: true,
+  detail: `devDependencies "${version}": used to develop the package, not installed by its consumers.`,
+  sources: [pj(pkg, 'devDependencies')],
+});
+
+const externalEdges: readonly CodebaseEdge[] = [
+  {
+    id: 'render-optional-three', source: 'pkg-render', target: 'ext-three', kind: 'optional-peer', label: 'optionally peers on',
+    dash: true,
+    detail: 'peerDependencies ">=0.180.0 <1.0.0", marked optional in peerDependenciesMeta.',
+    sources: [pj('render', 'peerDependencies'), pj('render', 'peerDependenciesMeta')],
+  },
+  {
+    id: 'react-peers-react', source: 'pkg-react', target: 'ext-react', kind: 'peer', label: 'peer-depends on',
+    detail: 'react and react-dom ">=19.0.0 <20.0.0".',
+    sources: [pj('react', 'peerDependencies')],
+  },
+  {
+    id: 'explorer-peers-react', source: 'pkg-explorer', target: 'ext-react', kind: 'peer', label: 'peer-depends on',
+    detail: 'react and react-dom ">=18.2.0 <20.0.0"; tested against React 18 through the react-18 aliases.',
+    sources: [pj('explorer', 'peerDependencies'), pj('explorer', 'devDependencies')],
+  },
+  devDep('layout', 'dagre', '3.1.1'),
+  devDep('graph', 'fast-check', '^4.9.0'),
+  devDep('render', 'jsdom', '^30.0.1'),
+  devDep('react', 'jsdom', '^30.0.1'),
+  devDep('explorer', 'jsdom', '^30.0.1'),
+  devDep('graph', 'bench', 'workspace:*'),
+  devDep('layout', 'bench', 'workspace:*'),
+  devDep('render', 'bench', 'workspace:*'),
+  devDep('react', 'bench', 'workspace:*'),
+];
+
+const flowEdges: readonly CodebaseEdge[] = [
+  {
+    id: 'src-checked', source: 'stage-src', target: 'stage-checks', kind: 'flow', label: 'is checked by',
+    detail: 'typecheck and test scripts.', sources: [...inEvery('scripts.typecheck'), ...inEvery('scripts.test')],
+  },
+  {
+    id: 'src-benched', source: 'stage-src', target: 'stage-bench', kind: 'flow', label: 'is benchmarked by',
+    detail: 'bench script.', inferred: true, sources: inEvery('scripts.bench'),
+  },
+  {
+    id: 'src-compiled', source: 'stage-src', target: 'stage-build', kind: 'flow', label: 'is compiled by',
+    detail: 'build script, "tsc -p tsconfig.build.json".', inferred: true, sources: inEvery('scripts.build'),
+  },
+  {
+    id: 'build-writes-dist', source: 'stage-build', target: 'stage-dist', kind: 'flow', label: 'writes',
+    detail: 'Inferred: the entry points name ./dist, and build is the only script that emits files.',
+    inferred: true, sources: [...inEvery('scripts.build'), ...inEvery('main')],
+  },
+  {
+    id: 'dist-exported', source: 'stage-dist', target: 'stage-entry', kind: 'flow', label: 'is exposed through',
+    detail: 'Every exports condition points into ./dist (except the explorer\'s ./styles.css).', sources: inEvery('exports'),
+  },
+  {
+    id: 'entry-published', source: 'stage-entry', target: 'stage-publish', kind: 'flow', label: 'is published in',
+    detail: 'dist is in the files field of every package.', sources: inEvery('files'),
+  },
+  {
+    id: 'src-published', source: 'stage-src', target: 'stage-publish', kind: 'flow', label: 'is also shipped in',
+    detail: 'src is in the files field of every package.', sources: inEvery('files'),
+  },
+];
+
+// ------------------------------------------------------------------- views
+
+/** Declared, not measured: sized for a label, a kind line and three summary lines. */
+const NODE_LAYOUT = { direction: 'right', nodeSize: { width: 260, height: 128 } } as const;
+
+export const views: readonly ExplorerView<CodebaseNode, CodebaseEdge>[] = [
+  {
+    id: 'packages',
+    label: 'Workspace packages',
+    description:
+      'The five published packages and how they need each other. Arrows point from a package to the package it needs. Solid: dependencies or peerDependencies; the edge label says which.',
+    nodes: packages,
+    edges: workspaceEdges,
+    layout: NODE_LAYOUT,
+  },
+  {
+    id: 'externals',
+    label: 'Peers and dev tooling',
+    description:
+      'Packages outside the five that they name. Arrows point from a Dagr package to what it needs. Dashed: development-only or optional.',
+    nodes: [...packages, three, reactLib, dagre, fastCheck, jsdom, bench],
+    edges: externalEdges,
+    layout: NODE_LAYOUT,
+  },
+  {
+    id: 'flow',
+    label: 'From source to published package',
+    description:
+      'The scripts and fields every package shares, in the order a change travels. Arrows follow that flow. Steps marked inferred are not stated in the packet.',
+    nodes: [srcStage, checksStage, benchStage, buildStage, distStage, entryStage, publishStage],
+    edges: flowEdges,
+    layout: NODE_LAYOUT,
+  },
+];

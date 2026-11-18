@@ -1,0 +1,576 @@
+import type { ExplorerEdge, ExplorerNode, ExplorerView } from '@prnt/dagr-explorer';
+
+export type Stage = 'Setup' | 'Data model' | 'Rendering' | 'Behavior' | 'Polish';
+
+export interface ConceptNode extends ExplorerNode {
+  readonly stage: Stage;
+  readonly summary: string;
+  readonly points: readonly string[];
+  readonly code?: string | undefined;
+  readonly source: string;
+  readonly check: { readonly question: string; readonly answer: string };
+}
+
+export const STAGE_COLORS: Readonly<Record<Stage, string>> = {
+  Setup: '#64748b',
+  'Data model': '#2563eb',
+  Rendering: '#7c3aed',
+  Behavior: '#059669',
+  Polish: '#d97706',
+};
+
+const README = 'packages/explorer/README.md';
+const TYPES = 'packages/explorer/src/types.ts';
+
+// Listed in a valid learning order: every concept comes after its prerequisites.
+export const CONCEPTS: readonly ConceptNode[] = [
+  {
+    id: 'install',
+    label: 'Install and requirements',
+    stage: 'Setup',
+    summary: 'Install @prnt/dagr-explorer; it runs on React 18 and React 19.',
+    points: [
+      'Install with npm install @prnt/dagr-explorer.',
+      'react and react-dom must be >=18.2.0 <20.0.0.',
+      'The umbrella package re-exports it as @prnt/dagr/explorer but requires React 19, so a React 18 site installs this package directly.',
+      'The explorer never loads three.js at runtime: it imports only the three-free core entry of @prnt/dagr-render.',
+    ],
+    code: 'npm install @prnt/dagr-explorer',
+    source: `${README} — Install and requirements`,
+    check: {
+      question: 'A site is on React 18. Which package should it install?',
+      answer: '@prnt/dagr-explorer directly, because the umbrella @prnt/dagr requires React 19.',
+    },
+  },
+  {
+    id: 'node',
+    label: 'A node is an id and a label',
+    stage: 'Data model',
+    summary: 'id and label are all the explorer reads from a node.',
+    points: [
+      'ExplorerNode has id and label, plus optional size and color (any CSS color).',
+      'The label is the accessible name, the search result text, and the default content.',
+      'Everything else about a node is your own fields.',
+    ],
+    code: "const node = { id: 'store', label: 'Store' };",
+    source: `${README} — A node is an id and a label; ${TYPES} — ExplorerNode`,
+    check: {
+      question: 'Name three jobs a node’s label does.',
+      answer: 'It is the accessible name, the search result text, and the default content.',
+    },
+  },
+  {
+    id: 'custom-type',
+    label: 'Your own node fields',
+    stage: 'Data model',
+    summary: 'Extend ExplorerNode; your type flows through every function and slot.',
+    points: [
+      'Declare an interface that extends ExplorerNode with your own fields.',
+      'That type flows through to every function and every slot.',
+      'With DagrExplorer the node type is inferred from your data, so renderNode sees your fields.',
+    ],
+    code: [
+      "import type { ExplorerNode } from '@prnt/dagr-explorer';",
+      '',
+      'interface MyNode extends ExplorerNode {',
+      '  readonly title: string;',
+      '}',
+    ].join('\n'),
+    source: `${README} — The parts; A node is an id and a label`,
+    check: {
+      question: 'How do you give nodes a field such as team?',
+      answer: 'Put it on a type that extends ExplorerNode; the explorer passes that type to every slot.',
+    },
+  },
+  {
+    id: 'edge',
+    label: 'Edges',
+    stage: 'Data model',
+    summary: 'An edge has an id, a source and a target node id.',
+    points: [
+      'ExplorerEdge has id, source and target, plus optional label, color and dash (draw it dashed).',
+      'An edge that names a node its view lacks throws MISSING_EDGE_ENDPOINT.',
+      'A self loop stays in your data but is not drawn: it has an empty route.',
+    ],
+    code: "{ id: 'read', source: 'app', target: 'store' }",
+    source: `${TYPES} — ExplorerEdge; ${README} — Layout, Errors`,
+    check: {
+      question: 'What happens to an edge from a node to itself?',
+      answer: 'It stays in your data with an empty route; it is not drawn and moves nothing.',
+    },
+  },
+  {
+    id: 'group',
+    label: 'Groups',
+    stage: 'Data model',
+    summary: 'A labeled outline around member nodes. An annotation: it moves no node.',
+    points: [
+      'ExplorerGroup has id, label, nodeIds and an optional color.',
+      'It is drawn as the padded hull of its members with a band above for its label.',
+      'strictGroups throws GROUP_ENCLOSES_NON_MEMBER when an outline would overlap a non-member node.',
+      'A group with no members throws EMPTY_GROUP; one naming a missing node throws MISSING_GROUP_MEMBER.',
+    ],
+    code: "{ id: 'data', label: 'Data tier', nodeIds: ['store'] }",
+    source: `${TYPES} — ExplorerGroup; ${README} — Layout, Errors`,
+    check: {
+      question: 'Does adding a group change where its nodes are laid out?',
+      answer: 'No. A group moves no node; it is an outline drawn around its members.',
+    },
+  },
+  {
+    id: 'view',
+    label: 'Views',
+    stage: 'Data model',
+    summary: 'A view bundles nodes, edges, optional groups and layout under an id and label.',
+    points: [
+      'ExplorerView has id, label, nodes and edges, plus optional description, groups and layout.',
+      'Pass an array of views to show a view switcher; it renders nothing for a single view.',
+      'Ids may repeat across views, but two views may not share an id (DUPLICATE_VIEW_ID).',
+    ],
+    code: [
+      'const views: ExplorerView<MyNode>[] = [',
+      "  { id: 'overview', label: 'Overview', nodes, edges },",
+      '];',
+    ].join('\n'),
+    source: `${TYPES} — ExplorerView; ${README} — The parts, Errors`,
+    check: {
+      question: 'Can the same node id appear in two views?',
+      answer: 'Yes. Ids may repeat across views; within one view node ids must be unique.',
+    },
+  },
+  {
+    id: 'single-graph',
+    label: 'One graph without views',
+    stage: 'Data model',
+    summary: 'Pass nodes, edges, groups and layout directly instead of views.',
+    points: [
+      "That is one view with the id 'default' and the explorer’s label as its label.",
+      'Passing both shapes (views and nodes/edges) is a type error.',
+    ],
+    code: '<DagrExplorer label="Architecture" nodes={nodes} edges={edges} />',
+    source: `${README} — The explorer`,
+    check: {
+      question: 'What id does the single view get when you pass nodes and edges directly?',
+      answer: "'default'.",
+    },
+  },
+  {
+    id: 'sizes',
+    label: 'Sizes are declared',
+    stage: 'Data model',
+    summary: 'A node’s size is declared, never measured.',
+    points: [
+      'A node’s size is its own size, else the view’s layout.nodeSize (a value or a function of the node), else 240 by 120.',
+      'The explorer virtualizes node content, and a node with no element cannot be measured.',
+      'A width or height that is not finite and greater than zero throws INVALID_NODE_SIZE, naming the node.',
+    ],
+    source: `${README} — Sizes are declared, never measured`,
+    check: {
+      question: 'Why can the explorer not measure node content to size it?',
+      answer: 'Node content is virtualized, and a node with no element cannot be measured.',
+    },
+  },
+  {
+    id: 'layout',
+    label: 'Layout options',
+    stage: 'Data model',
+    summary: 'view.layout sets direction, node size, spacing and edge style.',
+    points: [
+      "direction: 'right' (default) or 'down'.",
+      'nodeSep: gap between neighbors across the flow, default 40. rankSep: gap between ranks along the flow, default 120.',
+      "edgeStyle: 'smooth' (default) or 'orthogonal'.",
+      'layoutView(view) returns boxes, routes and group rectangles in world space: y-down CSS pixels at zoom 1, padded 40 off the origin. It touches no DOM.',
+      'Parallel edges on one line that span a single rank are separated by 16.',
+    ],
+    code: [
+      "import { layoutView } from '@prnt/dagr-explorer';",
+      '',
+      'const layout = layoutView(view);',
+      "layout.boxes.get('app'); // { x: 40, y: 40, width: 240, height: 120 }",
+    ].join('\n'),
+    source: `${README} — Layout; The core`,
+    check: {
+      question: 'What are the default direction and edge style?',
+      answer: "direction 'right' and edgeStyle 'smooth'.",
+    },
+  },
+  {
+    id: 'errors',
+    label: 'Data errors',
+    stage: 'Data model',
+    summary: 'A malformed view throws ExplorerDataError; switch on its code.',
+    points: [
+      'ExplorerRoot validates every view and lays out the active one during render, so an error boundary catches it.',
+      'error.id is the view, node, edge or group at fault; error.viewId is the view it was found in (undefined for an error about a view itself).',
+      'validateView and validateViews run the same checks without laying out. Only validateViews can raise DUPLICATE_VIEW_ID.',
+      'layoutView validates its view first, so it throws these too.',
+    ],
+    code: [
+      "import { ExplorerDataError, validateViews } from '@prnt/dagr-explorer';",
+      '',
+      'try {',
+      '  validateViews(views);',
+      '} catch (error) {',
+      '  if (error instanceof ExplorerDataError) {',
+      '    console.warn(error.code, error.viewId, error.id);',
+      '  }',
+      '}',
+    ].join('\n'),
+    source: `${README} — Errors`,
+    check: {
+      question: 'Where do you catch a data error thrown while the explorer renders?',
+      answer: 'In an error boundary, because ExplorerRoot validates during render.',
+    },
+  },
+  {
+    id: 'label-prop',
+    label: 'The required label',
+    stage: 'Rendering',
+    summary: 'label is the accessible name of the graph.',
+    points: [
+      'label is required on DagrExplorer and ExplorerRoot.',
+      'The parts derive their accessible names from it.',
+    ],
+    source: `${README} — The explorer`,
+    check: {
+      question: 'Why is label required?',
+      answer: 'It is the accessible name of the graph, and the parts derive theirs from it.',
+    },
+  },
+  {
+    id: 'dagr-explorer',
+    label: 'DagrExplorer',
+    stage: 'Rendering',
+    summary: 'The preassembled explorer: pass label and data, get the whole UI.',
+    points: [
+      'It takes the root’s props plus renderNode, renderDetails, renderConnection, renderViews, tiers, maxOverlayNodes, base, nodeAriaLabel, inset and contentPadding, which it forwards to the parts.',
+      'It infers the node and edge types from views, so every slot is typed from your data.',
+      'The stylesheet @prnt/dagr-explorer/styles.css is optional.',
+    ],
+    code: [
+      "import { DagrExplorer } from '@prnt/dagr-explorer';",
+      "import '@prnt/dagr-explorer/styles.css'; // optional",
+      '',
+      '<DagrExplorer label="Architecture" views={views} />;',
+    ].join('\n'),
+    source: `${README} — The explorer`,
+    check: {
+      question: 'What does DagrExplorer give you that hand-composed parts cannot?',
+      answer: 'Type inference: it infers node and edge types from views, so slots are checked against your data.',
+    },
+  },
+  {
+    id: 'render-node',
+    label: 'renderNode',
+    stage: 'Rendering',
+    summary: 'Your content for nodes large enough on screen to read.',
+    points: [
+      'renderNode receives your node type, so it can read your own fields.',
+      'Node content is virtualized by on-screen size: only nodes on screen and large enough to read have elements.',
+      'Nodes too small to read, edges and group outlines are drawn by a base layer, SVG by default.',
+      'Keys typed into content you render inside a node are left to that content.',
+    ],
+    code: 'renderNode={(node) => `${node.label} (${node.team})`}',
+    source: `${README} — The explorer; Keyboard; The base layer is experimental`,
+    check: {
+      question: 'Which nodes get a renderNode element?',
+      answer: 'Only nodes on screen and large enough to read. The rest are drawn by the base layer.',
+    },
+  },
+  {
+    id: 'render-details',
+    label: 'The details drawer',
+    stage: 'Rendering',
+    summary: 'renderDetails replaces the drawer body; renderConnection draws one connection.',
+    points: [
+      'The drawer slot receives { node, connections, inspect, follow }.',
+      "renderConnection(edge, otherNode, direction) draws one connection in the default body, with direction 'to', 'from' or 'self'.",
+      'Following a connection inspects the neighbor, keeps the original opener, and pans it into view at the current zoom.',
+      'Below 720 CSS pixels of container width the drawer docks to the bottom; wider containers keep a 360px side panel.',
+    ],
+    code: [
+      'renderDetails={({ node, connections, follow }) => (',
+      '  <MyDetails node={node} connections={connections} onFollow={follow} />',
+      ')}',
+    ].join('\n'),
+    source: `${README} — The parts; Details adapt to their container; Search, drawer and Escape`,
+    check: {
+      question: 'What four things does the drawer slot receive?',
+      answer: 'node, connections, inspect and follow.',
+    },
+  },
+  {
+    id: 'map-outline',
+    label: 'Map and outline',
+    stage: 'Rendering',
+    summary: 'DagrExplorer shows a Map and an Outline of the same view.',
+    points: [
+      "mode ('map' or 'outline') is controllable, with defaultMode and onModeChange.",
+      'The outline lists the active view’s nodes as buttons in data order. It is not virtualized.',
+      'Selection, query, trace and the drawer carry across a switch; the map stays mounted, hidden, and keeps its camera.',
+    ],
+    source: `${README} — The explorer; The parts`,
+    check: {
+      question: 'Does switching to the outline lose the current selection?',
+      answer: 'No. The selection, query, trace and drawer carry across a switch.',
+    },
+  },
+  {
+    id: 'parts',
+    label: 'Composing the parts',
+    stage: 'Rendering',
+    summary: 'DagrExplorer is built only from public parts you can rearrange.',
+    points: [
+      'Parts: ExplorerRoot, ExplorerViews, ExplorerSearch, ExplorerTraceToggle, ExplorerViewport, ExplorerDetails, ExplorerOutline, ExplorerToolbar.',
+      'One ExplorerViewport per root: a second throws ExplorerContextError with code SECOND_VIEWPORT. A part outside a root throws OUTSIDE_EXPLORER.',
+      'A part’s type parameter is a claim, not a check: ExplorerViewport<MyNode> asserts the type and nothing verifies it.',
+      'Every part takes className and style.',
+    ],
+    code: [
+      '<ExplorerRoot label="Architecture" views={views}>',
+      '  <ExplorerSearch />',
+      '  <ExplorerViewport<MyNode> renderNode={(node) => node.title}>',
+      '    <ExplorerDetails />',
+      '  </ExplorerViewport>',
+      '  <ExplorerToolbar />',
+      '</ExplorerRoot>',
+    ].join('\n'),
+    source: `${README} — The parts`,
+    check: {
+      question: 'What happens if you render two ExplorerViewport parts in one root?',
+      answer: 'The second throws ExplorerContextError with the code SECOND_VIEWPORT.',
+    },
+  },
+  {
+    id: 'controlled-state',
+    label: 'Controlled and internal state',
+    stage: 'Behavior',
+    summary: 'viewId and selectedId are controllable; query, trace, drawer and camera are internal.',
+    points: [
+      'viewId and selectedId take defaultViewId, defaultSelectedId, onViewChange and onSelectedChange, because they are what a host syncs to a URL.',
+      'Under a controlled value, a change the explorer starts calls the callback and changes nothing on screen until the prop does.',
+      'Changing view resets the query, trace, drawer and camera, and sets the selection to selectOnViewChange(view) or clears it.',
+      'If the selected node leaves the data, the selection clears and the drawer closes.',
+    ],
+    source: `${README} — The root’s props and state`,
+    check: {
+      question: 'With selectedId controlled, what happens when a reader clicks a node?',
+      answer: 'onSelectedChange is called, and nothing changes on screen until you update the prop.',
+    },
+  },
+  {
+    id: 'use-explorer',
+    label: 'useExplorer, useExplorerApi, apiRef',
+    stage: 'Behavior',
+    summary: 'Read explorer state or call its methods from your own components.',
+    points: [
+      'useExplorer() returns state (views, activeView, selectedNode, query, matches, trace, detailsOpen, camera and more) and the methods. It re-renders on every state change.',
+      'useExplorerApi() returns only the stable methods and never re-renders its caller.',
+      'Methods include fit, zoomBy, focusNode, reveal, focusViewport, select, inspect, closeDetails, selectView, setQuery and setTrace.',
+      'select(id) sets the current node without opening the drawer; inspect(id) selects and opens it.',
+    ],
+    code: [
+      'function FitButton() {',
+      '  const { fit } = useExplorerApi();',
+      '  return <button onClick={fit}>Fit</button>;',
+      '}',
+    ].join('\n'),
+    source: `${README} — useExplorer, useExplorerApi and apiRef`,
+    check: {
+      question: 'Which hook should a button that only calls fit() use, and why?',
+      answer: 'useExplorerApi, because it returns the stable methods and never re-renders its caller.',
+    },
+  },
+  {
+    id: 'search',
+    label: 'Search',
+    stage: 'Behavior',
+    summary: 'Search reaches every node, whatever is on screen.',
+    points: [
+      'A node matches when its text contains every whitespace-separated token, case ignored. The query is literal text, not a pattern.',
+      'The text is the id and label unless you pass searchText.',
+      'Enter inspects the first match and flies to it. The list shows at most maxResults matches (default 50).',
+      'An empty query matches nothing.',
+    ],
+    code: "searchNodes(view.nodes, 'sto'); // [{ id: 'store', label: 'Store' }]",
+    source: `${README} — Search, drawer and Escape; Search`,
+    check: {
+      question: 'Why is search described as the complete way to every node?',
+      answer: 'A node too small on screen to read has no element, but search reaches every node.',
+    },
+  },
+  {
+    id: 'keyboard',
+    label: 'Keyboard and focus',
+    stage: 'Behavior',
+    summary: 'The graph is one tab stop; arrow keys move between nodes.',
+    points: [
+      'Exactly one node is in the tab order: the selected node, else the last keyboard-focused node, else the node nearest the center.',
+      'With a node focused: arrows move to the nearest node in that direction, Shift with an arrow pans, Enter or Space inspects.',
+      '+ and = zoom in, - zooms out, 0 fits.',
+      'Escape closes the drawer if open, otherwise leaves the graph.',
+    ],
+    source: `${README} — Keyboard; Search, drawer and Escape`,
+    check: {
+      question: 'With a node focused, what does Enter do?',
+      answer: 'It inspects the node: selects it and opens the drawer.',
+    },
+  },
+  {
+    id: 'labels',
+    label: 'Labels',
+    stage: 'Polish',
+    summary: 'Every string the parts show comes from labels.',
+    points: [
+      'labels is an ExplorerLabels object; its neutral English defaults are DEFAULT_EXPLORER_LABELS. Pass any subset.',
+      'Counts and names are formatters, such as matches(count) and zoomLevel(percent).',
+      'An inline object is kept by value, but an inline formatter is a new function each render; define formatters outside the component.',
+    ],
+    code: "<DagrExplorer label=\"Architecture\" views={views} labels={{ search: 'Find' }} />",
+    source: `${README} — Labels`,
+    check: {
+      question: 'Why define a formatter label outside the component?',
+      answer: 'An inline formatter is a new function each render, and so counts as a change.',
+    },
+  },
+  {
+    id: 'styling',
+    label: 'Styling',
+    stage: 'Polish',
+    summary: 'The parts work unstyled; styles.css is an optional light theme driven by CSS variables.',
+    points: [
+      'What the parts need to function is inline. Each carries a data-dagr-explorer hook.',
+      'styles.css reads variables such as --dagr-explorer-accent, --dagr-explorer-fg and --dagr-explorer-bg.',
+      'Its selectors are wrapped in :where(), so any rule of yours wins (except :hover, :focus and :focus-visible rules).',
+      '--dagr-explorer-height sets the graph height, 480px by default, with or without the stylesheet.',
+    ],
+    code: '<ExplorerViewport style={{ height: 600 }} />',
+    source: `${README} — Styling; The parts`,
+    check: {
+      question: 'How tall is the graph if you set nothing?',
+      answer: '480px, from --dagr-explorer-height.',
+    },
+  },
+  {
+    id: 'ssr',
+    label: 'Server rendering',
+    stage: 'Polish',
+    summary: 'Every part renders on a server, with no DOM.',
+    points: [
+      'Layout is pure, so the HTML carries the shell, the base layer, every node as a mark and every routed edge.',
+      'The camera and node elements start on the client once the viewport is measured.',
+      'A data error throws ExplorerDataError on the server as it does on the client.',
+    ],
+    source: `${README} — Server rendering`,
+    check: {
+      question: 'What starts only on the client?',
+      answer: 'The camera and the node elements, once the viewport is measured.',
+    },
+  },
+];
+
+// [prerequisite, concept that builds on it]
+const PREREQUISITE_PAIRS: readonly (readonly [string, string])[] = [
+  ['install', 'node'],
+  ['install', 'label-prop'],
+  ['node', 'custom-type'],
+  ['node', 'edge'],
+  ['node', 'group'],
+  ['node', 'sizes'],
+  ['node', 'view'],
+  ['edge', 'view'],
+  ['group', 'view'],
+  ['view', 'single-graph'],
+  ['view', 'layout'],
+  ['sizes', 'layout'],
+  ['view', 'errors'],
+  ['layout', 'errors'],
+  ['view', 'dagr-explorer'],
+  ['label-prop', 'dagr-explorer'],
+  ['custom-type', 'render-node'],
+  ['dagr-explorer', 'render-node'],
+  ['edge', 'render-details'],
+  ['dagr-explorer', 'render-details'],
+  ['dagr-explorer', 'map-outline'],
+  ['dagr-explorer', 'parts'],
+  ['custom-type', 'parts'],
+  ['dagr-explorer', 'controlled-state'],
+  ['controlled-state', 'use-explorer'],
+  ['parts', 'use-explorer'],
+  ['dagr-explorer', 'search'],
+  ['search', 'keyboard'],
+  ['dagr-explorer', 'labels'],
+  ['dagr-explorer', 'styling'],
+  ['parts', 'ssr'],
+  ['errors', 'ssr'],
+];
+
+export const PREREQUISITE_EDGES: readonly ExplorerEdge[] = PREREQUISITE_PAIRS.map(
+  ([source, target]) => ({ id: `${source}->${target}`, source, target }),
+);
+
+export const PREREQUISITES_OF: ReadonlyMap<string, readonly string[]> = new Map(
+  CONCEPTS.map((concept) => [
+    concept.id,
+    PREREQUISITE_PAIRS.filter(([, target]) => target === concept.id).map(([source]) => source),
+  ]),
+);
+
+function viewOf(
+  id: string,
+  label: string,
+  description: string,
+  ids: readonly string[] | null,
+  direction: 'right' | 'down',
+): ExplorerView<ConceptNode> {
+  const nodes = ids === null ? CONCEPTS : CONCEPTS.filter((concept) => ids.includes(concept.id));
+  const present = new Set(nodes.map((node) => node.id));
+  return {
+    id,
+    label,
+    description,
+    nodes,
+    edges: PREREQUISITE_EDGES.filter((edge) => present.has(edge.source) && present.has(edge.target)),
+    layout: { direction, edgeStyle: 'smooth' },
+  };
+}
+
+export const PATH_VIEW_ID = 'path';
+
+export const CONCEPT_VIEWS: readonly ExplorerView<ConceptNode>[] = [
+  viewOf(
+    PATH_VIEW_ID,
+    'Full learning path',
+    'Every concept, with edges from each prerequisite to what builds on it.',
+    null,
+    'right',
+  ),
+  viewOf(
+    'data',
+    'Data model',
+    'What you hand the explorer: nodes, edges, groups, views, sizes and layout.',
+    ['install', 'node', 'custom-type', 'edge', 'group', 'view', 'single-graph', 'sizes', 'layout', 'errors'],
+    'down',
+  ),
+  viewOf(
+    'ui',
+    'Rendering and behavior',
+    'What the reader sees and does: the component, its slots, state, search and keyboard.',
+    [
+      'label-prop',
+      'dagr-explorer',
+      'render-node',
+      'render-details',
+      'map-outline',
+      'parts',
+      'controlled-state',
+      'use-explorer',
+      'search',
+      'keyboard',
+      'labels',
+      'styling',
+      'ssr',
+    ],
+    'right',
+  ),
+];

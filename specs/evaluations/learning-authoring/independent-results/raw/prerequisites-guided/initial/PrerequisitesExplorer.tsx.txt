@@ -1,0 +1,156 @@
+import type { CSSProperties } from 'react';
+import { DagrExplorer } from '@prnt/dagr-explorer';
+import type { ExplorerConnection } from '@prnt/dagr-explorer';
+import '@prnt/dagr-explorer/styles.css';
+import { SOURCE_SNAPSHOT, views } from './prerequisites-data';
+import type { Concept, Prerequisite } from './prerequisites-data';
+
+type Connection = ExplorerConnection<Concept, Prerequisite>;
+
+const muted: CSSProperties = { color: 'var(--dagr-explorer-fg-muted)' };
+const clamp3: CSSProperties = {
+  display: '-webkit-box',
+  WebkitLineClamp: 3,
+  WebkitBoxOrient: 'vertical',
+  overflow: 'hidden',
+};
+const listReset: CSSProperties = { listStyle: 'none', padding: 0, margin: 0, display: 'grid', gap: 8 };
+const connectionButton: CSSProperties = {
+  display: 'block',
+  width: '100%',
+  minHeight: 44,
+  padding: '8px 10px',
+  textAlign: 'left',
+  font: 'inherit',
+  color: 'inherit',
+  background: 'var(--dagr-explorer-bg-subtle)',
+  border: '1px solid var(--dagr-explorer-border)',
+  borderRadius: 6,
+  cursor: 'pointer',
+};
+
+function searchText(node: Concept): string {
+  return [node.id, node.label, node.kind, node.summary, node.explanation, ...node.keywords].join(' ');
+}
+
+function ConnectionList({
+  title,
+  empty,
+  items,
+  follow,
+}: {
+  title: string;
+  empty: string;
+  items: readonly { connection: Connection; text: string }[];
+  follow: (id: string) => void;
+}) {
+  return (
+    <section>
+      <h4 style={{ margin: '16px 0 8px' }}>{title}</h4>
+      {items.length === 0 ? (
+        <p style={muted}>{empty}</p>
+      ) : (
+        <ul style={listReset}>
+          {items.map(({ connection: { edge, node: other }, text }) => (
+            <li key={edge.id}>
+              <button type="button" style={connectionButton} onClick={() => follow(other.id)}>
+                <strong style={{ display: 'block' }}>{text}</strong>
+                <span style={muted}>{edge.reason}</span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  );
+}
+
+export function PrerequisitesExplorer() {
+  return (
+    <section aria-labelledby="prereq-heading" style={{ maxWidth: 1200, margin: '0 auto', padding: 16 }}>
+      <h2 id="prereq-heading" style={{ marginTop: 0 }}>Before you author a Dagr Explorer</h2>
+      <p>
+        A prerequisite map for React developers. Arrows point from a concept to what it is
+        needed for, so start at the left. Search by name or API term, open a concept for its
+        explanation and sources, or switch to Outline to read it as a list.
+      </p>
+      <DagrExplorer
+        label="Prerequisites for authoring a Dagr Explorer; edges point from a prerequisite to what it is needed for"
+        views={views}
+        style={{ '--dagr-explorer-height': '560px' } as CSSProperties}
+        searchText={searchText}
+        renderNode={(node, { tier }) => (
+          <span style={{ display: 'block', padding: 4, textAlign: 'left', lineHeight: 1.35 }}>
+            <strong style={{ display: 'block' }}>{node.label}</strong>
+            {tier === 'rich' && (
+              <>
+                <span style={{ ...muted, display: 'block', fontSize: '0.8em' }}>{node.kind}</span>
+                <span style={{ ...clamp3, fontSize: '0.9em' }}>{node.summary}</span>
+              </>
+            )}
+          </span>
+        )}
+        renderDetails={({ node, connections, follow }) => {
+          const learnFirst = connections
+            .filter(({ edge }) => edge.target === node.id && edge.source !== node.id)
+            .map((connection) => ({ connection, text: `← ${connection.node.label}` }));
+          const leadsTo = connections
+            .filter(({ edge }) => edge.source === node.id && edge.target !== node.id)
+            .map((connection) => ({ connection, text: `→ ${connection.node.label}` }));
+          return (
+            <article>
+              <p style={{ ...muted, margin: 0 }}>{node.kind}</p>
+              <h3 style={{ marginTop: 4 }}>{node.label}</h3>
+              <p><strong>{node.summary}</strong></p>
+              <h4 style={{ margin: '16px 0 4px' }}>What it is</h4>
+              <p style={{ marginTop: 0 }}>{node.explanation}</p>
+              <h4 style={{ margin: '16px 0 4px' }}>Why it matters</h4>
+              <p style={{ marginTop: 0 }}>{node.whyItMatters}</p>
+              {node.example && (
+                <>
+                  <h4 style={{ margin: '16px 0 4px' }}>Example</h4>
+                  <pre
+                    style={{
+                      margin: 0,
+                      padding: 8,
+                      overflowX: 'auto',
+                      whiteSpace: 'pre',
+                      fontFamily: 'var(--dagr-explorer-font-mono, monospace)',
+                      fontSize: '0.85em',
+                      background: 'var(--dagr-explorer-bg-subtle)',
+                      borderRadius: 6,
+                    }}
+                  >
+                    <code>{node.example.code}</code>
+                  </pre>
+                  <p style={{ ...muted, fontSize: '0.85em', marginTop: 4 }}>{node.example.note}</p>
+                </>
+              )}
+              <ConnectionList
+                title="Learn first"
+                empty="Nothing in this view comes before it."
+                items={learnFirst}
+                follow={follow}
+              />
+              <ConnectionList
+                title="Needed for"
+                empty="Nothing in this view builds on it."
+                items={leadsTo}
+                follow={follow}
+              />
+              <h4 style={{ margin: '16px 0 4px' }}>Sources</h4>
+              <ul style={{ marginTop: 0, paddingLeft: 18, fontSize: '0.85em' }}>
+                {node.sources.map((source) => (
+                  <li key={source}>{source}</li>
+                ))}
+              </ul>
+              <p style={{ ...muted, fontSize: '0.8em' }}>{SOURCE_SNAPSHOT}</p>
+            </article>
+          );
+        }}
+      />
+    </section>
+  );
+}
+
+export default PrerequisitesExplorer;

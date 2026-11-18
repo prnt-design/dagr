@@ -1,0 +1,50 @@
+[
+  {
+    "name": "baseline-desktop",
+    "followed": "2. Rebase onto origin/main",
+    "focusAfterClose": {
+      "tag": "BUTTON",
+      "label": null,
+      "text": "1. Run the full local gate"
+    },
+    "empty": "No matches",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "name": "baseline-phone",
+    "followed": "2. Rebase onto origin/main",
+    "focusAfterClose": {
+      "tag": "BUTTON",
+      "label": null,
+      "text": "1. Run the full local gate"
+    },
+    "empty": "No matches",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "name": "guided-desktop",
+    "followed": "Reinstall: frozen lockfile",
+    "focusAfterClose": {
+      "tag": "BUTTON",
+      "label": null,
+      "text": "1. Run the full local gate"
+    },
+    "empty": "No matches",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "name": "guided-phone",
+    "followed": "Reinstall: frozen lockfile",
+    "focusAfterClose": {
+      "tag": "BUTTON",
+      "label": null,
+      "text": "1. Run the full local gate"
+    },
+    "empty": "No matches",
+    "overflow": false,
+    "errors": []
+  }
+]

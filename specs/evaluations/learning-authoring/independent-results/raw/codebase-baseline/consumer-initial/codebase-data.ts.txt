@@ -1,0 +1,451 @@
+import type { ExplorerEdge, ExplorerGroup, ExplorerNode, ExplorerView } from '@prnt/dagr-explorer';
+
+export const SNAPSHOT_COMMIT = 'ccb66cad9dfc3baf650d65338e2bb2ae6c38aae2';
+export const REPOSITORY_URL = 'git+https://github.com/prnt-design/dagr.git';
+
+export type NodeKind = 'package' | 'workspace' | 'external' | 'entry';
+
+export interface Fact {
+  readonly label: string;
+  readonly value: string;
+}
+
+export interface CodebaseNode extends ExplorerNode {
+  readonly kind: NodeKind;
+  readonly summary: string;
+  readonly facts: readonly Fact[];
+  /** The packet file(s) every fact on this node comes from. */
+  readonly manifest: readonly string[];
+}
+
+export type Relation = 'dependency' | 'peer' | 'optional-peer' | 'dev' | 'export';
+
+export interface CodebaseEdge extends ExplorerEdge {
+  readonly relation: Relation;
+  readonly range: string;
+  readonly manifest: string;
+}
+
+export const RELATION_TEXT: Record<Relation, string> = {
+  dependency: 'dependencies',
+  peer: 'peerDependencies',
+  'optional-peer': 'peerDependencies, marked optional in peerDependenciesMeta',
+  dev: 'devDependencies',
+  export: 'exports',
+};
+
+export const KIND_TEXT: Record<NodeKind, string> = {
+  package: '@prnt/dagr package',
+  workspace: 'Workspace package',
+  external: 'Third-party package',
+  entry: 'Published entry point',
+};
+
+export const KIND_COLOR: Record<NodeKind, string> = {
+  package: '#2f6fde',
+  workspace: '#8a5cd1',
+  external: '#6b7280',
+  entry: '#0f8a6a',
+};
+
+const RELATION_COLOR: Record<Relation, string> = {
+  dependency: '#2f6fde',
+  peer: '#c2410c',
+  'optional-peer': '#c2410c',
+  dev: '#6b7280',
+  export: '#0f8a6a',
+};
+
+const M = {
+  graph: 'packages/graph/package.json',
+  layout: 'packages/layout/package.json',
+  render: 'packages/render/package.json',
+  react: 'packages/react/package.json',
+  explorer: 'packages/explorer/package.json',
+} as const;
+
+type PackageKey = keyof typeof M;
+
+const COMMON_SCRIPTS: readonly Fact[] = [
+  { label: 'typecheck', value: 'tsc --noEmit' },
+  { label: 'build', value: 'tsc -p tsconfig.build.json' },
+  { label: 'bench', value: 'vitest bench --run --outputJson bench-report.json' },
+];
+
+function packageNode(
+  key: PackageKey,
+  name: string,
+  description: string,
+  summary: string,
+  extra: readonly Fact[],
+  test = 'vitest run',
+): CodebaseNode {
+  return {
+    id: key,
+    label: name,
+    kind: 'package',
+    color: KIND_COLOR.package,
+    summary,
+    manifest: [M[key]],
+    facts: [
+      { label: 'description', value: description },
+      { label: 'version', value: '0.2.0' },
+      { label: 'license', value: 'MIT' },
+      { label: 'type', value: 'module' },
+      { label: 'directory', value: `packages/${key}` },
+      ...extra,
+      { label: 'script: test', value: test },
+      ...COMMON_SCRIPTS.map((s) => ({ label: `script: ${s.label}`, value: s.value })),
+    ],
+  };
+}
+
+const PACKAGES: Record<PackageKey, CodebaseNode> = {
+  graph: packageNode(
+    'graph',
+    '@prnt/dagr-graph',
+    'Typed directed graph model for Dagr: stable node identity, zero dependencies.',
+    'The graph model. Its manifest declares no dependencies or peerDependencies.',
+    [
+      { label: 'files', value: 'dist, src, CHANGELOG.md, README.md, LICENSE' },
+      { label: 'sideEffects', value: 'false' },
+    ],
+  ),
+  layout: packageNode(
+    'layout',
+    '@prnt/dagr-layout',
+    'Headless Sugiyama layout pipeline for Dagr, the dagre successor: incremental and animation first.',
+    'The layout pipeline. Takes @prnt/dagr-graph as a peer.',
+    [
+      { label: 'files', value: 'dist, src, CHANGELOG.md, README.md, LICENSE' },
+      { label: 'sideEffects', value: 'false' },
+    ],
+  ),
+  render: packageNode(
+    'render',
+    '@prnt/dagr-render',
+    'WebGPU renderer for Dagr: a three.js WebGPURenderer scene with SDF shapes and spring animation.',
+    'The renderer. Exports "." and "./core"; three is an optional peer.',
+    [
+      { label: 'exports', value: '".", "./core"' },
+      { label: 'files', value: 'dist, src, CHANGELOG.md, README.md, LICENSE' },
+      { label: 'sideEffects', value: 'false' },
+    ],
+  ),
+  react: packageNode(
+    'react',
+    '@prnt/dagr-react',
+    'React bindings for Dagr: the DagrCanvas component and hooks.',
+    'React bindings. Depends on layout; graph, render and React 19 are peers.',
+    [
+      { label: 'files', value: 'dist, src, CHANGELOG.md, README.md, LICENSE' },
+      { label: 'sideEffects', value: 'false' },
+    ],
+  ),
+  explorer: packageNode(
+    'explorer',
+    '@prnt/dagr-explorer',
+    'An interactive graph explorer for Dagr: views, search, connection tracing, groups and a details drawer, with virtualized node content.',
+    'The explorer. Depends on graph, layout and render; React 18 or 19 is a peer.',
+    [
+      { label: 'exports', value: '".", "./styles.css"' },
+      { label: 'files', value: 'dist, src, styles.css, CHANGELOG.md, README.md, LICENSE' },
+      { label: 'sideEffects', value: '["*.css"]' },
+      { label: 'script: test:react18', value: 'vitest run --config vitest.react18.config.ts' },
+    ],
+    'vitest run && vitest run --config vitest.react18.config.ts',
+  ),
+};
+
+function external(
+  id: string,
+  label: string,
+  summary: string,
+  manifest: readonly string[],
+  facts: readonly Fact[] = [],
+): CodebaseNode {
+  return {
+    id,
+    label,
+    kind: 'external',
+    color: KIND_COLOR.external,
+    summary,
+    manifest,
+    facts,
+    size: { width: 200, height: 80 },
+  };
+}
+
+function edge(
+  from: string,
+  to: string,
+  relation: Relation,
+  range: string,
+  manifest: string,
+): CodebaseEdge {
+  const dashed = relation === 'dev' || relation === 'optional-peer';
+  return {
+    id: `${from}->${to}:${relation}`,
+    source: from,
+    target: to,
+    relation,
+    range,
+    manifest,
+    label: range,
+    color: RELATION_COLOR[relation],
+    dash: dashed,
+  };
+}
+
+const allPackages = Object.values(PACKAGES);
+
+const runtimeView: ExplorerView<CodebaseNode, CodebaseEdge> = {
+  id: 'runtime',
+  label: 'Runtime and peer dependencies',
+  description:
+    'What each package declares under dependencies and peerDependencies. An arrow points from a package to what it needs.',
+  layout: { direction: 'right', nodeSize: { width: 240, height: 104 } },
+  nodes: [
+    ...allPackages,
+    external('npm:react', 'react', 'Peer of @prnt/dagr-react and @prnt/dagr-explorer, with different ranges.', [M.react, M.explorer]),
+    external('npm:react-dom', 'react-dom', 'Peer of @prnt/dagr-react and @prnt/dagr-explorer, with the same ranges as react.', [M.react, M.explorer]),
+    external('npm:three', 'three', 'Optional peer of @prnt/dagr-render.', [M.render], [
+      { label: 'peerDependenciesMeta', value: '{ "three": { "optional": true } }' },
+    ]),
+  ],
+  edges: [
+    edge('layout', 'graph', 'peer', 'workspace:^', M.layout),
+    edge('render', 'npm:three', 'optional-peer', '>=0.180.0 <1.0.0', M.render),
+    edge('react', 'layout', 'dependency', 'workspace:^', M.react),
+    edge('react', 'graph', 'peer', 'workspace:^', M.react),
+    edge('react', 'render', 'peer', 'workspace:^', M.react),
+    edge('react', 'npm:react', 'peer', '>=19.0.0 <20.0.0', M.react),
+    edge('react', 'npm:react-dom', 'peer', '>=19.0.0 <20.0.0', M.react),
+    edge('explorer', 'graph', 'dependency', 'workspace:^', M.explorer),
+    edge('explorer', 'layout', 'dependency', 'workspace:^', M.explorer),
+    edge('explorer', 'render', 'dependency', 'workspace:^', M.explorer),
+    edge('explorer', 'npm:react', 'peer', '>=18.2.0 <20.0.0', M.explorer),
+    edge('explorer', 'npm:react-dom', 'peer', '>=18.2.0 <20.0.0', M.explorer),
+  ],
+};
+
+const devView: ExplorerView<CodebaseNode, CodebaseEdge> = {
+  id: 'dev',
+  label: 'Development dependencies',
+  description:
+    'What each package declares under devDependencies: shared benchmarking, test environments and type packages.',
+  layout: { direction: 'right', nodeSize: { width: 240, height: 104 }, nodeSep: 24 },
+  nodes: [
+    ...allPackages,
+    {
+      id: 'bench',
+      label: '@dagr/bench',
+      kind: 'workspace',
+      color: KIND_COLOR.workspace,
+      summary: 'Referenced as "workspace:*". Its own manifest is not in the source packet.',
+      manifest: [M.graph, M.layout, M.render, M.react],
+      facts: [
+        { label: 'range', value: 'workspace:*' },
+        { label: 'declared by', value: 'graph, layout, render, react' },
+        { label: 'not declared by', value: '@prnt/dagr-explorer (which still has a bench script)' },
+      ],
+      size: { width: 200, height: 80 },
+    },
+    external('npm:fast-check', 'fast-check', 'Dev dependency of @prnt/dagr-graph.', [M.graph]),
+    external('npm:@dagrejs/dagre', '@dagrejs/dagre', 'Dev dependency of @prnt/dagr-layout, pinned exactly.', [M.layout]),
+    external('npm:three', 'three', 'Dev dependency of @prnt/dagr-render, alongside its optional peer range.', [M.render]),
+    external('npm:@types/three', '@types/three', 'Dev dependency of @prnt/dagr-render.', [M.render]),
+    external('npm:jsdom', 'jsdom', 'Dev dependency of render, react and explorer, all at ^30.0.1.', [M.render, M.react, M.explorer]),
+    external('npm:react', 'react', 'Dev dependency of react and explorer at ^19.2.8.', [M.react, M.explorer]),
+    external('npm:react-dom', 'react-dom', 'Dev dependency of react and explorer at ^19.2.8.', [M.react, M.explorer]),
+    external('npm:@types/react', '@types/react', 'Dev dependency of react and explorer at ^19.2.17.', [M.react, M.explorer]),
+    external('npm:@types/react-dom', '@types/react-dom', 'Dev dependency of react and explorer at ^19.2.3.', [M.react, M.explorer]),
+    external('alias:react-18', 'react-18', 'An npm alias for react 18, declared only by @prnt/dagr-explorer.', [M.explorer], [
+      { label: 'range', value: 'npm:react@^18.3.1' },
+      { label: 'used alongside', value: 'script test:react18 → vitest run --config vitest.react18.config.ts' },
+    ]),
+    external('alias:react-dom-18', 'react-dom-18', 'An npm alias for react-dom 18, declared only by @prnt/dagr-explorer.', [M.explorer], [
+      { label: 'range', value: 'npm:react-dom@^18.3.1' },
+    ]),
+  ],
+  edges: [
+    edge('graph', 'bench', 'dev', 'workspace:*', M.graph),
+    edge('graph', 'npm:fast-check', 'dev', '^4.9.0', M.graph),
+    edge('layout', 'bench', 'dev', 'workspace:*', M.layout),
+    edge('layout', 'graph', 'dev', 'workspace:^', M.layout),
+    edge('layout', 'npm:@dagrejs/dagre', 'dev', '3.1.1', M.layout),
+    edge('render', 'bench', 'dev', 'workspace:*', M.render),
+    edge('render', 'npm:@types/three', 'dev', '^0.185.0', M.render),
+    edge('render', 'npm:jsdom', 'dev', '^30.0.1', M.render),
+    edge('render', 'npm:three', 'dev', '^0.185.1', M.render),
+    edge('react', 'bench', 'dev', 'workspace:*', M.react),
+    edge('react', 'graph', 'dev', 'workspace:^', M.react),
+    edge('react', 'render', 'dev', 'workspace:^', M.react),
+    edge('react', 'npm:@types/react', 'dev', '^19.2.17', M.react),
+    edge('react', 'npm:@types/react-dom', 'dev', '^19.2.3', M.react),
+    edge('react', 'npm:jsdom', 'dev', '^30.0.1', M.react),
+    edge('react', 'npm:react', 'dev', '^19.2.8', M.react),
+    edge('react', 'npm:react-dom', 'dev', '^19.2.8', M.react),
+    edge('explorer', 'npm:@types/react', 'dev', '^19.2.17', M.explorer),
+    edge('explorer', 'npm:@types/react-dom', 'dev', '^19.2.3', M.explorer),
+    edge('explorer', 'npm:jsdom', 'dev', '^30.0.1', M.explorer),
+    edge('explorer', 'npm:react', 'dev', '^19.2.8', M.explorer),
+    edge('explorer', 'npm:react-dom', 'dev', '^19.2.8', M.explorer),
+    edge('explorer', 'alias:react-18', 'dev', 'npm:react@^18.3.1', M.explorer),
+    edge('explorer', 'alias:react-dom-18', 'dev', 'npm:react-dom@^18.3.1', M.explorer),
+  ],
+};
+
+function entry(
+  pkg: PackageKey,
+  subpath: string,
+  facts: readonly Fact[],
+  summary: string,
+): CodebaseNode {
+  return {
+    id: `${pkg}:${subpath}`,
+    label: `${PACKAGES[pkg].label}${subpath === '.' ? '' : subpath.slice(1)}`,
+    kind: 'entry',
+    color: KIND_COLOR.entry,
+    summary,
+    manifest: [M[pkg]],
+    facts: [{ label: 'export key', value: `"${subpath}"` }, ...facts],
+    size: { width: 240, height: 88 },
+  };
+}
+
+const MAIN_ENTRY: readonly Fact[] = [
+  { label: 'types', value: './dist/index.d.ts' },
+  { label: 'import', value: './dist/index.js' },
+  { label: 'default', value: './dist/index.js' },
+];
+
+const packagingNodes: CodebaseNode[] = [
+  ...allPackages,
+  entry('graph', '.', MAIN_ENTRY, 'The main entry, built to ./dist/index.js.'),
+  entry('layout', '.', MAIN_ENTRY, 'The main entry, built to ./dist/index.js.'),
+  entry('render', '.', MAIN_ENTRY, 'The main entry, built to ./dist/index.js.'),
+  entry(
+    'render',
+    './core',
+    [
+      { label: 'types', value: './dist/core.d.ts' },
+      { label: 'import', value: './dist/core.js' },
+      { label: 'default', value: './dist/core.js' },
+    ],
+    'A second entry, built to ./dist/core.js.',
+  ),
+  entry('react', '.', MAIN_ENTRY, 'The main entry, built to ./dist/index.js.'),
+  entry('explorer', '.', MAIN_ENTRY, 'The main entry, built to ./dist/index.js.'),
+  entry(
+    'explorer',
+    './styles.css',
+    [{ label: 'target', value: './styles.css' }, { label: 'sideEffects', value: '["*.css"]' }],
+    'A stylesheet entry. The package lists *.css as its only side effects.',
+  ),
+];
+
+const packagingView: ExplorerView<CodebaseNode, CodebaseEdge> = {
+  id: 'packaging',
+  label: 'Published entry points',
+  description:
+    'The subpaths each package.json exports. Every package also sets main, module and types to ./dist/index.*.',
+  layout: { direction: 'down', nodeSize: { width: 240, height: 104 }, nodeSep: 32, rankSep: 80 },
+  nodes: packagingNodes,
+  edges: packagingNodes
+    .filter((n) => n.kind === 'entry')
+    .map((n) => {
+      const [pkg, subpath] = n.id.split(':') as [PackageKey, string];
+      return edge(pkg, n.id, 'export', subpath, M[pkg]);
+    }),
+  groups: (Object.keys(PACKAGES) as PackageKey[]).map(
+    (pkg): ExplorerGroup => ({
+      id: `group:${pkg}`,
+      label: `packages/${pkg}`,
+      nodeIds: packagingNodes.filter((n) => n.id === pkg || n.id.startsWith(`${pkg}:`)).map((n) => n.id),
+    }),
+  ),
+};
+
+export const VIEWS: readonly ExplorerView<CodebaseNode, CodebaseEdge>[] = [
+  runtimeView,
+  devView,
+  packagingView,
+];
+
+export interface TourStep {
+  readonly title: string;
+  readonly viewId: string;
+  readonly nodeId: string;
+  readonly text: string;
+}
+
+export const TOUR: readonly TourStep[] = [
+  {
+    title: 'Start at the base',
+    viewId: 'runtime',
+    nodeId: 'graph',
+    text: '@prnt/dagr-graph describes itself as a typed directed graph model with zero dependencies, and its manifest has no dependencies or peerDependencies. Layout, react and explorer each declare it.',
+  },
+  {
+    title: 'Layout sits on the graph',
+    viewId: 'runtime',
+    nodeId: 'layout',
+    text: '@prnt/dagr-layout is a headless Sugiyama layout pipeline. It takes @prnt/dagr-graph as a peer, and keeps @dagrejs/dagre 3.1.1 as a dev dependency.',
+  },
+  {
+    title: 'Rendering is separate',
+    viewId: 'runtime',
+    nodeId: 'render',
+    text: '@prnt/dagr-render is the WebGPU renderer built on three.js. three is an optional peer, and the package exports a second entry, "./core".',
+  },
+  {
+    title: 'Two React-facing packages',
+    viewId: 'runtime',
+    nodeId: 'react',
+    text: '@prnt/dagr-react provides the DagrCanvas component and hooks, and requires React 19. Compare it with the explorer, which accepts React 18 or 19.',
+  },
+  {
+    title: 'The explorer pulls in three packages',
+    viewId: 'runtime',
+    nodeId: 'explorer',
+    text: '@prnt/dagr-explorer lists graph, layout and render under dependencies, not as peers, and exports an optional stylesheet.',
+  },
+  {
+    title: 'Shared tooling',
+    viewId: 'dev',
+    nodeId: 'bench',
+    text: 'Four packages declare the workspace package @dagr/bench as a dev dependency. Every package has a bench script that runs vitest bench.',
+  },
+  {
+    title: 'Testing on React 18 too',
+    viewId: 'dev',
+    nodeId: 'alias:react-18',
+    text: 'The explorer aliases react@^18.3.1 and react-dom@^18.3.1 and its test script runs vitest a second time with vitest.react18.config.ts.',
+  },
+  {
+    title: 'What gets published',
+    viewId: 'packaging',
+    nodeId: 'render:./core',
+    text: 'Every package exports "." from ./dist/index.js. Render adds "./core" and explorer adds "./styles.css".',
+  },
+];
+
+export const QUIZ: readonly { readonly question: string; readonly answer: string }[] = [
+  {
+    question: 'Which package declares no dependencies or peerDependencies?',
+    answer: '@prnt/dagr-graph. Its manifest only has devDependencies (@dagr/bench and fast-check).',
+  },
+  {
+    question: 'Which React versions can each React-facing package run with?',
+    answer: '@prnt/dagr-react: >=19.0.0 <20.0.0. @prnt/dagr-explorer: >=18.2.0 <20.0.0.',
+  },
+  {
+    question: 'Which command builds a package?',
+    answer: 'tsc -p tsconfig.build.json, the build script in all five manifests.',
+  },
+  {
+    question: 'How does a package refer to a sibling in the workspace?',
+    answer: 'With the workspace:^ protocol, for example @prnt/dagr-layout\'s peer on @prnt/dagr-graph. @dagr/bench uses workspace:*.',
+  },
+];

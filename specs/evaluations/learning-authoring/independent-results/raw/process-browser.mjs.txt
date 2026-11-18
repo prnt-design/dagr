@@ -1,0 +1,40 @@
+import {chromium} from '/tmp/dagr-learning-consumer/node_modules/playwright/index.mjs';
+import {spawn} from 'node:child_process';
+import {mkdirSync,writeFileSync} from 'node:fs';
+const root='/tmp/dagr-learning-independent-collected';
+const results=[];let browser;
+try{
+ browser=await chromium.launch({headless:true});
+ for(const arm of ['baseline','guided']){
+  const cwd=`${root}/process-${arm}/consumer-initial`;
+  const server=spawn('node',['/tmp/dagr-learning-consumer/node_modules/vite/bin/vite.js','--host','127.0.0.1','--port','4191','--strictPort'],{cwd,stdio:'ignore'});
+  try{
+   for(let i=0;i<100;i++){try{await fetch('http://127.0.0.1:4191');break}catch{await new Promise(r=>setTimeout(r,100))}}
+   for(const mobile of [false,true]){
+    const name=`${arm}-${mobile?'phone':'desktop'}`;
+    const context=await browser.newContext({viewport:mobile?{width:390,height:844}:{width:1280,height:800},hasTouch:mobile,deviceScaleFactor:2,reducedMotion:'reduce'});
+    const page=await context.newPage();page.setDefaultTimeout(5000);const errors=[];page.on('pageerror',e=>errors.push(e.message));
+    mkdirSync(`${root}/process-${arm}/screenshots`,{recursive:true});
+    try{
+     await page.goto('http://127.0.0.1:4191');
+     const search=page.getByRole('searchbox');await search.fill('gate');
+     const result=page.locator('[data-dagr-explorer="search"] button').first();await result.click();
+     await page.locator('[data-dagr-explorer="details"] h2, [data-dagr-explorer="details"] h3').first().waitFor();
+     const details=page.locator('[data-dagr-explorer="details"]');
+     await details.getByRole('button').filter({hasNotText:/^Close$/}).last().click();
+     const followed=await page.locator('[data-dagr-explorer="details"] h2, [data-dagr-explorer="details"] h3').first().textContent();
+     await page.screenshot({path:`${root}/process-${arm}/screenshots/${name}-follow.png`,fullPage:true});
+     await details.getByRole('button',{name:'Close',exact:true}).click();
+     const focusAfterClose=await page.evaluate(()=>({tag:document.activeElement?.tagName,label:document.activeElement?.getAttribute('aria-label'),text:document.activeElement?.textContent?.slice(0,100)}));
+     await search.fill('zzznomatch');const empty=await page.locator('[data-dagr-explorer="search-count"]').textContent();
+     await search.fill('gate');await search.press('ArrowDown');await search.press('Enter');await page.locator('[data-dagr-explorer="details"] h2, [data-dagr-explorer="details"] h3').first().waitFor();await page.keyboard.press('Escape');
+     await page.getByRole('button',{name:'Outline',exact:true}).click();
+     await page.screenshot({path:`${root}/process-${arm}/screenshots/${name}-outline.png`,fullPage:true});
+     const overflow=await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth);
+     results.push({name,followed,focusAfterClose,empty,overflow,errors});
+    }catch(e){results.push({name,error:String(e),errors});await page.screenshot({path:`${root}/process-${arm}/screenshots/${name}-failure.png`,fullPage:true})}
+    finally{await context.close()}
+   }
+  }finally{server.kill();await new Promise(r=>server.once('exit',r))}
+ }
+}finally{await browser?.close();writeFileSync(`${root}/process-browser-results.json`,JSON.stringify(results,null,2))}

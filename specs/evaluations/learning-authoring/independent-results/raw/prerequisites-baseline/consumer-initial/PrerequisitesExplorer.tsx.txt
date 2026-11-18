@@ -1,0 +1,326 @@
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import type { CSSProperties, ReactElement } from 'react';
+import { DagrExplorer } from '@prnt/dagr-explorer';
+import type {
+  ExplorerApi,
+  ExplorerDetailsContext,
+  ExplorerEdge,
+  ExplorerLabels,
+} from '@prnt/dagr-explorer';
+import '@prnt/dagr-explorer/styles.css';
+import {
+  CONCEPTS,
+  CONCEPT_VIEWS,
+  PATH_VIEW_ID,
+  PREREQUISITES_OF,
+  STAGE_COLORS,
+  type ConceptNode,
+} from './prerequisitesData';
+
+const LABELS: Partial<ExplorerLabels> = { search: 'Find a concept' };
+
+const wrapperStyle = {
+  '--dagr-explorer-height': '560px',
+  boxSizing: 'border-box',
+  maxWidth: 1100,
+  margin: '0 auto',
+  padding: '16px',
+  fontFamily: 'system-ui, sans-serif',
+  color: '#0f172a',
+} as CSSProperties;
+
+const codeStyle: CSSProperties = {
+  margin: '8px 0 0',
+  padding: '8px 10px',
+  background: '#f1f5f9',
+  borderRadius: 6,
+  fontSize: 12,
+  lineHeight: 1.5,
+  overflowX: 'auto',
+  whiteSpace: 'pre',
+};
+
+const buttonStyle: CSSProperties = {
+  minHeight: 44,
+  padding: '8px 12px',
+  border: '1px solid #cbd5e1',
+  borderRadius: 6,
+  background: '#ffffff',
+  color: 'inherit',
+  font: 'inherit',
+  cursor: 'pointer',
+  textAlign: 'left',
+};
+
+function nextConcept(understood: ReadonlySet<string>): ConceptNode | undefined {
+  const open = CONCEPTS.filter((concept) => !understood.has(concept.id));
+  return (
+    open.find((concept) =>
+      (PREREQUISITES_OF.get(concept.id) ?? []).every((id) => understood.has(id)),
+    ) ?? open[0]
+  );
+}
+
+function StageTag({ stage }: { stage: ConceptNode['stage'] }): ReactElement {
+  return (
+    <span
+      style={{
+        display: 'inline-block',
+        padding: '1px 6px',
+        borderRadius: 999,
+        background: STAGE_COLORS[stage],
+        color: '#ffffff',
+        fontSize: 11,
+        fontWeight: 600,
+      }}
+    >
+      {stage}
+    </span>
+  );
+}
+
+interface ConceptDetailsProps {
+  readonly context: ExplorerDetailsContext<ConceptNode, ExplorerEdge>;
+  readonly understood: boolean;
+  readonly onToggle: (id: string) => void;
+}
+
+function ConceptDetails({ context, understood, onToggle }: ConceptDetailsProps): ReactElement {
+  const { node, connections, follow } = context;
+  const [answerShown, setAnswerShown] = useState(false);
+  const buildsOn = connections.filter(
+    (c) => c.edge.target === node.id && c.node.id !== node.id,
+  );
+  const unlocks = connections.filter(
+    (c) => c.edge.source === node.id && c.node.id !== node.id,
+  );
+
+  return (
+    <article style={{ display: 'grid', gap: 12, fontSize: 14, lineHeight: 1.5 }}>
+      <header>
+        <StageTag stage={node.stage} />
+        <h3 style={{ margin: '6px 0 4px', fontSize: 18 }}>{node.label}</h3>
+        <p style={{ margin: 0 }}>{node.summary}</p>
+      </header>
+
+      <ul style={{ margin: 0, paddingLeft: 18 }}>
+        {node.points.map((point) => (
+          <li key={point}>{point}</li>
+        ))}
+      </ul>
+
+      {node.code !== undefined && (
+        <pre style={codeStyle}>
+          <code>{node.code}</code>
+        </pre>
+      )}
+
+      <p style={{ margin: 0, fontSize: 12, color: '#475569' }}>Source: {node.source}</p>
+
+      <section aria-label="Check yourself" style={{ borderTop: '1px solid #e2e8f0', paddingTop: 8 }}>
+        <h4 style={{ margin: '0 0 4px', fontSize: 14 }}>Check yourself</h4>
+        <p style={{ margin: '0 0 8px' }}>{node.check.question}</p>
+        {answerShown ? (
+          <p style={{ margin: 0, padding: 8, background: '#f0fdf4', borderRadius: 6 }}>
+            {node.check.answer}
+          </p>
+        ) : (
+          <button type="button" style={buttonStyle} onClick={() => setAnswerShown(true)}>
+            Show answer
+          </button>
+        )}
+      </section>
+
+      <button
+        type="button"
+        aria-pressed={understood}
+        style={{ ...buttonStyle, fontWeight: 600 }}
+        onClick={() => onToggle(node.id)}
+      >
+        {understood ? '✓ Understood' : 'Mark as understood'}
+      </button>
+
+      {[
+        { title: 'Learn first', items: buildsOn },
+        { title: 'Builds on this', items: unlocks },
+      ].map(({ title, items }) =>
+        items.length === 0 ? null : (
+          <nav key={title} aria-label={title}>
+            <h4 style={{ margin: '0 0 4px', fontSize: 14 }}>{title}</h4>
+            <div style={{ display: 'grid', gap: 6 }}>
+              {items.map((c) => (
+                <button
+                  key={c.edge.id}
+                  type="button"
+                  style={buttonStyle}
+                  onClick={() => follow(c.node.id)}
+                >
+                  {c.node.label}
+                </button>
+              ))}
+            </div>
+          </nav>
+        ),
+      )}
+    </article>
+  );
+}
+
+export function PrerequisitesExplorer(): ReactElement {
+  const apiRef = useRef<ExplorerApi>(null);
+  const pendingInspect = useRef<string | null>(null);
+  const [viewId, setViewId] = useState<string>(PATH_VIEW_ID);
+  const [understood, setUnderstood] = useState<ReadonlySet<string>>(() => new Set());
+
+  const toggle = useCallback((id: string) => {
+    setUnderstood((previous) => {
+      const next = new Set(previous);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
+
+  const next = useMemo(() => nextConcept(understood), [understood]);
+
+  const goTo = useCallback(
+    (id: string) => {
+      const active = CONCEPT_VIEWS.find((view) => view.id === viewId);
+      if (active?.nodes.some((node) => node.id === id)) {
+        apiRef.current?.inspect(id);
+        apiRef.current?.focusNode(id);
+        return;
+      }
+      // Changing view resets the drawer and selection, so inspect after it lands.
+      pendingInspect.current = id;
+      setViewId(PATH_VIEW_ID);
+    },
+    [viewId],
+  );
+
+  useEffect(() => {
+    const id = pendingInspect.current;
+    if (id === null) return;
+    pendingInspect.current = null;
+    apiRef.current?.inspect(id);
+    apiRef.current?.focusNode(id);
+  }, [viewId]);
+
+  const total = CONCEPTS.length;
+  const done = understood.size;
+
+  return (
+    <section style={wrapperStyle} aria-labelledby="prereq-title">
+      <header style={{ marginBottom: 12 }}>
+        <h2 id="prereq-title" style={{ margin: '0 0 6px', fontSize: 22 }}>
+          Before you author a Dagr Explorer
+        </h2>
+        <p style={{ margin: '0 0 8px', lineHeight: 1.5 }}>
+          This map is itself a Dagr Explorer. Each node is a concept you need before building one
+          with <code>@prnt/dagr-explorer</code>, and each edge runs from a prerequisite to the
+          concept that builds on it, so earlier concepts sit to the left (or above, in the Data
+          model view). Open a concept to read it, check yourself, and mark it understood.
+        </p>
+        <details style={{ marginBottom: 8 }}>
+          <summary style={{ cursor: 'pointer' }}>How to move around</summary>
+          <ul style={{ margin: '6px 0 0', paddingLeft: 18, lineHeight: 1.5 }}>
+            <li>Search reaches every concept, even ones too small on screen to show a label.</li>
+            <li>Map and Outline show the same concepts; the outline is a plain list.</li>
+            <li>
+              Tab into the graph, use the arrow keys to move between concepts, and press Enter to
+              open one. Escape closes the drawer.
+            </li>
+            <li>In the drawer, the “Learn first” and “Builds on this” buttons follow an edge.</li>
+          </ul>
+        </details>
+        <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 12 }}>
+          <div style={{ flex: '1 1 200px' }}>
+            <div aria-live="polite" style={{ fontSize: 14, marginBottom: 4 }}>
+              {done} of {total} concepts understood
+            </div>
+            <div
+              role="progressbar"
+              aria-label="Concepts understood"
+              aria-valuemin={0}
+              aria-valuemax={total}
+              aria-valuenow={done}
+              style={{ height: 8, background: '#e2e8f0', borderRadius: 4, overflow: 'hidden' }}
+            >
+              <div
+                style={{
+                  width: `${(done / total) * 100}%`,
+                  height: '100%',
+                  background: '#059669',
+                  transition: 'width 150ms',
+                }}
+              />
+            </div>
+          </div>
+          {next !== undefined ? (
+            <button type="button" style={buttonStyle} onClick={() => goTo(next.id)}>
+              Next: {next.label}
+            </button>
+          ) : (
+            <span style={{ fontWeight: 600 }}>All prerequisites understood.</span>
+          )}
+          {done > 0 && (
+            <button type="button" style={buttonStyle} onClick={() => setUnderstood(new Set())}>
+              Reset progress
+            </button>
+          )}
+        </div>
+      </header>
+
+      <DagrExplorer
+        label="Dagr Explorer prerequisites"
+        views={CONCEPT_VIEWS}
+        viewId={viewId}
+        onViewChange={setViewId}
+        labels={LABELS}
+        apiRef={apiRef}
+        searchText={(node) => `${node.label} ${node.stage} ${node.summary}`}
+        nodeAriaLabel={(node) =>
+          understood.has(node.id) ? `${node.label}, understood` : node.label
+        }
+        renderNode={(node, { tier }) => (
+          <div
+            style={{
+              display: 'grid',
+              gap: 4,
+              height: '100%',
+              boxSizing: 'border-box',
+              padding: tier === 'rich' ? 10 : 4,
+              borderLeft: `4px solid ${STAGE_COLORS[node.stage]}`,
+              textAlign: 'left',
+              alignContent: 'start',
+              overflow: 'hidden',
+            }}
+          >
+            <strong style={{ fontSize: tier === 'rich' ? 15 : 13, lineHeight: 1.2 }}>
+              {understood.has(node.id) ? '✓ ' : ''}
+              {node.label}
+            </strong>
+            {tier === 'rich' && (
+              <>
+                <StageTag stage={node.stage} />
+                <span style={{ fontSize: 12, lineHeight: 1.35, color: '#334155' }}>
+                  {node.summary}
+                </span>
+              </>
+            )}
+          </div>
+        )}
+        renderDetails={(context) => (
+          <ConceptDetails
+            key={context.node.id}
+            context={context}
+            understood={understood.has(context.node.id)}
+            onToggle={toggle}
+          />
+        )}
+      />
+    </section>
+  );
+}
+
+export default PrerequisitesExplorer;
