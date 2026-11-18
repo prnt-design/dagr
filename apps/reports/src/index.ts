@@ -68,7 +68,7 @@ export function entityId(entity: Entity): string {
   return `${entity.kind}:${encodeURIComponent(entity.key)}`;
 }
 
-function snapshot(node: ReportNode): string {
+export function snapshot(node: ReportNode): string {
   // JSON object key order is not part of the display/status snapshot.
   const content = node.content.map(block => {
     switch (block.kind) {
