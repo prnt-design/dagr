@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
-import { mkdirSync, readFileSync, readdirSync, realpathSync, writeFileSync, linkSync, unlinkSync } from 'node:fs';
+import { mkdirSync, readFileSync, readdirSync, realpathSync, writeFileSync, linkSync, unlinkSync, rmdirSync } from 'node:fs';
 import { resolve, relative } from 'node:path';
 import { entityId, validateReport, snapshot } from './index.js';
 import type { Report, ReportNode } from './types.js';
@@ -32,16 +32,25 @@ export function generate(capture: Capture, previous?: Report): Report {
 
 export function save(directory: string, capture: Capture): string {
   mkdirSync(directory, { recursive: true, mode: 0o700 });
+  const lock = resolve(directory, '.save-lock');
+  try { mkdirSync(lock, { mode: 0o700 }); }
+  catch { throw new Error('Archive writer lock unavailable. Retry after the active writer finishes; interrupted locks require manual recovery.'); }
+  try { return saveLocked(directory, capture); }
+  finally { rmdirSync(lock); }
+}
+
+function saveLocked(directory: string, capture: Capture): string {
   const date = capture.capturedAt.slice(0, 10);
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new Error('Invalid capture date');
   const files = readdirSync(directory).filter(f => /^\d{4}-\d{2}-\d{2}\.json$/.test(f)).sort();
   const path = resolve(directory, `${date}.json`);
   const priorFile = files.filter(f => f < `${date}.json`).at(-1);
   const previous = priorFile ? JSON.parse(readFileSync(resolve(directory, priorFile), 'utf8')) as Report : undefined;
+  if (previous && previous.date !== priorFile?.slice(0, 10)) throw new Error('Baseline date does not match filename');
   if (files.includes(`${date}.json`)) {
     const existing = JSON.parse(readFileSync(path, 'utf8')) as Report;
     const checked = validateReport(existing, previous);
-    if (!checked.ok || existing.repository !== capture.repository) throw new Error('Existing report invalid');
+    if (!checked.ok || existing.repository !== capture.repository || existing.date !== date) throw new Error('Existing report invalid');
     return path;
   }
   if (files.some(f => f > `${date}.json`)) throw new Error('Cannot insert historical report');

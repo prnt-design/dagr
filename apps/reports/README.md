@@ -123,3 +123,12 @@ an atomic hard link publishes a complete validated file without overwriting an
 existing date. Interrupted temporary files are ignored and may be removed manually.
 Concurrent losers fail safely and can retry. This protects against partial process
 writes, not disk loss; back up the private output directory separately.
+
+All archive inspection, baseline selection and dated-file publication run under
+one directory-wide `.save-lock` created atomically. Competing writers fail and
+must retry after the winner finishes, including when dates differ. Normal errors
+release the lock. A killed process can leave the lock directory behind; never
+remove it while any writer may still be running. Stop/verify all invocations for
+this archive, inspect the dated files, then remove the empty `.save-lock` directory
+and retry. Locks are never stolen based on age or PID. Temporary files are ignored.
+Persisted dates must agree with filenames, both for retry and baseline selection.

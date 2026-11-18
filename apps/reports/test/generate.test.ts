@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest';
-import { mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, rmdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { generate, save } from '../src/generate.js';
@@ -22,4 +22,29 @@ it('saves once, compares the next day and recovers past an interrupted temporary
 });
 it('rejects unsafe source links before saving', () => {
   expect(() => generate({ ...capture, prs: [{ ...capture.prs[0]!, url: 'http://example.com' }] })).toThrow();
+});
+it('serializes all dates and recovers only after an interrupted lock is explicitly removed', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'dagr-report-lock-'));
+  try {
+    mkdirSync(join(dir, '.save-lock'));
+    for (const capturedAt of ['2026-11-18T12:00:00Z', '2026-11-19T12:00:00Z']) {
+      expect(() => save(dir, { ...capture, capturedAt })).toThrow('writer lock unavailable');
+    }
+    expect(readdirSync(dir)).toEqual(['.save-lock']);
+    rmdirSync(join(dir, '.save-lock'));
+    save(dir, { ...capture, capturedAt: '2026-11-19T12:00:00Z' });
+    expect(() => save(dir, capture)).toThrow('Cannot insert historical');
+    expect(readdirSync(dir)).toEqual(['2026-11-19.json']);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+it('rejects renamed same-day and baseline reports and releases the lock on failure', () => {
+  for (const filename of ['2026-11-18.json', '2026-11-17.json']) {
+    const dir = mkdtempSync(join(tmpdir(), 'dagr-report-dates-'));
+    try {
+      const report = generate({ ...capture, capturedAt: '2026-11-16T12:00:00Z' });
+      writeFileSync(join(dir, filename), JSON.stringify(report));
+      expect(() => save(dir, capture)).toThrow(/date|invalid/);
+      expect(readdirSync(dir)).toEqual([filename]);
+    } finally { rmSync(dir, { recursive: true, force: true }); }
+  }
 });
