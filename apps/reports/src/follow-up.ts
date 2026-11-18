@@ -46,9 +46,10 @@ export function followUp(directory: string, action: Action): Proposal {
       const checked = validateReport(action.report, action.previous);
       if (!checked.ok) throw new Error(`Invalid source report: ${checked.errors.join(', ')}`);
       const report = checked.report;
+      if (typeof action.nodeId !== 'string') throw new Error('Invalid finding ID');
       const node = report.nodes.find(n => n.id === action.nodeId);
       if (!node || !node.sourceIds.length) throw new Error('Source-linked finding required');
-      if (![action.key, action.title, action.scope, ...action.criteria].every(nonempty) || !action.criteria.length) throw new Error('Key, scope, title and acceptance criteria required');
+      if (!Array.isArray(action.criteria) || !action.criteria.length || ![action.key, action.title, action.scope, ...action.criteria].every(nonempty)) throw new Error('Key, scope, title and acceptance criteria required');
       const payload: Payload = { repository: report.repository, date: report.date, nodeId: node.id, key: action.key, title: action.title, scope: action.scope, criteria: action.criteria, sources: report.sources.filter(s => node.sourceIds.includes(s.id)) };
       const id = digest([payload.repository, payload.date, payload.nodeId, payload.key]);
       const prior = ledger.proposals[id];
@@ -56,6 +57,7 @@ export function followUp(directory: string, action: Action): Proposal {
       proposal = prior ?? { id, payload, decision: 'draft', submission: 'none' };
       ledger.proposals[id] = proposal;
     } else {
+      if (typeof action.id !== 'string' || !/^[a-f0-9]{64}$/.test(action.id)) throw new Error('Invalid proposal ID');
       proposal = ledger.proposals[action.id]!;
       if (!proposal || proposal.id !== action.id) throw new Error('Unknown proposal');
       if (action.kind === 'decision') {

@@ -67,3 +67,16 @@ it('rejects escaping ledger symlinks and mismatched task identities', () => {
   writeFileSync(path, JSON.stringify(ledger));
   expect(() => followUp(directory, { kind: 'observe', id: p.id })).toThrow('identity');
 });
+
+it('validates untrusted draft arrays and nearby action fields before persistence', () => {
+  const { directory, draft } = setup();
+  for (const criteria of ['criterion', undefined, {}, [], [42], ['']]) {
+    expect(() => followUp(directory, { ...draft, criteria } as unknown as Action)).toThrow('acceptance criteria required');
+  }
+  for (const field of ['key', 'title', 'scope']) {
+    expect(() => followUp(directory, { ...draft, [field]: 42 } as unknown as Action)).toThrow('acceptance criteria required');
+  }
+  expect(() => followUp(directory, { ...draft, nodeId: {} } as unknown as Action)).toThrow('finding ID');
+  expect(() => followUp(directory, { kind: 'submit', id: '__proto__' })).toThrow('proposal ID');
+  expect(() => readFileSync(resolve(directory, 'follow-ups.json'))).toThrow();
+});
