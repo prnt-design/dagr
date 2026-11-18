@@ -397,6 +397,26 @@ describe('SceneEdges', () => {
     fresh.dispose();
   });
 
+  it('drops the spare and colour headroom after every route changes', () => {
+    const fan = (dy: number, all: boolean): SceneEdge[] =>
+      Array.from({ length: 400 }, (_, i) =>
+        edge(`e${String(i)}`, [{ x: i, y: 0 }, { x: i + 20, y: 30 + (all || i % 5 === 0 ? dy : 0) }, { x: i, y: 60 }]),
+      );
+    const scene = new SceneEdges(groups());
+    for (const dy of [0, 1, 2]) scene.setEdges(OVERLAY, fan(dy, false));
+    scene.setEdges(OVERLAY, fan(3, true));
+    scene.setEdges(OVERLAY, fan(4, true));
+    const before = attributeOf(scene, 1, 'ribbonPosition').buffer;
+    scene.setEdges(OVERLAY, fan(5, true));
+    scene.setEdges(OVERLAY, fan(6, true));
+    expect(attributeOf(scene, 1, 'ribbonPosition').buffer === before).toBe(false);
+    for (const name of ['ribbonColor', 'ribbonIntensity']) {
+      const array = attributeOf(scene, 1, name);
+      expect(array.buffer.byteLength, name).toBe(array.byteLength);
+    }
+    scene.dispose();
+  });
+
   it('rebuilds correctly when GC has discarded the spare', () => {
     const scene = new SceneEdges(groups());
     const before = [edge('a', straight), edge('b', straight, 0x219ebc)];
@@ -422,7 +442,7 @@ describe('SceneEdges', () => {
   it('keeps live geometry intact when a rebuild into a spare rejects a colour', () => {
     const fan = (dy: number, lastColor = 0xffb703): SceneEdge[] =>
       Array.from({ length: 400 }, (_, i) =>
-        edge(`e${String(i)}`, [{ x: i, y: 0 }, { x: i + 20, y: 30 + dy }, { x: i, y: 60 }], i === 399 ? lastColor : 0x219ebc),
+        edge(`e${String(i)}`, [{ x: i, y: 0 }, { x: i + 20, y: 30 + (i % 5 === 0 ? dy : 0) }, { x: i, y: 60 }], i === 399 ? lastColor : 0x219ebc),
       );
     const scene = new SceneEdges(groups());
     for (const dy of [0, 1, 2]) scene.setEdges(OVERLAY, fan(dy));

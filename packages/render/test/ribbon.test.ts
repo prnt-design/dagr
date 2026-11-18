@@ -847,6 +847,16 @@ describe('tessellateRibbons: reusing the previous build', () => {
     expect(sameBits(tessellateRibbons(after, undefined, undefined, previous), tessellateRibbons(after))).toBe(true);
   });
 
+  it('counts copied vertices without treating an unchanged empty route as reuse', () => {
+    const before = [route('a', [0, 0], [10, 0]), route('b', [0, 0], [20, 0]), route('empty', [1, 1], [1, 1])];
+    const previous = tessellateRibbons(before);
+    const partial = tessellateRibbons([before[0]!, route('b', [0, 0], [30, 0]), before[2]!], undefined, undefined, previous);
+    expect(partial.copiedVertices).toBe(previous.ranges[0]!.vertexCount);
+    const changed = tessellateRibbons([route('a', [0, 0], [40, 0]), route('b', [0, 0], [30, 0]), before[2]!], undefined, undefined, previous);
+    expect(changed.copiedVertices).toBe(0);
+    expect(previous.copiedVertices).toBe(0);
+  });
+
   it('still rejects a route that cannot be drawn under an id that could', () => {
     const previous = tessellateRibbons([route('a', [0, 0], [10, 0])]);
     expect(() =>

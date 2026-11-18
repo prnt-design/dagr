@@ -370,7 +370,7 @@ class EdgeGroup implements GpuResource {
     // highlight would land on whatever edge now occupies those vertices. A
     // caller that wants a highlight to survive a re-layout re-applies it, which
     // is one call over data it already holds.
-    const intensity = spareFloats(spare?.intensity, tessellated.vertexCount).fill(
+    const intensity = spareFloats(spare?.intensity, tessellated.vertexCount, tessellated.copiedVertices > 0).fill(
       FULL_INTENSITY,
     );
     const intensityAttribute = new BufferAttribute(intensity, 1);
@@ -390,7 +390,10 @@ class EdgeGroup implements GpuResource {
     this.mesh.geometry = geometry;
     previous.dispose();
 
+    // Reuse helped partial motion, while fully changed builds paid a whole-frame
+    // cost. Do not retain a cache when no drawn vertices were copied.
     this.#spare =
+      tessellated.copiedVertices === 0 ||
       this.#previous === undefined ||
       this.#previousColors === undefined ||
       !fitsAsSpare(this.#previous, this.#sizeHint)
@@ -526,7 +529,7 @@ function colorsFor(
 ): EdgeColors {
   // Every vertex belongs to one edge's range and every edge's range is written
   // below, so a spare's old values never survive into the result.
-  const colors = spareFloats(spare, geometry.vertexCount * 3);
+  const colors = spareFloats(spare, geometry.vertexCount * 3, geometry.copiedVertices > 0);
   const { ranges } = geometry;
   const hexes = new Float64Array(ranges.length).fill(Number.NaN);
   // A slice depends only on its edge's colour and vertex count, so where both

@@ -398,6 +398,9 @@ export interface RibbonGeometry {
 
   /** Every route's points as given, for the next build to compare against. */
   readonly given: RibbonGiven;
+
+  /** Vertices copied from unchanged routes in the previous build. */
+  readonly copiedVertices: number;
 }
 
 /**
@@ -659,13 +662,13 @@ export function spareBuffer<T extends Float32Array | Uint32Array>(
 
 /**
  * `length` elements over {@link spareBuffer}'s buffer when it fits, and over a
- * new one with {@link HINT_HEADROOM} otherwise, so the next build of a scene
- * whose size moves a little from frame to frame can still use it.
+ * new one otherwise. Partial-motion builds request {@link HINT_HEADROOM},
+ * so a scene whose size moves a little can still use it on the next build.
  */
-export function spareFloats(spare: Float32Array | undefined, length: number): Float32Array {
+export function spareFloats(spare: Float32Array | undefined, length: number, headroom: boolean): Float32Array {
   const whole =
     spareBuffer(spare, length, length * VIEW_SLACK) ??
-    new Float32Array(Math.ceil(length * HINT_HEADROOM));
+    new Float32Array(headroom ? Math.ceil(length * HINT_HEADROOM) : length);
   return whole.subarray(0, length);
 }
 
@@ -1581,6 +1584,7 @@ export function tessellateRibbons(
   };
 
   let position = 0;
+  let copiedVertices = 0;
   for (const route of routes) {
     let reused: RibbonRange | undefined;
     if (previous !== undefined) {
@@ -1592,6 +1596,7 @@ export function tessellateRibbons(
     position += 1;
     starts.push(record.length);
     if (reused !== undefined) {
+      copiedVertices += reused.vertexCount;
       // A build's ranges advance vertices and indices together, so meeting on
       // the vertex is meeting on both.
       if (reused.vertexStart !== run.vertexStart + run.vertexCount) {
@@ -1650,6 +1655,7 @@ export function tessellateRibbons(
     vertexCount: out.vertexCount,
     indexCount: out.indexCount,
     given: { coordinates: record, starts },
+    copiedVertices,
   };
 }
 
