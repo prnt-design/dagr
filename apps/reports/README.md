@@ -100,3 +100,26 @@ dangling references, view membership, identity drift, comparison errors,
 proposal/completion confusion, unsafe URLs, and impossible dates. These are
 negative examples, never generator output. Tests also cover malformed roots,
 missing and mismatched baselines, changed nodes, and a third day's identity.
+
+## Manual generator (R2)
+
+Build with `pnpm --filter @dagr/reports build`, then run
+`node apps/reports/dist/cli.js /absolute/private/dagr-reports` from the checkout.
+The explicit output directory must resolve outside the checkout. Keep it private:
+PR titles can contain confidential information. Nothing is published or scheduled.
+
+The generator reads HEAD and the latest 50 GitHub PR records using existing `gh`
+authentication. It never writes credentials or settings. Each UTC date has one
+append-only JSON file. A valid same-day file wins on retry, preserving its original
+capture time even if remote records change. The next date compares with the most
+recent saved earlier report; a gap is visible in previousDate. Coverage is partial,
+not a claim about all activity or roadmap completion. Revision and capture time
+appear in overview.unknowns; later remote changes are explicitly unknown.
+
+Missing git/GitHub access, empty PR results, invalid data, and invalid existing
+reports fail without a new dated file. There is no cached-source fallback. A stale
+same-day report retains its recorded observation time. Temporary files are private;
+an atomic hard link publishes a complete validated file without overwriting an
+existing date. Interrupted temporary files are ignored and may be removed manually.
+Concurrent losers fail safely and can retry. This protects against partial process
+writes, not disk loss; back up the private output directory separately.
