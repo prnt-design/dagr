@@ -5194,10 +5194,11 @@ passed before each launch, and every row's first frame lit pixels (about
 empty canvas of session 0. Viewport 1280 by 720, zoom 1 about the fitted
 view's centre, where `fit` is 0.0715. 13,169 edges, 60 warm-up and 1,200
 measured frames per mode, control tick 16.7 ms in every run. Three runs at
-each DPR, DPR 1 and 2 alternating, one at a time, load average 0.2 to 6.4 at
-the start of each (read with `uptime`), which was not controlled. The first
-DPR 1 run timed out waiting for the page to load and measured nothing; it
-was run again in a fresh launch after the others and is run 1 below. Columns
+each DPR, DPR 1 and 2 alternating, one at a time, load average 0.2 to 5.2 at
+the start of each measured run (read with `uptime`), which was not
+controlled. The first DPR 1 run timed out waiting for the page to load and
+measured nothing; it was run again in a fresh launch after the `--gpu` runs
+below and is run 1 in the table. Columns
 as at 10,000.
 
 | DPR | Edges | Motion | Interval p95 | Past one tick | `apply` | `advance` | `setNodes` | `setEdges` | `render` | Holds the tick |
@@ -5229,23 +5230,25 @@ So straight after the runs above, one more launch measured that row alone,
 `--edges=smooth --moving=1`, at `fit` and then zoom 1, at DPR 1 and then 2,
 twice over. Missed ticks, with `setEdges` between retargets in brackets:
 
-| Pair | DPR | `fit` | Zoom 1 | Load at start |
+| Pair | DPR | `fit` | Zoom 1 | Load at start (`fit`, zoom 1) |
 | --- | --- | --- | --- | --- |
 | 1 | 1 | 9.0% (7.6 ms) | 6.9% (8.1) | 2.6, 1.0 |
 | 1 | 2 | 16.1% (8.0) | 56.9% (12.3) | 0.7, 2.5 |
 | 2 | 1 | 56.3% (12.5) | 56.5% (12.1) | 14.8, 22.4 |
 | 2 | 2 | 7.1% (7.8) | 10.2% (8.2) | 23.8, 13.6 |
 
-Other processes started on the machine during pair 1 at DPR 2 (the load was
-14.8 by the next start). The three readings near 56% came with every CPU
-step at about one and a half times its other runs' reading (`setEdges` 12.1
-to 12.5 ms against 7.6 to 8.2, `advance` 6.6 to 7.3 against 4.0 to 4.5),
-which fits the CPU being shared, so they are counted as disturbance. In the
+The load rose during pair 1 at DPR 2 (14.8 by the next start). The three
+readings near 56% came with `setEdges` and `advance` at about one and a half
+times their other runs' readings (12.1 to 12.5 ms against 7.6 to 8.2, and
+6.6 to 7.3 against 4.0 to 4.5) and every other step up too, which fits the
+CPU being shared, so they are counted as disturbance. Load at a run's start
+did not predict it: pair 2 at DPR 2 began at 23.8 and was not disturbed. In the
 other five, `fit` missed 7.1% to 16.1% and zoom 1 6.9% to 10.2%.
 
 **GPU time per frame**, from `--gpu` with the helper started with
 `DAGR_CHROMIUM_ARGS=--enable-webgpu-developer-features`, one run at each DPR
-straight after the six table runs. As at `fit`, the runner exits non-zero on
+straight after the first five table runs, before run 1 at DPR 1 was
+repeated. As at `fit`, the runner exits non-zero on
 both, because the timestamps were still rounded to 1,024 ns. Medians / 95th
 percentiles of the frame's passes summed, in milliseconds:
 
@@ -5261,24 +5264,30 @@ and 17.6% (DPR 2) of ticks and every other row none. The longest single GPU
 frame was 5.6 ms.
 
 - **Zoom 1 holds the same rows as `fit`.** Every row holds the tick except
-  smooth edges with every node moving, which misses 11.5% to 18.0% of ticks
-  at both ratios, with an interval p95 of two ticks.
+  smooth edges with every node moving, which misses 15.3% to 17.3% of ticks
+  at DPR 1 and 11.5% to 18.0% at DPR 2, with an interval p95 of two ticks.
 - **Zoom 1 does not separate from `fit` on that row.** In the same launch,
   the five undisturbed readings put `fit` at 7.1% to 16.1% and zoom 1 at
-  6.9% to 10.2%. Both read above the 2026-10-30 matrix's `fit`, unpaired with
-  it and on another Chrome; why was not traced. As on the Apple M4, the CPU
-  steps match whatever the camera shows, since every node and edge is
-  updated: between retargets `setEdges` is 8.4 to 10.2 ms and `advance` 4.2
-  to 4.3, against 7.5 to 9.0 and 3.8 to 4.8 at `fit` on 2026-10-30, and a
-  retarget's `apply` 19.8 to 20.7 against 17.6 to 22.5. Summed per run, the
-  step medians between retargets come to 17.5 to 17.7 ms at DPR 1 and 15.7
-  to 17.3 at DPR 2, at or past one tick; the run at 15.7 missed the fewest
+  6.9% to 10.2%. All but one read above the 2026-10-30 matrix's `fit` at
+  their DPR (pair 2's 7.1% at DPR 2 is below that date's 7.4% to 9.3%),
+  unpaired with it and on another Chrome; why was not traced. As on the
+  Apple M4, the CPU steps do not depend on the camera, since every node and
+  edge is updated: in the same launch, undisturbed, `setEdges` read 7.6 to
+  8.0 ms at `fit` against 8.1 to 8.2 at zoom 1. Across dates the table's
+  `setEdges` is 8.4 to 10.2 ms and `advance` 4.2 to 4.3, against 7.5 to 9.0
+  and 3.8 to 4.8 at `fit` on 2026-10-30, and a retarget's `apply` 19.8 to
+  20.7 against 17.6 to 22.5. Summed per run, the step medians between
+  retargets come to 17.5 to 17.7 ms at DPR 1 and 15.7 to 17.3 at DPR 2,
+  past one tick in five of six runs; the run at 15.7 missed the fewest
   ticks (11.5%).
-- **The GPU frame is not what misses the tick.** It is 1.6 ms or less at the
-  median and p95 on every row. Against `fit` on 2026-10-30 it is shorter at
-  DPR 2 (0.69 to 0.90 at the median against 1.36 to 2.79), as on the Apple
-  M4, where most of the graph is off screen at zoom 1; at DPR 1 the two
-  overlap.
+- **The GPU frame is not what misses the tick.** It is about 1.6 ms or less
+  at the median and p95 on every row. Against `fit` on 2026-10-30 it is
+  shorter at DPR 2 on every row but smooth edges with every node moving
+  (0.85 against 0.51 at the median); the rest read 0.27 to 0.90 against 0.54
+  to 2.79. That fits most of the graph being off screen at zoom 1, as on the
+  Apple M4, though the 2026-10-30 section saw the GPU clock down when the
+  frame leaves it idle, which these readings cannot separate. At DPR 1 the
+  two overlap.
 
 Hit testing is not in these rows. Still not covered, all on the NVIDIA
 adapter: unrounded GPU timestamps, rich nodes and the WebGL2 fallback.
