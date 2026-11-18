@@ -132,3 +132,38 @@ remove it while any writer may still be running. Stop/verify all invocations for
 this archive, inspect the dated files, then remove the empty `.save-lock` directory
 and retry. Locks are never stolen based on age or PID. Temporary files are ignored.
 Persisted dates must agree with filenames, both for retry and baseline selection.
+
+## P4 slice 1: simulated follow-up boundary
+
+`src/follow-up.ts` is a manual local fixture adapter, not live workboard
+integration. It never executes work. Build with `pnpm --filter @dagr/reports build`,
+then run `node apps/reports/dist/follow-up-cli.js /absolute/private/follow-ups /absolute/action.json`.
+The action file follows the exported `Action` union. A draft includes the validated
+source report (and its previous report when needed), nodeId, stable caller key,
+title, scope and criteria. Provenance comes from that report's source table.
+Use decision actions to defer, reject or explicitly accept the simulated scope;
+submit requires accepted state. Acceptance is a local simulation, not an
+authenticated person's approval. Accepted payloads are frozen. Reusing the same
+repository/date/node/key with different content fails.
+
+Submit returns a stable `fixture-` task ID and a queued receipt, never completion.
+`fixture-status` simulates later work states; `observe` explicitly reads them back.
+`followUpContent` supplies existing R1 paragraph content for a later report;
+missing or different-day observations display unknown. Completed, failed, blocked,
+canceled and unknown remain distinct. Submission errors are separate from work
+state. `loseResponse: true` simulates creation followed by a lost response; restart
+and submit the same proposal to recover the one durable task. All data and output
+are labeled simulated. Nothing is sent to Dispatch.
+
+The ledger must be outside the checkout, including resolved directory symlinks.
+One `.follow-up-lock` excludes every writer and reader operation. Contention fails
+explicitly. After interruption, stop and verify all ledger processes before manually
+removing that empty lock directory. Never recover by age or PID alone. JSON is
+atomically replaced with private temporary files; this is not a disk-loss backup.
+Do not manually edit the private ledger. Back it up separately.
+
+Live acceptance into the workboard remains future work. An external bridge could
+use existing Dispatch task tools, but task creation has no idempotency argument.
+It needs a reviewed durable proposal-to-task reconciliation scheme before retrying
+uncertain submissions. This fixture does not establish that live guarantee. Live
+integration, authenticated approval, execution and scheduling are outside this slice.
