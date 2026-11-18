@@ -96,8 +96,7 @@ the WebGPU renderer first within that track. A [daily report track](#daily-repor
 repository's own activity runs in parallel, never ahead of the queue.
 
 The published npm packages use `@prnt/dagr-*`, with the
-`@prnt/dagr` umbrella. All eight packages are published at **0.2.0**, under both `latest` and `next`
-(2026-10-07). `@prnt/dagr-explorer` (M5.6, new in 0.1.3) is also exposed by
+`@prnt/dagr` umbrella. All eight packages are published at **0.2.0**, under both `latest` and `next`. `@prnt/dagr-explorer` (M5.6, new in 0.1.3) is also exposed by
 the umbrella as `@prnt/dagr/explorer`; 0.1.4 makes its camera frame the part
 of the graph the open drawer leaves uncovered. `three` is an optional peer, so
 an explorer site does not install it. Earlier releases added generic node-group
@@ -119,7 +118,7 @@ M5.2 or M7 complete based on the shared contract or demos.
 
 M5.4a gates the tarballs with `publint`, `arethetypeswrong`, and a scratch
 install outside the workspace. M5.4b now includes the `onLayout` continuity
-signal and external consumer checks for all seven public packages. Publication
+signal and external consumer checks for the seven graph/Explorer public packages. Publication
 uses `pnpm` so workspace dependency ranges resolve to released versions.
 
 Over the six-session corpus (M3.10a), the incremental path moves 4.1x to
