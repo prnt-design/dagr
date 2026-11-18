@@ -1,0 +1,2390 @@
+{
+  "date": "2026-11-18",
+  "originalPRHead": "117566e4ab84cfb2d1f715c6f558c7829599efd5",
+  "unconditionalWeak": {
+    "measuredBase": "a8aaa30ac905f1e6021ba32e635b4e52b02dcafa",
+    "measuredCandidate": "14cceff06fb2f754f8de1a559f7371621711a0ac",
+    "order": [
+      [
+        "main",
+        "weak"
+      ],
+      [
+        "weak",
+        "main"
+      ],
+      [
+        "main",
+        "weak"
+      ]
+    ],
+    "frameRows": [
+      {
+        "pair": 1,
+        "variant": "main",
+        "moving": 0.1,
+        "tickMs": 17.7,
+        "lit": 353428,
+        "setEdges": {
+          "median": 3,
+          "p95": 5.2,
+          "p99": 5.6,
+          "max": 6.6
+        },
+        "apply": {
+          "median": 2.3,
+          "p95": 3.1,
+          "p99": 4,
+          "max": 4
+        },
+        "advance": {
+          "median": 0.6,
+          "p95": 0.8,
+          "p99": 0.9,
+          "max": 1.4
+        },
+        "interval": {
+          "median": 17.9,
+          "p95": 18.1,
+          "p99": 18.2,
+          "max": 18.6,
+          "pastOneTick": 0
+        },
+        "still": {
+          "median": 17.8,
+          "p95": 18.1,
+          "p99": 18.1,
+          "max": 18.6,
+          "pastOneTick": 0
+        },
+        "heapMb": {
+          "before": 11,
+          "built": 58,
+          "afterAnimated": 111
+        }
+      },
+      {
+        "pair": 1,
+        "variant": "main",
+        "moving": 1,
+        "tickMs": 17.7,
+        "lit": 353428,
+        "setEdges": {
+          "median": 7,
+          "p95": 9.6,
+          "p99": 12.8,
+          "max": 22.5
+        },
+        "apply": {
+          "median": 16.2,
+          "p95": 19.4,
+          "p99": 30.3,
+          "max": 30.3
+        },
+        "advance": {
+          "median": 2.8,
+          "p95": 7,
+          "p99": 8.5,
+          "max": 15.6
+        },
+        "interval": {
+          "median": 18,
+          "p95": 18.1,
+          "p99": 35.6,
+          "max": 54,
+          "pastOneTick": 2.8
+        },
+        "still": {
+          "median": 17.8,
+          "p95": 18.1,
+          "p99": 18.2,
+          "max": 18.6,
+          "pastOneTick": 0
+        },
+        "heapMb": {
+          "before": 111,
+          "built": 108,
+          "afterAnimated": 131
+        }
+      },
+      {
+        "pair": 1,
+        "variant": "weak",
+        "moving": 0.1,
+        "tickMs": 17.8,
+        "lit": 353428,
+        "setEdges": {
+          "median": 2.1,
+          "p95": 3,
+          "p99": 3.5,
+          "max": 4.3
+        },
+        "apply": {
+          "median": 1.9,
+          "p95": 3.2,
+          "p99": 3.7,
+          "max": 3.7
+        },
+        "advance": {
+          "median": 0.6,
+          "p95": 0.8,
+          "p99": 1,
+          "max": 2.6
+        },
+        "interval": {
+          "median": 17.9,
+          "p95": 18.1,
+          "p99": 18.2,
+          "max": 18.6,
+          "pastOneTick": 0
+        },
+        "still": {
+          "median": 17.8,
+          "p95": 18.1,
+          "p99": 18.1,
+          "max": 18.5,
+          "pastOneTick": 0
+        },
+        "heapMb": {
+          "before": 10,
+          "built": 58,
+          "afterAnimated": 111
+        }
+      },
+      {
+        "pair": 1,
+        "variant": "weak",
+        "moving": 1,
+        "tickMs": 17.8,
+        "lit": 353428,
+        "setEdges": {
+          "median": 7.2,
+          "p95": 9,
+          "p99": 15.6,
+          "max": 20.4
+        },
+        "apply": {
+          "median": 17,
+          "p95": 20.8,
+          "p99": 25.6,
+          "max": 25.6
+        },
+        "advance": {
+          "median": 3.7,
+          "p95": 7.1,
+          "p99": 9.1,
+          "max": 19
+        },
+        "interval": {
+          "median": 18,
+          "p95": 18.1,
+          "p99": 36,
+          "max": 53.5,
+          "pastOneTick": 2.4
+        },
+        "still": {
+          "median": 17.7,
+          "p95": 18.1,
+          "p99": 18.1,
+          "max": 18.6,
+          "pastOneTick": 0
+        },
+        "heapMb": {
+          "before": 111,
+          "built": 109,
+          "afterAnimated": 184
+        }
+      },
+      {
+        "pair": 2,
+        "variant": "main",
+        "moving": 0.1,
+        "tickMs": 16.7,
+        "lit": 353428,
+        "setEdges": {
+          "median": 3.2,
+          "p95": 5.6,
+          "p99": 5.9,
+          "max": 6.8
+        },
+        "apply": {
+          "median": 2.4,
+          "p95": 3.9,
+          "p99": 4.1,
+          "max": 4.1
+        },
+        "advance": {
+          "median": 0.6,
+          "p95": 0.9,
+          "p99": 1,
+          "max": 3
+        },
+        "interval": {
+          "median": 16.7,
+          "p95": 16.9,
+          "p99": 17,
+          "max": 17,
+          "pastOneTick": 0
+        },
+        "still": {
+          "median": 16.7,
+          "p95": 16.8,
+          "p99": 16.9,
+          "max": 17,
+          "pastOneTick": 0
+        },
+        "heapMb": {
+          "before": 10,
+          "built": 58,
+          "afterAnimated": 88
+        }
+      },
+      {
+        "pair": 2,
+        "variant": "main",
+        "moving": 1,
+        "tickMs": 16.7,
+        "lit": 353428,
+        "setEdges": {
+          "median": 8,
+          "p95": 11.6,
+          "p99": 15.3,
+          "max": 23.9
+        },
+        "apply": {
+          "median": 17.5,
+          "p95": 20.3,
+          "p99": 22.2,
+          "max": 22.2
+        },
+        "advance": {
+          "median": 3.3,
+          "p95": 7.5,
+          "p99": 12.7,
+          "max": 21
+        },
+        "interval": {
+          "median": 16.7,
+          "p95": 33.3,
+          "p99": 33.5,
+          "max": 50.2,
+          "pastOneTick": 7.2
+        },
+        "still": {
+          "median": 16.7,
+          "p95": 16.9,
+          "p99": 16.9,
+          "max": 17,
+          "pastOneTick": 0
+        },
+        "heapMb": {
+          "before": 88,
+          "built": 104,
+          "afterAnimated": 160
+        }
+      },
+      {
+        "pair": 2,
+        "variant": "weak",
+        "moving": 0.1,
+        "tickMs": 16.7,
+        "lit": 353428,
+        "setEdges": {
+          "median": 2.2,
+          "p95": 3.2,
+          "p99": 3.8,
+          "max": 4.7
+        },
+        "apply": {
+          "median": 2,
+          "p95": 3.7,
+          "p99": 4,
+          "max": 4
+        },
+        "advance": {
+          "median": 0.7,
+          "p95": 0.9,
+          "p99": 1,
+          "max": 2.5
+        },
+        "interval": {
+          "median": 16.7,
+          "p95": 16.9,
+          "p99": 16.9,
+          "max": 17,
+          "pastOneTick": 0
+        },
+        "still": {
+          "median": 16.7,
+          "p95": 18,
+          "p99": 18.1,
+          "max": 304.2,
+          "pastOneTick": 0.7
+        },
+        "heapMb": {
+          "before": 10,
+          "built": 58,
+          "afterAnimated": 113
+        }
+      },
+      {
+        "pair": 2,
+        "variant": "weak",
+        "moving": 1,
+        "tickMs": 16.7,
+        "lit": 353428,
+        "setEdges": {
+          "median": 8.1,
+          "p95": 11,
+          "p99": 18.7,
+          "max": 22.1
+        },
+        "apply": {
+          "median": 18.4,
+          "p95": 22.9,
+          "p99": 23.9,
+          "max": 23.9
+        },
+        "advance": {
+          "median": 3.7,
+          "p95": 7.9,
+          "p99": 12.6,
+          "max": 16.8
+        },
+        "interval": {
+          "median": 16.7,
+          "p95": 33.4,
+          "p99": 33.6,
+          "max": 50.3,
+          "pastOneTick": 7.6
+        },
+        "still": {
+          "median": 16.7,
+          "p95": 16.8,
+          "p99": 16.9,
+          "max": 17,
+          "pastOneTick": 0
+        },
+        "heapMb": {
+          "before": 113,
+          "built": 123,
+          "afterAnimated": 246
+        }
+      },
+      {
+        "pair": 3,
+        "variant": "main",
+        "moving": 0.1,
+        "tickMs": 16.7,
+        "lit": 353428,
+        "setEdges": {
+          "median": 3.1,
+          "p95": 5.5,
+          "p99": 5.8,
+          "max": 6.7
+        },
+        "apply": {
+          "median": 2.1,
+          "p95": 3.8,
+          "p99": 3.9,
+          "max": 3.9
+        },
+        "advance": {
+          "median": 0.7,
+          "p95": 0.9,
+          "p99": 1.1,
+          "max": 2.2
+        },
+        "interval": {
+          "median": 16.7,
+          "p95": 16.9,
+          "p99": 16.9,
+          "max": 17,
+          "pastOneTick": 0
+        },
+        "still": {
+          "median": 16.7,
+          "p95": 16.9,
+          "p99": 16.9,
+          "max": 17,
+          "pastOneTick": 0
+        },
+        "heapMb": {
+          "before": 10,
+          "built": 58,
+          "afterAnimated": 131
+        }
+      },
+      {
+        "pair": 3,
+        "variant": "main",
+        "moving": 1,
+        "tickMs": 16.7,
+        "lit": 353428,
+        "setEdges": {
+          "median": 8.1,
+          "p95": 11.6,
+          "p99": 18.4,
+          "max": 21.6
+        },
+        "apply": {
+          "median": 19.4,
+          "p95": 21.8,
+          "p99": 29.8,
+          "max": 29.8
+        },
+        "advance": {
+          "median": 3,
+          "p95": 5.8,
+          "p99": 10.4,
+          "max": 14.3
+        },
+        "interval": {
+          "median": 16.7,
+          "p95": 33.3,
+          "p99": 33.6,
+          "max": 66.8,
+          "pastOneTick": 6.1
+        },
+        "still": {
+          "median": 16.7,
+          "p95": 16.9,
+          "p99": 16.9,
+          "max": 17,
+          "pastOneTick": 0
+        },
+        "heapMb": {
+          "before": 131,
+          "built": 71,
+          "afterAnimated": 122
+        }
+      },
+      {
+        "pair": 3,
+        "variant": "weak",
+        "moving": 0.1,
+        "tickMs": 16.7,
+        "lit": 353428,
+        "setEdges": {
+          "median": 2.2,
+          "p95": 3.2,
+          "p99": 3.4,
+          "max": 4.4
+        },
+        "apply": {
+          "median": 2.5,
+          "p95": 4,
+          "p99": 5,
+          "max": 5
+        },
+        "advance": {
+          "median": 0.6,
+          "p95": 0.9,
+          "p99": 1.5,
+          "max": 2.5
+        },
+        "interval": {
+          "median": 16.7,
+          "p95": 16.9,
+          "p99": 16.9,
+          "max": 17,
+          "pastOneTick": 0
+        },
+        "still": {
+          "median": 16.7,
+          "p95": 16.9,
+          "p99": 16.9,
+          "max": 18.3,
+          "pastOneTick": 0
+        },
+        "heapMb": {
+          "before": 10,
+          "built": 58,
+          "afterAnimated": 106
+        }
+      },
+      {
+        "pair": 3,
+        "variant": "weak",
+        "moving": 1,
+        "tickMs": 16.7,
+        "lit": 353428,
+        "setEdges": {
+          "median": 7.9,
+          "p95": 11.3,
+          "p99": 17.1,
+          "max": 19.8
+        },
+        "apply": {
+          "median": 21.4,
+          "p95": 36.8,
+          "p99": 37.6,
+          "max": 37.6
+        },
+        "advance": {
+          "median": 4,
+          "p95": 7.9,
+          "p99": 11.5,
+          "max": 16.1
+        },
+        "interval": {
+          "median": 16.7,
+          "p95": 33.4,
+          "p99": 49.9,
+          "max": 50.2,
+          "pastOneTick": 7.8
+        },
+        "still": {
+          "median": 16.7,
+          "p95": 16.9,
+          "p99": 16.9,
+          "max": 17,
+          "pastOneTick": 0
+        },
+        "heapMb": {
+          "before": 106,
+          "built": 124,
+          "afterAnimated": 98
+        }
+      }
+    ],
+    "memoryRows": [
+      {
+        "pair": 1,
+        "variant": "main",
+        "initialEdgeBytes": 15306620,
+        "movingEdgeBytes": 16565212,
+        "GPUBytesCreatedPerMovingFrame": 12502199,
+        "disposeGPUBytes": 0
+      },
+      {
+        "pair": 1,
+        "variant": "weak",
+        "initialEdgeBytes": 15632896,
+        "movingEdgeBytes": 16903396,
+        "GPUBytesCreatedPerMovingFrame": 12502160,
+        "disposeGPUBytes": 0
+      },
+      {
+        "pair": 2,
+        "variant": "main",
+        "initialEdgeBytes": 15294284,
+        "movingEdgeBytes": 16509228,
+        "GPUBytesCreatedPerMovingFrame": 12502108,
+        "disposeGPUBytes": 0
+      },
+      {
+        "pair": 2,
+        "variant": "weak",
+        "initialEdgeBytes": 15698508,
+        "movingEdgeBytes": 16944564,
+        "GPUBytesCreatedPerMovingFrame": 12502103,
+        "disposeGPUBytes": 0
+      },
+      {
+        "pair": 3,
+        "variant": "main",
+        "initialEdgeBytes": 15412188,
+        "movingEdgeBytes": 16550480,
+        "GPUBytesCreatedPerMovingFrame": 12502102,
+        "disposeGPUBytes": 0
+      },
+      {
+        "pair": 3,
+        "variant": "weak",
+        "initialEdgeBytes": 15821912,
+        "movingEdgeBytes": 17080640,
+        "GPUBytesCreatedPerMovingFrame": 12502112,
+        "disposeGPUBytes": 0
+      }
+    ],
+    "deterministicRetention": [],
+    "limitation": "No explicit former-owner handoff was obtainable. Linux lock does not cover Windows processes. Read-only Windows process/GPU preflight and repeated monitoring were used; guaranteed Windows quietness is not claimed.\n"
+  },
+  "narrowed": {
+    "measuredBase": "d402d97b67319e6c4448c27c94af2b8e0c521987",
+    "measuredCandidate": "91f829099d659ced08b36a3ea502efd5654647c6",
+    "order": [
+      [
+        "main",
+        "narrow"
+      ],
+      [
+        "narrow",
+        "main"
+      ],
+      [
+        "main",
+        "narrow"
+      ]
+    ],
+    "frameRows": [
+      {
+        "pair": 1,
+        "variant": "main",
+        "moving": 0.1,
+        "tickMs": 17.6,
+        "lit": 353428,
+        "setEdges": {
+          "median": 3.2,
+          "p95": 5.6,
+          "p99": 5.9,
+          "max": 7.2
+        },
+        "apply": {
+          "median": 2,
+          "p95": 3.6,
+          "p99": 4.1,
+          "max": 4.1
+        },
+        "advance": {
+          "median": 0.6,
+          "p95": 0.8,
+          "p99": 0.9,
+          "max": 2.7
+        },
+        "interval": {
+          "median": 17.9,
+          "p95": 18.1,
+          "p99": 18.4,
+          "max": 18.7,
+          "pastOneTick": 0
+        },
+        "still": {
+          "median": 17.8,
+          "p95": 18.1,
+          "p99": 18.2,
+          "max": 18.7,
+          "pastOneTick": 0
+        },
+        "heapMb": {
+          "before": 10,
+          "built": 58,
+          "afterAnimated": 83
+        }
+      },
+      {
+        "pair": 1,
+        "variant": "main",
+        "moving": 1,
+        "tickMs": 17.6,
+        "lit": 353428,
+        "setEdges": {
+          "median": 7.5,
+          "p95": 10.9,
+          "p99": 13.9,
+          "max": 22.7
+        },
+        "apply": {
+          "median": 17.3,
+          "p95": 21.3,
+          "p99": 25.2,
+          "max": 25.2
+        },
+        "advance": {
+          "median": 4.2,
+          "p95": 8,
+          "p99": 12.7,
+          "max": 21.5
+        },
+        "interval": {
+          "median": 18,
+          "p95": 34.8,
+          "p99": 36,
+          "max": 54,
+          "pastOneTick": 5.1
+        },
+        "still": {
+          "median": 17.7,
+          "p95": 18.1,
+          "p99": 18.3,
+          "max": 18.6,
+          "pastOneTick": 0
+        },
+        "heapMb": {
+          "before": 83,
+          "built": 99,
+          "afterAnimated": 126
+        }
+      },
+      {
+        "pair": 1,
+        "variant": "narrow",
+        "moving": 0.1,
+        "tickMs": 17.6,
+        "lit": 353428,
+        "setEdges": {
+          "median": 2.2,
+          "p95": 3.1,
+          "p99": 3.3,
+          "max": 4.4
+        },
+        "apply": {
+          "median": 2,
+          "p95": 3.2,
+          "p99": 3.5,
+          "max": 3.5
+        },
+        "advance": {
+          "median": 0.6,
+          "p95": 0.8,
+          "p99": 0.9,
+          "max": 2.1
+        },
+        "interval": {
+          "median": 17.8,
+          "p95": 18.1,
+          "p99": 18.2,
+          "max": 18.7,
+          "pastOneTick": 0
+        },
+        "still": {
+          "median": 17.7,
+          "p95": 18.1,
+          "p99": 18.2,
+          "max": 18.6,
+          "pastOneTick": 0
+        },
+        "heapMb": {
+          "before": 10,
+          "built": 57,
+          "afterAnimated": 95
+        }
+      },
+      {
+        "pair": 1,
+        "variant": "narrow",
+        "moving": 1,
+        "tickMs": 17.6,
+        "lit": 353428,
+        "setEdges": {
+          "median": 7.5,
+          "p95": 10.4,
+          "p99": 12.4,
+          "max": 21.9
+        },
+        "apply": {
+          "median": 18,
+          "p95": 22.7,
+          "p99": 25.4,
+          "max": 25.4
+        },
+        "advance": {
+          "median": 3.3,
+          "p95": 7.8,
+          "p99": 9,
+          "max": 21.7
+        },
+        "interval": {
+          "median": 18,
+          "p95": 18.2,
+          "p99": 36,
+          "max": 53.5,
+          "pastOneTick": 3.8
+        },
+        "still": {
+          "median": 17.7,
+          "p95": 18.1,
+          "p99": 18.2,
+          "max": 18.5,
+          "pastOneTick": 0
+        },
+        "heapMb": {
+          "before": 95,
+          "built": 100,
+          "afterAnimated": 146
+        }
+      },
+      {
+        "pair": 2,
+        "variant": "main",
+        "moving": 0.1,
+        "tickMs": 16.7,
+        "lit": 353428,
+        "setEdges": {
+          "median": 3.1,
+          "p95": 5.3,
+          "p99": 6.1,
+          "max": 8
+        },
+        "apply": {
+          "median": 2.4,
+          "p95": 3.7,
+          "p99": 4.5,
+          "max": 4.5
+        },
+        "advance": {
+          "median": 0.6,
+          "p95": 0.8,
+          "p99": 1.1,
+          "max": 3.1
+        },
+        "interval": {
+          "median": 17.9,
+          "p95": 18.1,
+          "p99": 18.4,
+          "max": 299.6,
+          "pastOneTick": 0.3
+        },
+        "still": {
+          "median": 17.7,
+          "p95": 18.1,
+          "p99": 18.1,
+          "max": 18.5,
+          "pastOneTick": 0
+        },
+        "heapMb": {
+          "before": 10,
+          "built": 58,
+          "afterAnimated": 124
+        }
+      },
+      {
+        "pair": 2,
+        "variant": "main",
+        "moving": 1,
+        "tickMs": 16.7,
+        "lit": 353428,
+        "setEdges": {
+          "median": 8.3,
+          "p95": 11.4,
+          "p99": 16.7,
+          "max": 25.1
+        },
+        "apply": {
+          "median": 19.9,
+          "p95": 22.2,
+          "p99": 23.2,
+          "max": 23.2
+        },
+        "advance": {
+          "median": 3.9,
+          "p95": 6.7,
+          "p99": 12.8,
+          "max": 18.2
+        },
+        "interval": {
+          "median": 16.7,
+          "p95": 33.3,
+          "p99": 50,
+          "max": 50.3,
+          "pastOneTick": 6.4
+        },
+        "still": {
+          "median": 16.7,
+          "p95": 16.9,
+          "p99": 16.9,
+          "max": 17,
+          "pastOneTick": 0
+        },
+        "heapMb": {
+          "before": 124,
+          "built": 110,
+          "afterAnimated": 285
+        }
+      },
+      {
+        "pair": 2,
+        "variant": "narrow",
+        "moving": 0.1,
+        "tickMs": 17.7,
+        "lit": 353428,
+        "setEdges": {
+          "median": 2.2,
+          "p95": 3.6,
+          "p99": 5,
+          "max": 7.6
+        },
+        "apply": {
+          "median": 2.1,
+          "p95": 3.1,
+          "p99": 3.8,
+          "max": 3.8
+        },
+        "advance": {
+          "median": 0.6,
+          "p95": 0.9,
+          "p99": 1.2,
+          "max": 2
+        },
+        "interval": {
+          "median": 17.9,
+          "p95": 18.1,
+          "p99": 18.2,
+          "max": 18.8,
+          "pastOneTick": 0
+        },
+        "still": {
+          "median": 17.9,
+          "p95": 18.1,
+          "p99": 18.1,
+          "max": 18.6,
+          "pastOneTick": 0
+        },
+        "heapMb": {
+          "before": 10,
+          "built": 58,
+          "afterAnimated": 90
+        }
+      },
+      {
+        "pair": 2,
+        "variant": "narrow",
+        "moving": 1,
+        "tickMs": 17.7,
+        "lit": 353428,
+        "setEdges": {
+          "median": 7.5,
+          "p95": 10.2,
+          "p99": 12,
+          "max": 19.9
+        },
+        "apply": {
+          "median": 18.5,
+          "p95": 23.2,
+          "p99": 25,
+          "max": 25
+        },
+        "advance": {
+          "median": 3.5,
+          "p95": 7.9,
+          "p99": 9.5,
+          "max": 18
+        },
+        "interval": {
+          "median": 18,
+          "p95": 18.2,
+          "p99": 36,
+          "max": 53.1,
+          "pastOneTick": 3.8
+        },
+        "still": {
+          "median": 17.8,
+          "p95": 18.1,
+          "p99": 18.1,
+          "max": 18.6,
+          "pastOneTick": 0
+        },
+        "heapMb": {
+          "before": 90,
+          "built": 95,
+          "afterAnimated": 145
+        }
+      },
+      {
+        "pair": 3,
+        "variant": "main",
+        "moving": 0.1,
+        "tickMs": 16.7,
+        "lit": 353428,
+        "setEdges": {
+          "median": 3.2,
+          "p95": 5.3,
+          "p99": 5.8,
+          "max": 7.5
+        },
+        "apply": {
+          "median": 2.5,
+          "p95": 3.7,
+          "p99": 4.3,
+          "max": 4.3
+        },
+        "advance": {
+          "median": 0.7,
+          "p95": 1,
+          "p99": 1.4,
+          "max": 2.1
+        },
+        "interval": {
+          "median": 16.7,
+          "p95": 16.9,
+          "p99": 17,
+          "max": 17,
+          "pastOneTick": 0
+        },
+        "still": {
+          "median": 16.7,
+          "p95": 16.9,
+          "p99": 16.9,
+          "max": 17,
+          "pastOneTick": 0
+        },
+        "heapMb": {
+          "before": 10,
+          "built": 58,
+          "afterAnimated": 126
+        }
+      },
+      {
+        "pair": 3,
+        "variant": "main",
+        "moving": 1,
+        "tickMs": 16.7,
+        "lit": 353428,
+        "setEdges": {
+          "median": 8.2,
+          "p95": 11.4,
+          "p99": 13.2,
+          "max": 22.9
+        },
+        "apply": {
+          "median": 18.8,
+          "p95": 22.7,
+          "p99": 24.4,
+          "max": 24.4
+        },
+        "advance": {
+          "median": 3.9,
+          "p95": 7,
+          "p99": 13.4,
+          "max": 17.7
+        },
+        "interval": {
+          "median": 16.7,
+          "p95": 33.3,
+          "p99": 33.5,
+          "max": 50.2,
+          "pastOneTick": 7.3
+        },
+        "still": {
+          "median": 16.7,
+          "p95": 16.9,
+          "p99": 16.9,
+          "max": 18,
+          "pastOneTick": 0
+        },
+        "heapMb": {
+          "before": 126,
+          "built": 69,
+          "afterAnimated": 152
+        }
+      },
+      {
+        "pair": 3,
+        "variant": "narrow",
+        "moving": 0.1,
+        "tickMs": 16.7,
+        "lit": 353428,
+        "setEdges": {
+          "median": 2.2,
+          "p95": 3.3,
+          "p99": 3.9,
+          "max": 4.5
+        },
+        "apply": {
+          "median": 2.1,
+          "p95": 3.5,
+          "p99": 3.5,
+          "max": 3.5
+        },
+        "advance": {
+          "median": 0.7,
+          "p95": 1,
+          "p99": 1.2,
+          "max": 2.1
+        },
+        "interval": {
+          "median": 16.7,
+          "p95": 16.9,
+          "p99": 16.9,
+          "max": 17.1,
+          "pastOneTick": 0
+        },
+        "still": {
+          "median": 16.7,
+          "p95": 16.8,
+          "p99": 16.9,
+          "max": 17,
+          "pastOneTick": 0
+        },
+        "heapMb": {
+          "before": 10,
+          "built": 58,
+          "afterAnimated": 113
+        }
+      },
+      {
+        "pair": 3,
+        "variant": "narrow",
+        "moving": 1,
+        "tickMs": 16.7,
+        "lit": 353428,
+        "setEdges": {
+          "median": 8.1,
+          "p95": 11.4,
+          "p99": 16.9,
+          "max": 20.7
+        },
+        "apply": {
+          "median": 20.6,
+          "p95": 31.7,
+          "p99": 38,
+          "max": 38
+        },
+        "advance": {
+          "median": 4,
+          "p95": 6.8,
+          "p99": 11.5,
+          "max": 16.9
+        },
+        "interval": {
+          "median": 16.7,
+          "p95": 33.3,
+          "p99": 50.1,
+          "max": 66.6,
+          "pastOneTick": 6.7
+        },
+        "still": {
+          "median": 16.7,
+          "p95": 16.9,
+          "p99": 16.9,
+          "max": 17,
+          "pastOneTick": 0
+        },
+        "heapMb": {
+          "before": 113,
+          "built": 122,
+          "afterAnimated": 172
+        }
+      }
+    ],
+    "memoryRows": [
+      {
+        "pair": 1,
+        "variant": "main",
+        "initialEdgeBytes": 15296484,
+        "movingEdgeBytes": 16465292,
+        "GPUBytesCreatedPerMovingFrame": 12502151,
+        "disposeGPUBytes": 0
+      },
+      {
+        "pair": 1,
+        "variant": "narrow",
+        "initialEdgeBytes": 15293228,
+        "movingEdgeBytes": 16351072,
+        "GPUBytesCreatedPerMovingFrame": 12502169,
+        "disposeGPUBytes": 0
+      },
+      {
+        "pair": 2,
+        "variant": "main",
+        "initialEdgeBytes": 15415148,
+        "movingEdgeBytes": 16605700,
+        "GPUBytesCreatedPerMovingFrame": 12502092,
+        "disposeGPUBytes": 0
+      },
+      {
+        "pair": 2,
+        "variant": "narrow",
+        "initialEdgeBytes": 15397952,
+        "movingEdgeBytes": 16663312,
+        "GPUBytesCreatedPerMovingFrame": 12502172,
+        "disposeGPUBytes": 0
+      },
+      {
+        "pair": 3,
+        "variant": "main",
+        "initialEdgeBytes": 15434556,
+        "movingEdgeBytes": 16663736,
+        "GPUBytesCreatedPerMovingFrame": 12502108,
+        "disposeGPUBytes": 0
+      },
+      {
+        "pair": 3,
+        "variant": "narrow",
+        "initialEdgeBytes": 15416560,
+        "movingEdgeBytes": 16712732,
+        "GPUBytesCreatedPerMovingFrame": 12502085,
+        "disposeGPUBytes": 0
+      }
+    ],
+    "deterministicRetention": [
+      {
+        "pair": 1,
+        "variant": "main",
+        "phases": [
+          {
+            "step": "graph",
+            "count": null,
+            "moving": null,
+            "heap": {
+              "usedSize": 5216688,
+              "totalSize": 5931008,
+              "embedderHeapUsedSize": 550216,
+              "backingStorageSize": 4197518
+            },
+            "backend": null
+          },
+          {
+            "step": "renderer",
+            "count": null,
+            "moving": null,
+            "heap": {
+              "usedSize": 6551548,
+              "totalSize": 6959104,
+              "embedderHeapUsedSize": 565240,
+              "backingStorageSize": 4216086
+            },
+            "backend": null
+          },
+          {
+            "step": "nodes",
+            "count": null,
+            "moving": null,
+            "heap": {
+              "usedSize": 8397596,
+              "totalSize": 9203712,
+              "embedderHeapUsedSize": 565248,
+              "backingStorageSize": 5197462
+            },
+            "backend": null
+          },
+          {
+            "step": "edges",
+            "count": null,
+            "moving": null,
+            "heap": {
+              "usedSize": 10048684,
+              "totalSize": 10907648,
+              "embedderHeapUsedSize": 565072,
+              "backingStorageSize": 18983822
+            },
+            "backend": null
+          },
+          {
+            "step": "motion",
+            "count": 10000,
+            "moving": 0.1,
+            "heap": {
+              "usedSize": 10939680,
+              "totalSize": 12480512,
+              "embedderHeapUsedSize": 676656,
+              "backingStorageSize": 19572650
+            },
+            "backend": "webgpu"
+          },
+          {
+            "step": "motion",
+            "count": 10000,
+            "moving": 1,
+            "heap": {
+              "usedSize": 11398472,
+              "totalSize": 13332480,
+              "embedderHeapUsedSize": 675288,
+              "backingStorageSize": 17276970
+            },
+            "backend": "webgpu"
+          },
+          {
+            "step": "motion",
+            "count": 1000,
+            "moving": 1,
+            "heap": {
+              "usedSize": 7591896,
+              "totalSize": 9056256,
+              "embedderHeapUsedSize": 754096,
+              "backingStorageSize": 5519906
+            },
+            "backend": "webgpu"
+          },
+          {
+            "step": "motion",
+            "count": 1000,
+            "moving": 0.1,
+            "heap": {
+              "usedSize": 7635268,
+              "totalSize": 8531968,
+              "embedderHeapUsedSize": 748424,
+              "backingStorageSize": 5736282
+            },
+            "backend": "webgpu"
+          },
+          {
+            "step": "empty",
+            "count": null,
+            "moving": null,
+            "heap": {
+              "usedSize": 7176664,
+              "totalSize": 7745536,
+              "embedderHeapUsedSize": 568600,
+              "backingStorageSize": 4216090
+            },
+            "backend": null
+          },
+          {
+            "step": "regrow",
+            "count": 10000,
+            "moving": 0.1,
+            "heap": {
+              "usedSize": 11382564,
+              "totalSize": 13004800,
+              "embedderHeapUsedSize": 736280,
+              "backingStorageSize": 19572650
+            },
+            "backend": "webgpu"
+          },
+          {
+            "step": "regrow",
+            "count": 10000,
+            "moving": 1,
+            "heap": {
+              "usedSize": 11745508,
+              "totalSize": 12808192,
+              "embedderHeapUsedSize": 760072,
+              "backingStorageSize": 17276970
+            },
+            "backend": "webgpu"
+          },
+          {
+            "step": "dispose",
+            "count": null,
+            "moving": null,
+            "heap": {
+              "usedSize": 6843848,
+              "totalSize": 8269824,
+              "embedderHeapUsedSize": 696968,
+              "backingStorageSize": 4201303
+            },
+            "backend": null
+          }
+        ]
+      },
+      {
+        "pair": 1,
+        "variant": "narrow",
+        "phases": [
+          {
+            "step": "graph",
+            "count": null,
+            "moving": null,
+            "heap": {
+              "usedSize": 5218272,
+              "totalSize": 6193152,
+              "embedderHeapUsedSize": 550216,
+              "backingStorageSize": 4201954
+            },
+            "backend": null
+          },
+          {
+            "step": "renderer",
+            "count": null,
+            "moving": null,
+            "heap": {
+              "usedSize": 6549312,
+              "totalSize": 6959104,
+              "embedderHeapUsedSize": 565240,
+              "backingStorageSize": 4220522
+            },
+            "backend": null
+          },
+          {
+            "step": "nodes",
+            "count": null,
+            "moving": null,
+            "heap": {
+              "usedSize": 8395276,
+              "totalSize": 9203712,
+              "embedderHeapUsedSize": 565248,
+              "backingStorageSize": 5201898
+            },
+            "backend": null
+          },
+          {
+            "step": "edges",
+            "count": null,
+            "moving": null,
+            "heap": {
+              "usedSize": 10047928,
+              "totalSize": 10645504,
+              "embedderHeapUsedSize": 565136,
+              "backingStorageSize": 18988258
+            },
+            "backend": null
+          },
+          {
+            "step": "motion",
+            "count": 10000,
+            "moving": 0.1,
+            "heap": {
+              "usedSize": 10952640,
+              "totalSize": 13266944,
+              "embedderHeapUsedSize": 662608,
+              "backingStorageSize": 20032850
+            },
+            "backend": "webgpu"
+          },
+          {
+            "step": "motion",
+            "count": 10000,
+            "moving": 1,
+            "heap": {
+              "usedSize": 11409460,
+              "totalSize": 12808192,
+              "embedderHeapUsedSize": 682640,
+              "backingStorageSize": 17281406
+            },
+            "backend": "webgpu"
+          },
+          {
+            "step": "motion",
+            "count": 1000,
+            "moving": 1,
+            "heap": {
+              "usedSize": 7613456,
+              "totalSize": 9056256,
+              "embedderHeapUsedSize": 650840,
+              "backingStorageSize": 5524342
+            },
+            "backend": "webgpu"
+          },
+          {
+            "step": "motion",
+            "count": 1000,
+            "moving": 0.1,
+            "heap": {
+              "usedSize": 7656224,
+              "totalSize": 8531968,
+              "embedderHeapUsedSize": 661832,
+              "backingStorageSize": 5790094
+            },
+            "backend": "webgpu"
+          },
+          {
+            "step": "empty",
+            "count": null,
+            "moving": null,
+            "heap": {
+              "usedSize": 7197000,
+              "totalSize": 8007680,
+              "embedderHeapUsedSize": 568192,
+              "backingStorageSize": 4220526
+            },
+            "backend": null
+          },
+          {
+            "step": "regrow",
+            "count": 10000,
+            "moving": 0.1,
+            "heap": {
+              "usedSize": 11403440,
+              "totalSize": 13266944,
+              "embedderHeapUsedSize": 627880,
+              "backingStorageSize": 20088330
+            },
+            "backend": "webgpu"
+          },
+          {
+            "step": "regrow",
+            "count": 10000,
+            "moving": 1,
+            "heap": {
+              "usedSize": 11763060,
+              "totalSize": 13332480,
+              "embedderHeapUsedSize": 667320,
+              "backingStorageSize": 17281406
+            },
+            "backend": "webgpu"
+          },
+          {
+            "step": "dispose",
+            "count": null,
+            "moving": null,
+            "heap": {
+              "usedSize": 6862144,
+              "totalSize": 8269824,
+              "embedderHeapUsedSize": 634248,
+              "backingStorageSize": 4205739
+            },
+            "backend": null
+          }
+        ]
+      },
+      {
+        "pair": 2,
+        "variant": "main",
+        "phases": [
+          {
+            "step": "graph",
+            "count": null,
+            "moving": null,
+            "heap": {
+              "usedSize": 5216688,
+              "totalSize": 5931008,
+              "embedderHeapUsedSize": 550216,
+              "backingStorageSize": 4197518
+            },
+            "backend": null
+          },
+          {
+            "step": "renderer",
+            "count": null,
+            "moving": null,
+            "heap": {
+              "usedSize": 6551548,
+              "totalSize": 6959104,
+              "embedderHeapUsedSize": 565240,
+              "backingStorageSize": 4216086
+            },
+            "backend": null
+          },
+          {
+            "step": "nodes",
+            "count": null,
+            "moving": null,
+            "heap": {
+              "usedSize": 8397596,
+              "totalSize": 8941568,
+              "embedderHeapUsedSize": 565248,
+              "backingStorageSize": 5197462
+            },
+            "backend": null
+          },
+          {
+            "step": "edges",
+            "count": null,
+            "moving": null,
+            "heap": {
+              "usedSize": 10048684,
+              "totalSize": 10907648,
+              "embedderHeapUsedSize": 565072,
+              "backingStorageSize": 18983822
+            },
+            "backend": null
+          },
+          {
+            "step": "motion",
+            "count": 10000,
+            "moving": 0.1,
+            "heap": {
+              "usedSize": 10937504,
+              "totalSize": 11956224,
+              "embedderHeapUsedSize": 681912,
+              "backingStorageSize": 19572650
+            },
+            "backend": "webgpu"
+          },
+          {
+            "step": "motion",
+            "count": 10000,
+            "moving": 1,
+            "heap": {
+              "usedSize": 11396348,
+              "totalSize": 12546048,
+              "embedderHeapUsedSize": 699584,
+              "backingStorageSize": 17276970
+            },
+            "backend": "webgpu"
+          },
+          {
+            "step": "motion",
+            "count": 1000,
+            "moving": 1,
+            "heap": {
+              "usedSize": 7603988,
+              "totalSize": 9056256,
+              "embedderHeapUsedSize": 662160,
+              "backingStorageSize": 5519906
+            },
+            "backend": "webgpu"
+          },
+          {
+            "step": "motion",
+            "count": 1000,
+            "moving": 0.1,
+            "heap": {
+              "usedSize": 7641544,
+              "totalSize": 9056256,
+              "embedderHeapUsedSize": 657904,
+              "backingStorageSize": 5736282
+            },
+            "backend": "webgpu"
+          },
+          {
+            "step": "empty",
+            "count": null,
+            "moving": null,
+            "heap": {
+              "usedSize": 7183072,
+              "totalSize": 8269824,
+              "embedderHeapUsedSize": 653168,
+              "backingStorageSize": 4216090
+            },
+            "backend": null
+          },
+          {
+            "step": "regrow",
+            "count": 10000,
+            "moving": 0.1,
+            "heap": {
+              "usedSize": 11397220,
+              "totalSize": 13266944,
+              "embedderHeapUsedSize": 682608,
+              "backingStorageSize": 19572650
+            },
+            "backend": "webgpu"
+          },
+          {
+            "step": "regrow",
+            "count": 10000,
+            "moving": 1,
+            "heap": {
+              "usedSize": 11750852,
+              "totalSize": 12808192,
+              "embedderHeapUsedSize": 690288,
+              "backingStorageSize": 17276970
+            },
+            "backend": "webgpu"
+          },
+          {
+            "step": "dispose",
+            "count": null,
+            "moving": null,
+            "heap": {
+              "usedSize": 6850560,
+              "totalSize": 8269824,
+              "embedderHeapUsedSize": 562720,
+              "backingStorageSize": 4201303
+            },
+            "backend": null
+          }
+        ]
+      },
+      {
+        "pair": 2,
+        "variant": "narrow",
+        "phases": [
+          {
+            "step": "graph",
+            "count": null,
+            "moving": null,
+            "heap": {
+              "usedSize": 5218312,
+              "totalSize": 6455296,
+              "embedderHeapUsedSize": 550216,
+              "backingStorageSize": 4201954
+            },
+            "backend": null
+          },
+          {
+            "step": "renderer",
+            "count": null,
+            "moving": null,
+            "heap": {
+              "usedSize": 6555080,
+              "totalSize": 6959104,
+              "embedderHeapUsedSize": 565240,
+              "backingStorageSize": 4220522
+            },
+            "backend": null
+          },
+          {
+            "step": "nodes",
+            "count": null,
+            "moving": null,
+            "heap": {
+              "usedSize": 8401128,
+              "totalSize": 9203712,
+              "embedderHeapUsedSize": 565248,
+              "backingStorageSize": 5201898
+            },
+            "backend": null
+          },
+          {
+            "step": "edges",
+            "count": null,
+            "moving": null,
+            "heap": {
+              "usedSize": 10053488,
+              "totalSize": 11431936,
+              "embedderHeapUsedSize": 705000,
+              "backingStorageSize": 18988258
+            },
+            "backend": null
+          },
+          {
+            "step": "motion",
+            "count": 10000,
+            "moving": 0.1,
+            "heap": {
+              "usedSize": 10963780,
+              "totalSize": 12742656,
+              "embedderHeapUsedSize": 676024,
+              "backingStorageSize": 20094830
+            },
+            "backend": "webgpu"
+          },
+          {
+            "step": "motion",
+            "count": 10000,
+            "moving": 1,
+            "heap": {
+              "usedSize": 11421236,
+              "totalSize": 12808192,
+              "embedderHeapUsedSize": 653848,
+              "backingStorageSize": 17281406
+            },
+            "backend": "webgpu"
+          },
+          {
+            "step": "motion",
+            "count": 1000,
+            "moving": 1,
+            "heap": {
+              "usedSize": 7624052,
+              "totalSize": 9580544,
+              "embedderHeapUsedSize": 748064,
+              "backingStorageSize": 5524342
+            },
+            "backend": "webgpu"
+          },
+          {
+            "step": "motion",
+            "count": 1000,
+            "moving": 0.1,
+            "heap": {
+              "usedSize": 7665636,
+              "totalSize": 9056256,
+              "embedderHeapUsedSize": 726384,
+              "backingStorageSize": 5791142
+            },
+            "backend": "webgpu"
+          },
+          {
+            "step": "empty",
+            "count": null,
+            "moving": null,
+            "heap": {
+              "usedSize": 7207124,
+              "totalSize": 8007680,
+              "embedderHeapUsedSize": 743936,
+              "backingStorageSize": 4220526
+            },
+            "backend": null
+          },
+          {
+            "step": "regrow",
+            "count": 10000,
+            "moving": 0.1,
+            "heap": {
+              "usedSize": 11413960,
+              "totalSize": 12480512,
+              "embedderHeapUsedSize": 739168,
+              "backingStorageSize": 20077374
+            },
+            "backend": "webgpu"
+          },
+          {
+            "step": "regrow",
+            "count": 10000,
+            "moving": 1,
+            "heap": {
+              "usedSize": 11772248,
+              "totalSize": 13332480,
+              "embedderHeapUsedSize": 727976,
+              "backingStorageSize": 17281406
+            },
+            "backend": "webgpu"
+          },
+          {
+            "step": "dispose",
+            "count": null,
+            "moving": null,
+            "heap": {
+              "usedSize": 6872400,
+              "totalSize": 8269824,
+              "embedderHeapUsedSize": 677184,
+              "backingStorageSize": 4205739
+            },
+            "backend": null
+          }
+        ]
+      },
+      {
+        "pair": 3,
+        "variant": "main",
+        "phases": [
+          {
+            "step": "graph",
+            "count": null,
+            "moving": null,
+            "heap": {
+              "usedSize": 5216648,
+              "totalSize": 6193152,
+              "embedderHeapUsedSize": 550216,
+              "backingStorageSize": 4197518
+            },
+            "backend": null
+          },
+          {
+            "step": "renderer",
+            "count": null,
+            "moving": null,
+            "heap": {
+              "usedSize": 6551540,
+              "totalSize": 7221248,
+              "embedderHeapUsedSize": 565240,
+              "backingStorageSize": 4216086
+            },
+            "backend": null
+          },
+          {
+            "step": "nodes",
+            "count": null,
+            "moving": null,
+            "heap": {
+              "usedSize": 8397588,
+              "totalSize": 8941568,
+              "embedderHeapUsedSize": 565248,
+              "backingStorageSize": 5197462
+            },
+            "backend": null
+          },
+          {
+            "step": "edges",
+            "count": null,
+            "moving": null,
+            "heap": {
+              "usedSize": 10048676,
+              "totalSize": 10645504,
+              "embedderHeapUsedSize": 565072,
+              "backingStorageSize": 18983822
+            },
+            "backend": null
+          },
+          {
+            "step": "motion",
+            "count": 10000,
+            "moving": 0.1,
+            "heap": {
+              "usedSize": 10938380,
+              "totalSize": 11956224,
+              "embedderHeapUsedSize": 678632,
+              "backingStorageSize": 19572650
+            },
+            "backend": "webgpu"
+          },
+          {
+            "step": "motion",
+            "count": 10000,
+            "moving": 1,
+            "heap": {
+              "usedSize": 11395824,
+              "totalSize": 12283904,
+              "embedderHeapUsedSize": 690856,
+              "backingStorageSize": 17276970
+            },
+            "backend": "webgpu"
+          },
+          {
+            "step": "motion",
+            "count": 1000,
+            "moving": 1,
+            "heap": {
+              "usedSize": 7595708,
+              "totalSize": 9056256,
+              "embedderHeapUsedSize": 661920,
+              "backingStorageSize": 5519906
+            },
+            "backend": "webgpu"
+          },
+          {
+            "step": "motion",
+            "count": 1000,
+            "moving": 0.1,
+            "heap": {
+              "usedSize": 7638308,
+              "totalSize": 9318400,
+              "embedderHeapUsedSize": 672136,
+              "backingStorageSize": 5736282
+            },
+            "backend": "webgpu"
+          },
+          {
+            "step": "empty",
+            "count": null,
+            "moving": null,
+            "heap": {
+              "usedSize": 7181084,
+              "totalSize": 8007680,
+              "embedderHeapUsedSize": 568328,
+              "backingStorageSize": 4216090
+            },
+            "backend": null
+          },
+          {
+            "step": "regrow",
+            "count": 10000,
+            "moving": 0.1,
+            "heap": {
+              "usedSize": 11387632,
+              "totalSize": 13004800,
+              "embedderHeapUsedSize": 664296,
+              "backingStorageSize": 19572650
+            },
+            "backend": "webgpu"
+          },
+          {
+            "step": "regrow",
+            "count": 10000,
+            "moving": 1,
+            "heap": {
+              "usedSize": 11746160,
+              "totalSize": 12808192,
+              "embedderHeapUsedSize": 680720,
+              "backingStorageSize": 17276970
+            },
+            "backend": "webgpu"
+          },
+          {
+            "step": "dispose",
+            "count": null,
+            "moving": null,
+            "heap": {
+              "usedSize": 6845192,
+              "totalSize": 8269824,
+              "embedderHeapUsedSize": 563432,
+              "backingStorageSize": 4201303
+            },
+            "backend": null
+          }
+        ]
+      },
+      {
+        "pair": 3,
+        "variant": "narrow",
+        "phases": [
+          {
+            "step": "graph",
+            "count": null,
+            "moving": null,
+            "heap": {
+              "usedSize": 5218280,
+              "totalSize": 6455296,
+              "embedderHeapUsedSize": 550216,
+              "backingStorageSize": 4201954
+            },
+            "backend": null
+          },
+          {
+            "step": "renderer",
+            "count": null,
+            "moving": null,
+            "heap": {
+              "usedSize": 6555080,
+              "totalSize": 6959104,
+              "embedderHeapUsedSize": 565240,
+              "backingStorageSize": 4220522
+            },
+            "backend": null
+          },
+          {
+            "step": "nodes",
+            "count": null,
+            "moving": null,
+            "heap": {
+              "usedSize": 8401128,
+              "totalSize": 9203712,
+              "embedderHeapUsedSize": 565248,
+              "backingStorageSize": 5201898
+            },
+            "backend": null
+          },
+          {
+            "step": "edges",
+            "count": null,
+            "moving": null,
+            "heap": {
+              "usedSize": 10053368,
+              "totalSize": 10907648,
+              "embedderHeapUsedSize": 565072,
+              "backingStorageSize": 18988258
+            },
+            "backend": null
+          },
+          {
+            "step": "motion",
+            "count": 10000,
+            "moving": 0.1,
+            "heap": {
+              "usedSize": 10964424,
+              "totalSize": 12480512,
+              "embedderHeapUsedSize": 678824,
+              "backingStorageSize": 19975638
+            },
+            "backend": "webgpu"
+          },
+          {
+            "step": "motion",
+            "count": 10000,
+            "moving": 1,
+            "heap": {
+              "usedSize": 11424128,
+              "totalSize": 12808192,
+              "embedderHeapUsedSize": 692584,
+              "backingStorageSize": 17281406
+            },
+            "backend": "webgpu"
+          },
+          {
+            "step": "motion",
+            "count": 1000,
+            "moving": 1,
+            "heap": {
+              "usedSize": 7624456,
+              "totalSize": 9318400,
+              "embedderHeapUsedSize": 660720,
+              "backingStorageSize": 5524342
+            },
+            "backend": "webgpu"
+          },
+          {
+            "step": "motion",
+            "count": 1000,
+            "moving": 0.1,
+            "heap": {
+              "usedSize": 7663856,
+              "totalSize": 8794112,
+              "embedderHeapUsedSize": 676960,
+              "backingStorageSize": 5793194
+            },
+            "backend": "webgpu"
+          },
+          {
+            "step": "empty",
+            "count": null,
+            "moving": null,
+            "heap": {
+              "usedSize": 7204632,
+              "totalSize": 8007680,
+              "embedderHeapUsedSize": 568152,
+              "backingStorageSize": 4220526
+            },
+            "backend": null
+          },
+          {
+            "step": "regrow",
+            "count": 10000,
+            "moving": 0.1,
+            "heap": {
+              "usedSize": 11413144,
+              "totalSize": 13266944,
+              "embedderHeapUsedSize": 631584,
+              "backingStorageSize": 20094830
+            },
+            "backend": "webgpu"
+          },
+          {
+            "step": "regrow",
+            "count": 10000,
+            "moving": 1,
+            "heap": {
+              "usedSize": 11771804,
+              "totalSize": 12808192,
+              "embedderHeapUsedSize": 666720,
+              "backingStorageSize": 17281406
+            },
+            "backend": "webgpu"
+          },
+          {
+            "step": "dispose",
+            "count": null,
+            "moving": null,
+            "heap": {
+              "usedSize": 6870828,
+              "totalSize": 8269824,
+              "embedderHeapUsedSize": 562528,
+              "backingStorageSize": 4205739
+            },
+            "backend": null
+          }
+        ]
+      }
+    ],
+    "limitation": "No explicit former-owner handoff was obtainable. Linux lock does not cover Windows processes. Read-only Windows process/GPU preflight and repeated monitoring were used; guaranteed Windows quietness is not claimed.\n"
+  },
+  "fixture": {
+    "nodes": 10000,
+    "edges": 13169,
+    "edgeStyle": "smooth",
+    "nodesMode": "shapes",
+    "motion": "springs",
+    "moving": [
+      0.1,
+      1
+    ],
+    "warmup": 60,
+    "frames": 1200,
+    "zoom": 1,
+    "DPR": 1,
+    "backend": "webgpu",
+    "browser": "Chrome 157.0.8103.79 headed",
+    "adapter": "NVIDIA GeForce RTX 4090, nvidia/lovelace, not fallback",
+    "cpu": "AMD Ryzen 9 9900X",
+    "runtime": "Node v22.22.1",
+    "note": "Partial then all motion run in each invocation without forced GC between frame rows. Retention supplement uses deterministic 60 Hz spring input clock, independently of actual presentation pacing."
+  },
+  "runStatus": [
+    {
+      "experiment": "unconditionalWeak",
+      "name": "probe",
+      "status": 0,
+      "seconds": 3.0007431507110596
+    },
+    {
+      "experiment": "unconditionalWeak",
+      "name": "weak-pair1-main-frames",
+      "status": 0,
+      "seconds": 114.4916889667511
+    },
+    {
+      "experiment": "unconditionalWeak",
+      "name": "weak-pair1-main-memory",
+      "status": 0,
+      "seconds": 11.434416055679321
+    },
+    {
+      "experiment": "unconditionalWeak",
+      "name": "weak-pair1-main-retention",
+      "status": 0,
+      "seconds": 15.478819370269775
+    },
+    {
+      "experiment": "unconditionalWeak",
+      "name": "weak-pair1-weak-frames",
+      "status": 0,
+      "seconds": 114.38344240188599
+    },
+    {
+      "experiment": "unconditionalWeak",
+      "name": "weak-pair1-weak-memory",
+      "status": 0,
+      "seconds": 11.425292491912842
+    },
+    {
+      "experiment": "unconditionalWeak",
+      "name": "weak-pair1-weak-retention",
+      "status": 0,
+      "seconds": 15.463661909103394
+    },
+    {
+      "experiment": "unconditionalWeak",
+      "name": "weak-pair2-weak-frames",
+      "status": 0,
+      "seconds": 110.33601832389832
+    },
+    {
+      "experiment": "unconditionalWeak",
+      "name": "weak-pair2-weak-memory",
+      "status": 0,
+      "seconds": 10.001983880996704
+    },
+    {
+      "experiment": "unconditionalWeak",
+      "name": "weak-pair2-weak-retention",
+      "status": 0,
+      "seconds": 14.441643238067627
+    },
+    {
+      "experiment": "unconditionalWeak",
+      "name": "weak-pair2-main-frames",
+      "status": 0,
+      "seconds": 108.38356924057007
+    },
+    {
+      "experiment": "unconditionalWeak",
+      "name": "weak-pair2-main-memory",
+      "status": 0,
+      "seconds": 10.001819372177124
+    },
+    {
+      "experiment": "unconditionalWeak",
+      "name": "weak-pair2-main-retention",
+      "status": 0,
+      "seconds": 14.431693315505981
+    },
+    {
+      "experiment": "unconditionalWeak",
+      "name": "weak-pair3-main-frames",
+      "status": 0,
+      "seconds": 108.27171874046326
+    },
+    {
+      "experiment": "unconditionalWeak",
+      "name": "weak-pair3-main-memory",
+      "status": 0,
+      "seconds": 10.001811504364014
+    },
+    {
+      "experiment": "unconditionalWeak",
+      "name": "weak-pair3-main-retention",
+      "status": 0,
+      "seconds": 14.437769412994385
+    },
+    {
+      "experiment": "unconditionalWeak",
+      "name": "weak-pair3-weak-frames",
+      "status": 0,
+      "seconds": 109.32497262954712
+    },
+    {
+      "experiment": "unconditionalWeak",
+      "name": "weak-pair3-weak-memory",
+      "status": 0,
+      "seconds": 10.00182032585144
+    },
+    {
+      "experiment": "unconditionalWeak",
+      "name": "weak-pair3-weak-retention",
+      "status": 0,
+      "seconds": 14.421545505523682
+    },
+    {
+      "experiment": "narrowed",
+      "name": "probe",
+      "status": 0,
+      "seconds": 3.0008785724639893
+    },
+    {
+      "experiment": "narrowed",
+      "name": "narrow-pair1-main-frames",
+      "status": 0,
+      "seconds": 114.25505709648132
+    },
+    {
+      "experiment": "narrowed",
+      "name": "narrow-pair1-main-memory",
+      "status": 0,
+      "seconds": 11.41650104522705
+    },
+    {
+      "experiment": "narrowed",
+      "name": "narrow-pair1-main-retention",
+      "status": 0,
+      "seconds": 15.426899194717407
+    },
+    {
+      "experiment": "narrowed",
+      "name": "narrow-pair1-narrow-frames",
+      "status": 0,
+      "seconds": 114.19965958595276
+    },
+    {
+      "experiment": "narrowed",
+      "name": "narrow-pair1-narrow-memory",
+      "status": 0,
+      "seconds": 11.468412637710571
+    },
+    {
+      "experiment": "narrowed",
+      "name": "narrow-pair1-narrow-retention",
+      "status": 0,
+      "seconds": 17.435306549072266
+    },
+    {
+      "experiment": "narrowed",
+      "name": "narrow-pair2-narrow-frames",
+      "status": 0,
+      "seconds": 114.37693762779236
+    },
+    {
+      "experiment": "narrowed",
+      "name": "narrow-pair2-narrow-memory",
+      "status": 0,
+      "seconds": 11.419328927993774
+    },
+    {
+      "experiment": "narrowed",
+      "name": "narrow-pair2-narrow-retention",
+      "status": 0,
+      "seconds": 15.453927993774414
+    },
+    {
+      "experiment": "narrowed",
+      "name": "narrow-pair2-main-frames",
+      "status": 0,
+      "seconds": 111.43091630935669
+    },
+    {
+      "experiment": "narrowed",
+      "name": "narrow-pair2-main-memory",
+      "status": 0,
+      "seconds": 10.0017991065979
+    },
+    {
+      "experiment": "narrowed",
+      "name": "narrow-pair2-main-retention",
+      "status": 0,
+      "seconds": 14.471221208572388
+    },
+    {
+      "experiment": "narrowed",
+      "name": "narrow-pair3-main-frames",
+      "status": 0,
+      "seconds": 108.50104761123657
+    },
+    {
+      "experiment": "narrowed",
+      "name": "narrow-pair3-main-memory",
+      "status": 0,
+      "seconds": 10.001870155334473
+    },
+    {
+      "experiment": "narrowed",
+      "name": "narrow-pair3-main-retention",
+      "status": 0,
+      "seconds": 14.460779428482056
+    },
+    {
+      "experiment": "narrowed",
+      "name": "narrow-pair3-narrow-frames",
+      "status": 0,
+      "seconds": 108.56020665168762
+    },
+    {
+      "experiment": "narrowed",
+      "name": "narrow-pair3-narrow-memory",
+      "status": 0,
+      "seconds": 10.00188398361206
+    },
+    {
+      "experiment": "narrowed",
+      "name": "narrow-pair3-narrow-retention",
+      "status": 0,
+      "seconds": 14.4569411277771
+    }
+  ],
+  "monitor": [
+    {
+      "experiment": "unconditionalWeak",
+      "samples": 69,
+      "foreignDetections": 0,
+      "startUTC": "2026-11-18T15:49:12.553771+00:00",
+      "endUTC": "2026-11-18T16:02:50.056257+00:00"
+    },
+    {
+      "experiment": "narrowed",
+      "samples": 70,
+      "foreignDetections": 0,
+      "startUTC": "2026-11-18T16:09:56.198510+00:00",
+      "endUTC": "2026-11-18T16:23:44.667638+00:00"
+    }
+  ],
+  "failedPreflight": {
+    "status": 1,
+    "reason": "Standalone deterministic supplement refused NVIDIA GPU utilization 1% after first window teardown. No measurements ran and this attempt was not retried. The distinct narrowed-policy campaign later included a deterministic supplement."
+  },
+  "archive": {
+    "path": "pr159-2026-11-18.raw.json.gz",
+    "sha256": "c4a9a26092717f89f5e4e28d1bd80bd79033b1b799bf2b32260969dae2363b28",
+    "compressedBytes": 149859,
+    "uncompressedBytes": 2943744,
+    "fileCount": 129
+  },
+  "limits": [
+    "No explicit former-owner handoff was obtainable; Linux advisory compute lock does not guarantee Windows exclusivity. Read-only process/GPU preflight and repeated monitoring detected no foreign measurements.",
+    "Natural-GC peak memory is unmeasured and not bounded by the weak cache; WeakRef retention and eviction are implementation-dependent. Forced-GC results do not establish natural-GC peak parity.",
+    "Pacing varied, including a within-pair control mismatch. No all-moving 60 Hz or general all-moving frame benefit is claimed. Retarget apply costs remain visible.",
+    "Only moving=0.1 and moving=1 were measured. Other motion fractions, browsers and GPUs have no new performance validation.",
+    "The historic strong-spare memory trade is not accepted. The narrowed candidate replaces strong retention and bypasses spare retention when no nonempty vertices were copied."
+  ]
+}

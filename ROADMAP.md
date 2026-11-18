@@ -477,10 +477,18 @@ branches never enter public docs, source, npm artifacts, or job fixtures.
   they upload, and rich-node tiers retain 1.0 KB of heap a node with no tier
   open. GPU time per pass is left to M4.10.
 
-PR #159 remains an unmerged experiment. Its 2026-10-26 Apple M4 measurements
+The original PR #159 experiment was measured while unmerged. Its
+2026-10-26 Apple M4 measurements
 reduced partial-motion `setEdges` to 1.8 to 2.0 ms from 3.0 to 3.1, at
 retained moving-edge memory of 33.6 MB against 16.4. These historical results
 do not validate the current integration or accept its memory trade.
+The 2026-11-18 refresh instead uses a collectible spare only after copying
+unchanged drawn routes. Three RTX 4090 pairs reduced partial-motion
+`setEdges` from 3.1 to 3.2 ms to 2.2, with about 0.4 to 0.5 MiB of extra
+post-GC backing stores during partial motion. Fully changed builds drop the
+spare. All-moving `apply` still costs more in two pairs; pacing varies,
+natural-GC peak memory is unmeasured, and the all-moving 60 Hz goal remains
+unmet. See the refreshed PR #159 section in `bench/browser/README.md`.
 
 <a id="m410-current-outcome"></a>
 

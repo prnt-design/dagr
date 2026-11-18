@@ -5522,3 +5522,111 @@ sections; not traced.
 
 Hit testing is not in these rows. Still not covered, all on the NVIDIA
 adapter: unrounded GPU timestamps and the WebGL2 fallback.
+### PR #159 refreshed with reclaimable, partial-motion spares (2026-11-18)
+
+At measurement time PR #159 was unmerged. This is not acceptance of the
+historical strong spare's 16.4 to 33.6 MB retained-memory trade. Main still allocates
+fresh edge arrays. The refresh preserves the later routing arithmetic and
+edge layers, keeps fresh geometry/attributes and GPU buffers, and preserves
+synchronous render, completed geometry swap, old geometry disposal, then
+spare recording. Only disposed CPU arrays may be overwritten.
+
+An initial weak-spare candidate (`14cceff`) made the spare collectible but
+still used it for every workload. Its three pairs consistently reduced
+partial-motion `setEdges` (3.0 to 3.2 ms against 2.1 to 2.2), but all-moving
+`apply` medians increased from 16.2, 17.5, 19.4 to 17.0, 18.4, 21.4 ms,
+and `advance` from 2.8, 3.3, 3.0 to 3.7, 3.7, 4.0. Ticks missed went both
+ways. That whole-frame cost signal rejected unconditional weak reuse.
+All its results remain in the archive, including natural heap snapshots.
+
+The narrowed candidate (`91f829099d659ced08b36a3ea502efd5654647c6`, against
+main `d402d97b67319e6c4448c27c94af2b8e0c521987`) records how many vertices
+the tessellator already copied from unchanged routes. It retains a weak
+spare only when that count is nonzero. Fully changed steady-state builds
+hold no spare and allocate exact colour/intensity arrays, as main does.
+A transition from partial to full motion may consume the existing disposed
+spare once before dropping it. No extra route scan, public option or motion
+fraction threshold was added. A cache miss always allocates fresh arrays.
+
+Three paired rounds, in orders main/candidate, candidate/main,
+main/candidate, on the AMD Ryzen 9 9900X and Windows Chrome 157.0.8103.79,
+headed, NVIDIA GeForce RTX 4090 (`nvidia`, `lovelace`, not fallback),
+`--enable-webgpu-developer-features`, WebGPU on every row. Each run used
+`--motion=springs --sizes=10000 --edges=smooth --nodes=shapes --moving=0.1,1
+--frames=1200 --warmup=60 --zoom=1 --dpr=1`. The unmodified runner's actual
+canvas guard passed on every row. Partial then all motion ran in each
+invocation, without forced GC between frame rows. Animated medians and
+p95 in milliseconds, and ticks missed as percentages, in pair order:
+
+| Moving | Build | `setEdges` | p95 | `apply` | `advance` | Past one tick |
+| --- | --- | --- | --- | --- | --- | --- |
+| tenth | main | 3.2, 3.1, 3.2 | 5.6, 5.3, 5.3 | 2.0, 2.4, 2.5 | 0.6, 0.6, 0.7 | 0%, 0.3%, 0% |
+| tenth | narrowed | 2.2, 2.2, 2.2 | 3.1, 3.6, 3.3 | 2.0, 2.1, 2.1 | 0.6, 0.6, 0.7 | 0%, 0%, 0% |
+| all | main | 7.5, 8.3, 8.2 | 10.9, 11.4, 11.4 | 17.3, 19.9, 18.8 | 4.2, 3.9, 3.9 | 5.1%, 6.4%, 7.3% |
+| all | narrowed | 7.5, 7.5, 8.1 | 10.4, 10.2, 11.4 | 18.0, 18.5, 20.6 | 3.3, 3.5, 4.0 | 3.8%, 3.8%, 6.7% |
+
+This supports a partial-motion CPU-step improvement, not an all-moving
+60 Hz result. `apply` is still slower in two of three all-moving pairs.
+Control ticks were 17.6, 16.7, 16.7 ms on main against 17.6, 17.7, 16.7:
+pair 2 has mismatched pacing, and pair 1 is not an exact 16.7 ms tick.
+Other motion fractions, browsers and GPUs were not reprofiled.
+
+The existing `--memory --sizes=10000 --edges=smooth --nodes=shapes
+--frames=120 --zoom=1 --dpr=1` harness reports 15.703 to 15.892 MiB of
+moving-edge retained memory on main against 15.594 to 15.939 on the narrowed
+candidate. This is the initial edges' `heapDelta` plus `moveEdges.heapDelta`,
+including V8, backing stores and embedder heap, after forced collections.
+GPU bytes created per moving frame stay about 12.50 MB in both.
+
+A separate supplement reuses the page's graph, spring and draw helpers,
+with a deterministic spring input clock and 120 sampled frames per phase.
+Whole-page backing stores after GC, in MiB (ranges across all three runs):
+
+| Phase | Main | Narrowed |
+| --- | --- | --- |
+| 10k, tenth moving | 18.666 | 19.050 to 19.164 |
+| 10k, all moving | 16.477 | 16.481 |
+| shrink to 1k, all moving | 5.264 | 5.268 |
+| 1k, tenth moving | 5.471 | 5.522 to 5.525 |
+| empty | 4.021 | 4.025 |
+| regrow to 10k, tenth moving | 18.666 | 19.147 to 19.164 |
+| regrow to 10k, all moving | 16.477 | 16.481 |
+| disposed | 4.007 | 4.011 |
+
+The page's graph-only baseline differs by about 4 KiB. Partial-motion
+headroom still adds about 0.4 to 0.5 MiB after GC; the old large spare is
+not pinned through shrink/empty/full-motion phases. Weak retention is
+opportunistic, not a hard memory budget: eviction is not guaranteed, and
+natural-GC peak memory is unmeasured and not bounded by this cache. Raw
+unforced heap snapshots are retained but are neither peaks nor proof of
+memory parity. The historical strong-spare trade has not been accepted.
+
+Each hardware window held the canonical exclusive compute lock from setup
+through owned browser/server teardown, with an isolated Chrome profile and
+ports. Windows processes are outside that lock's guarantee. No explicit
+handoff from the former Windows measurement owner was obtainable; idle GPU
+and process preflight and repeated process/GPU monitoring detected no
+competing measurements (69 and 70 samples), not guaranteed Windows quietness.
+A standalone deterministic follow-up after the first window refused its
+1% GPU-load preflight and ran no measurements; it was preserved, not retried.
+The distinct narrowed-policy campaign later included the deterministic
+supplement. All 36 measurement commands and both probes exited zero.
+
+Native `WeakRef` is required. Its constructor and `deref` are supported from
+Chrome 84, Firefox 79, Safari 14.1 and Node 14.6 according to
+[MDN compatibility data](https://github.com/mdn/browser-compat-data/blob/main/javascript/builtins/WeakRef.json).
+The shipped renderer already uses native private methods, whose engine
+floors are Chrome 84, Firefox 90, Safari 15 and Node 14.6 in
+[MDN's class compatibility data](https://github.com/mdn/browser-compat-data/blob/main/javascript/classes.json).
+This comparison does not validate GC behavior on those browsers. Runtime
+checks here used Chrome 157 and Node 22.22.1; downleveling syntax alone does
+not supply `WeakRef`.
+
+The [readable summary](results/pr159-2026-11-18.summary.json),
+[manifest and checksums](results/pr159-2026-11-18.manifest.json), and
+[compressed raw evidence](results/pr159-2026-11-18.raw.json.gz) retain both
+candidate rounds, the failed preflight, scripts and monitor records. Home
+and worktree paths and ephemeral Chrome process handles are explicitly
+redacted, with original/public file hashes recorded. No timing, status,
+adapter, timestamp or ownership classification was altered; originals
+remain in the investigation's local evidence store. No baseline changed.
