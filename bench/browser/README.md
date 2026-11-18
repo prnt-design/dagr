@@ -720,7 +720,9 @@ none empty). From the `pointermove` to the `onNodeHover` call took 1.8 to
 1.9 ms at the median and 2.2 to 2.5 ms at the 95th percentile in every run,
 and at most 3.3 to 12.4 ms. The page logged the same `Vertex attribute
 "position"` warning once per run and no page error. The control, run
-headless with the full 250 samples, failed all 250 at both ratios.
+headless with the full 250 samples, failed all 250 at both ratios. These are
+historical results from the 2026-10-29 source and Apple M4, not a rerun of
+current source or evidence for the current PC.
 
 This is the hover demonstration, not the pricing: the latency is what a user
 waits for with nothing else moving, not what a pick costs a frame, and it
