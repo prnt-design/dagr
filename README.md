@@ -2,12 +2,14 @@
 
 # Dagr
 
-**Directed graph layout, WebGPU rendering, and visual DSLs.**
+**A data visualization toolkit with incremental graph layout and animated rendering.**
 
-Dagr combines a typed, headless Sugiyama
+Dagr is becoming a general data visualization toolkit, following the maintainer's
+2026-11-07 direction. Its public layers combine a typed, headless Sugiyama
 layout engine designed for *animation* (incremental layout, stable node
 identity, delta output), a WebGPU renderer (three.js
-WebGPURenderer, SDF shapes, spring physics) and a React component on top.
+WebGPURenderer, SDF shapes, spring physics), React bindings and a graph Explorer.
+The separately installed chart package adds bar and line charts.
 
 **[Explore Dagr](https://dagr.prnt.design)** ·
 **[Documentation](https://dagr.prnt.design/docs/)** ·
@@ -24,11 +26,11 @@ blocks of a domain-specific visual language. Stable IDs and incremental deltas
 make changes traceable, while layout stability depends on the graph and edit.
 See the [measured behavior](https://dagr.prnt.design/docs/incremental-layout).
 
-> ⚠️ Dagr is in the 0.x series, so expect change. The current focus is proving
-> the WebGPU renderer: backend parity was checked by hand on one machine
-> (byte-identical to WebGL2 on a probe scene of two shapes and two edges), and
-> a published performance profile and a measured large-graph target come next.
-> The queue lives in [ROADMAP.md](./ROADMAP.md).
+> ⚠️ Dagr is in the 0.x series, so expect change. Backend parity and consumer
+> performance profiles are recorded in [the browser evidence](bench/browser/README.md).
+> Partial-motion success at 10,000 nodes is measured; all-moving smooth rendering
+> still misses ticks. Results name their machine, browser and backend. Current
+> priorities and remaining evidence live in [ROADMAP.md](./ROADMAP.md).
 
 ## Packages
 
@@ -37,11 +39,11 @@ See the [measured behavior](https://dagr.prnt.design/docs/incremental-layout).
 | `@prnt/dagr` | Convenience umbrella with graph exports at the root and a subpath per package | Forwards the six scoped packages, and the renderer's three-free core |
 | `@prnt/dagr-graph` | Typed directed graph model: patches, stable identity, zero deps | Identity, shape, adjacency, attributes, ports, patches, traversal, and serialization implemented |
 | `@prnt/dagr-layout` | Headless Sugiyama layout engine; incremental, animation-first | The full pipeline, cycle breaking, ranking, crossing reduction, coordinates and routes implemented, plus the incremental engine: patches in, deltas out, warm-started stages and a committed [stability corpus](https://dagr.prnt.design/docs/incremental-layout); an inert-patch fast path skips stages when an edit changes no layout inputs, and a resize or a removed leaf runs only position and route; an added-leaf fast path is planned |
-| `@prnt/dagr-render` | WebGPU renderer: SDF shapes, instancing, spring animation | Camera, SDF shapes, an HTML overlay, instancing, edge ribbons, a real graph on screen, critically damped springs, node, edge and bounds motion driven as one scene, and the loop that drives it implemented; GPU picking follows the renderer proof |
-| `@prnt/dagr-react` | `<DagrCanvas>` component and hooks | The canvas, the `useDagr` hook over the incremental engine, `<Html>` over the overlay, the layout-to-scene conversion, and `animate`, which glides an edit to its new layout off the delta, implemented; click selection, hover and camera flights shipped in 0.1.3; GPU picking follows the renderer proof |
+| `@prnt/dagr-render` | WebGPU renderer: SDF shapes, instancing, spring animation | Camera, SDF shapes, an HTML overlay, instancing, edge ribbons, a real graph on screen, critically damped springs, node, edge and bounds motion driven as one scene, and the loop that drives it implemented; 0.2.0 adds GPU node picking |
+| `@prnt/dagr-react` | `<DagrCanvas>` component and hooks | The canvas, the `useDagr` hook over the incremental engine, `<Html>` over the overlay, the layout-to-scene conversion, and `animate`, which glides an edit to its new layout off the delta, implemented; click selection, hover and camera flights shipped in 0.1.3; 0.2.0 adds opt-in GPU node picking and CPU edge hits |
 | `@prnt/dagr-vdsl` | Visual DSL toolkit: node spec adapter, typed ports, drag-to-connect | The node spec adapter, its registry, port type tokens and connection validation implemented; drag-to-connect is parked behind the renderer work |
-| `@prnt/dagr-explorer` | React graph explorer: views, search, connection tracing, groups and a details drawer over a pannable DOM and SVG surface, on React 18 and 19 | Complete and browser-validated in Chromium and WebKit; the SVG base is smooth to about 4,000 nodes, and a native base is planned. Install it with `npm install @prnt/dagr-explorer` |
-| `@prnt/dagr-chart` | Animated React bar and line charts with GPU or SVG rendering, dual axes and Tailwind theme bindings | Approved 0.2.0 candidate, publication pending; [API and styling guide](packages/chart/README.md) |
+| `@prnt/dagr-explorer` | React graph explorer: views, search, connection tracing, groups and a details drawer over a pannable DOM and SVG surface, on React 18 and 19 | Graph reading implemented; original browser checks cover Chromium and WebKit, with the SVG base smooth to about 4,000 nodes on Apple M4. New mobile/outline work has separate evidence limits in ROADMAP.md; a native base is planned. Install it with `npm install @prnt/dagr-explorer` |
+| `@prnt/dagr-chart` | Animated React bar and line charts with GPU or SVG rendering, dual axes and Tailwind theme bindings | Published at 0.2.0; [API and styling guide](packages/chart/README.md) |
 
 `@prnt/dagr` offers `@prnt/dagr/graph`, `@prnt/dagr/layout`,
 `@prnt/dagr/render`, `@prnt/dagr/render/core`, `@prnt/dagr/react`,
@@ -53,6 +55,13 @@ The `packaging` workspace checks packed manifests,
 source maps, public types, and installation outside the repository. Release
 validation also runs `publint` and `arethetypeswrong`. Publication uses
 `pnpm` to replace workspace dependency ranges with registry versions.
+
+All eight public packages are published at 0.2.0 under both the `latest` and
+`next` tags. GPU node picking (`Renderer.pickNode`, `hitTesting="gpu"`) and
+CPU edge handlers are included in 0.2.0; port hits remain planned.
+Chart is installed separately and is not forwarded by the umbrella.
+Explorer owns graph reading/navigation, while VDSL owns consumer-defined node
+specifications and connection validation, with editing still planned.
 
 ## Agent-authored learning Explorers
 
@@ -88,8 +97,8 @@ A second skill, [dagr-chart](skills/dagr-chart/SKILL.md), covers bar, line and
 combined charts with `DagrChart`, with a [typed example](skills/dagr-chart/references/chart.tsx).
 It installs the same way, with `dagr-chart` in place of
 `dagr-learning-explorer` in the commands above, and the same CSS types note
-applies. Installing the skill does not install `@prnt/dagr-chart`, which
-is not on npm yet.
+applies. Installing the skill does not install `@prnt/dagr-chart`. Install the published
+chart package separately; it is not forwarded by the umbrella.
 
 ## Mobile framework support
 
@@ -100,6 +109,16 @@ ownership. See the [mobile architecture guide](docs/docs/mobile.md) for the
 contract and the [core mobile roadmap](ROADMAP.md#core-mobile-framework-track)
 for visible-viewport, occlusion and real-device conformance work. Repository
 changes remain subject to the human-gated package release process.
+
+## Delivery and research
+
+One scheduled daily owner delivers the highest-priority eligible increment,
+resuming existing PRs across tracks before new work and preserving live owners.
+Report-format PR delivery is included; new report implementation retains its
+separate track. Renderer and recovery jobs are available on demand. The weekly audit reviews the development process, researches agentic development,
+OSS and data visualization, and proposes bounded evaluations. It does not
+automatically change the roadmap.
+All changes follow the reviews, local gates and CI requirements in [AGENTS.md](AGENTS.md).
 
 ## Development
 
