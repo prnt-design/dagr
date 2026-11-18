@@ -5291,3 +5291,157 @@ frame was 5.6 ms.
 
 Hit testing is not in these rows. Still not covered, all on the NVIDIA
 adapter: unrounded GPU timestamps, rich nodes and the WebGL2 fallback.
+
+### Rich nodes at 10,000 on the NVIDIA RTX 4090 (2026-11-18)
+
+`tsk_ad4b7ce0d93b`, the matrix's first rows with rich nodes on its first
+machine. The rows [at 10,000](#results-matrix-at-10000-nodes-m410-2026-10-30)
+with `--nodes=rich`, at `fit` and at zoom 1, as [on the Apple
+M4](#rich-nodes-at-10000-on-the-apple-m4-2026-11-14), on main `3fe6d80`,
+nothing changed. As there, the harness refuses `--moving=0.1` with rich
+nodes, so there are no tenth-moving rows.
+
+```
+export WSL_INTEROP=/run/WSL/1_interop          # only from an SSH session
+node bench/browser/windows-chrome.mjs          # headed, left running
+DAGR_CDP=http://127.0.0.1:9445 node bench/browser/backend-probe.mjs --parity
+DAGR_CDP=http://127.0.0.1:9445 node bench/browser/frame-profile.mjs \
+  --motion=springs --sizes=10000 --edges=straight,smooth --nodes=rich --moving=1 --frames=1200 --zoom=fit --dpr=1
+  # then --dpr=2, and both again with --zoom=1
+```
+
+The WSL2 machine (AMD Ryzen 9 9900X), driven over SSH from the Mac mini and
+started in the signed-in session as [the smaller
+sizes](#sizes-below-10000-on-the-nvidia-rtx-4090-2026-11-17) describe,
+driving Google Chrome 157.0.8103.79 on the Windows side, headed, no flags
+beyond the helper's. The adapter, probed at run time, was `nvidia`
+`lovelace`, not a fallback (the `--gpu` runs, with developer features on,
+also report `NVIDIA GeForce RTX 4090`, device `0x2684`), and
+`renderer.backend` was `webgpu` on every row of every run. The parity check
+passed before each of the two launches, and every row's first frame lit
+pixels (about 350,000 at DPR 1 and 1.2 to 1.4 million at DPR 2). Viewport
+1280 by 720, 13,169 edges, 60 warm-up and 1,200 measured frames per mode.
+At `fit` (zoom 0.0715) no tier is open and the overlay holds no elements; at
+zoom 1 it had 84 to 88 labels attached at the end of each mode. Three runs
+at each zoom and DPR, in the order `fit` DPR 1, `fit` DPR 2, zoom 1 DPR 1,
+zoom 1 DPR 2, three times over, one at a time, load average 0.1 to 6.6 at
+the start of each (read from `/proc/loadavg`), which was not controlled.
+Columns as [on the Apple M4](#rich-nodes-at-10000-on-the-apple-m4-2026-11-14).
+
+**Both launches paced at the slower rate.** The control tick read 17.5 to
+17.8 ms in every run, not 16.7, the `--gpu` runs below included, and the
+interval median 17.5 to 18.0 on every row, so ticks are counted at that
+rate, as in the runs that paced that way [below
+10,000](#sizes-below-10000-on-the-nvidia-rtx-4090-2026-11-17).
+The cause is still not traced.
+
+| DPR | Zoom | Edges | Motion | Interval p95 | Past one tick | `apply` | `advance` | `setNodes` | `setEdges` | `richNodes` | `sync` | `render` | Holds the tick |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 1 | fit | straight | still | 18.1 | 0% | | | | | | 0.2 | 0.2 | yes |
+| 1 | fit | straight | all moving | 18.1 to 18.2 | 0.1%, 0.1%, 0% | 11.0 to 13.3 | 2.0 to 2.3 | 1.1 to 1.2 | 1.2 to 1.3 | 1.1 to 1.4 | 0.2 | 0.4 to 0.5 | yes |
+| 1 | fit | smooth | still | 18.1 to 18.2 | 0% | | | | | | 0.2 | 0.1 to 0.2 | yes |
+| 1 | fit | smooth | all moving | 35.6 to 36.0 | 18.1%, 12.1%, 14.9% | 18.9 to 20.8 | 3.8 to 4.7 | 1.3 | 7.7 to 10.0 | 1.2 to 1.5 | 0.2 to 0.4 | 1.1 to 1.2 | **no** |
+| 2 | fit | straight | still | 18.1 | 0% | | | | | | 0.2 | 0.2 | yes |
+| 2 | fit | straight | all moving | 18.1 | 0%, 0%, 0% | 13.3 to 13.5 | 1.7 to 2.0 | 1.1 | 1.2 to 1.3 | 1.1 | 0.2 | 0.4 | yes |
+| 2 | fit | smooth | still | 18.1 | 0% | | | | | | 0.2 | 0.1 to 0.2 | yes |
+| 2 | fit | smooth | all moving | 35.4 to 35.9 | 6.5%, 8.1%, 5.6% | 19.0 to 21.4 | 3.5 to 3.9 | 1.3 | 7.3 to 7.8 | 1.3 to 1.5 | 0.2 to 0.4 | 1.1 | **no** |
+| 1 | 1 | straight | still | 18.1 | 0% | | | | | | 0.1 | 0.2 | yes |
+| 1 | 1 | straight | all moving | 18.1 | 0%, 0%, 0.1% | 13.8 to 15.0 | 1.5 to 1.7 | 1.1 to 1.2 | 1.2 | 1.1 to 1.3 | 0.2 | 0.4 | yes |
+| 1 | 1 | smooth | still | 18.1 | 0% | | | | | | 0.1 to 0.2 | 0.1 | yes |
+| 1 | 1 | smooth | all moving | 18.1 to 36.0 | 4.3%, 7.3%, 15.5% | 18.3 to 21.4 | 2.0 to 3.2 | 1.3 | 7.3 to 9.1 | 1.4 to 1.6 | 0.3 | 1.1 | **no** |
+| 2 | 1 | straight | still | 18.1 | 0% | | | | | | 0.1 | 0.2 | yes |
+| 2 | 1 | straight | all moving | 18.1 | 0%, 0%, 0% | 9.8 to 13.8 | 1.8 to 2.1 | 1.0 to 1.3 | 1.2 to 1.3 | 1.1 to 1.4 | 0.2 to 0.3 | 0.4 to 0.5 | yes |
+| 2 | 1 | smooth | still | 18.1 | 0% | | | | | | 0.1 | 0.1 to 0.2 | yes |
+| 2 | 1 | smooth | all moving | 35.4 to 36.0 | 21.7%, 16.5%, 6.2% | 19.0 to 20.8 | 3.0 to 4.8 | 1.2 to 1.4 | 7.6 to 8.6 | 1.2 to 1.7 | 0.3 | 1.0 to 1.2 | **no** |
+
+`input` was 0.5 to 0.7 ms on every animated row. Where a straight row missed
+ticks it was one interval in 1,200, none longer than 36.0 ms; the still rows
+missed none. The longest interval in each run of the smooth all-moving rows
+was 54.0 to 88.5 ms.
+
+**Paired with plain shapes**, to separate the tiers from the date: six more
+runs after the twelve above, in the same launch, at DPR 1 only, with
+`--edges=smooth --nodes=shapes,rich --moving=1`, so each run measured both
+node modes on the same scene, shapes first in every run. `fit` and zoom 1
+alternated, three of each, load average 0.0 to 1.2 at the start of each.
+Missed ticks with every node moving, and the medians of the steps between
+retargets summed (`advance`, `setNodes`, `setEdges`, `render`, `input` and,
+in `rich`, `richNodes` and `sync`), in milliseconds:
+
+| Pair | Zoom | `shapes` | `rich` | Step sum, `shapes` | Step sum, `rich` |
+| --- | --- | --- | --- | --- | --- |
+| 1 | fit | 3.9% | 8.9% | 14.4 | 16.6 |
+| 1 | 1 | 4.3% | 7.8% | 14.9 | 15.5 |
+| 2 | fit | 3.6% | 5.3% | 14.6 | 15.6 |
+| 2 | 1 | 4.6% | 6.8% | 14.5 | 15.6 |
+| 3 | fit | 3.8% | 16.6% | 14.2 | 16.1 |
+| 3 | 1 | 12.3% | 16.0% | 16.2 | 16.5 |
+
+The still modes missed 0% in every run. In the pairs, `setEdges` read 7.5
+to 8.4 ms in `rich` against 7.3 to 7.9 in `shapes`, `advance` 2.7 to 3.9
+against 3.4 to 4.9, and a retarget's `apply` 18.3 to 20.4 against 18.6 to
+23.9, while `richNodes` added 1.4 to 2.0 ms and `sync` 0.2 to 0.3.
+
+**GPU time per frame**, from `--gpu` in a second launch with the helper
+started with `DAGR_CHROMIUM_ARGS=--enable-webgpu-developer-features`, one
+run at each zoom and DPR after the pairs, load average 3.0 to 9.5 at the
+start of each. As at `fit` and zoom 1 without rich nodes, the runner exits
+non-zero on all four, because the timestamps were still rounded to 1,024
+ns. Medians / 95th percentiles of the frame's passes summed, in
+milliseconds:
+
+| DPR | Zoom | Edges | Still | All moving |
+| --- | --- | --- | --- | --- |
+| 1 | fit | straight | 0.03 / 0.03 | 0.03 / 0.03 |
+| 1 | fit | smooth | 0.46 / 0.50 | 0.47 / 0.51 |
+| 2 | fit | straight | 0.21 / 1.27 | 1.27 / 1.29 |
+| 2 | fit | smooth | 1.40 / 1.43 | 1.33 / 1.36 |
+| 1 | 1 | straight | 0.11 / 0.12 | 0.10 / 0.79 |
+| 1 | 1 | smooth | 0.38 / 0.39 | 0.37 / 0.40 |
+| 2 | 1 | straight | 0.66 / 0.68 | 0.66 / 0.68 |
+| 2 | 1 | smooth | 0.76 / 0.78 | 0.72 / 0.75 |
+
+The longest single GPU frame was 2.49 ms. With timestamp queries on, the
+smooth all-moving rows missed 5.5% and 15.7% of ticks at `fit` (DPR 1 and
+2) and 14.6% and 19.0% at zoom 1, and the straight rows at most 0.3%. The
+overlay is DOM, which these timestamps do not see. Straight edges at `fit`
+and DPR 2 read 0.21 ms still against 1.27 moving, which fits the GPU
+clocking down when the frame leaves it idle, as in the earlier NVIDIA
+sections; not traced.
+
+- **Straight edges hold the tick with rich nodes at both zooms and both
+  DPRs.** No straight row in the table missed more than one interval in
+  1,200, and none in the `--gpu` runs more than 0.3%.
+- **Smooth edges with every node moving miss more with rich nodes, at
+  both zooms.** That row missed 5.6% to 18.1% of ticks at `fit` and 4.3% to
+  21.7% at zoom 1, and in every one of the six same-launch pairs `rich`
+  missed more than `shapes`: 5.3% to 16.6% against 3.6% to 3.9% at `fit`,
+  and 6.8% to 16.0% against 4.3% to 12.3% at zoom 1. Unlike the Apple M4,
+  where the gap was established only at zoom 1, here it shows at `fit` too,
+  where no tier is open and the overlay holds no elements, so DOM work from
+  labels does not explain it there. `rich` ran second in every pair, so an
+  order effect is not ruled out.
+- **The timed tier work lands on a frame already near the tick.** The
+  shared steps barely moved in `rich` (`setEdges` 0.2 ms lower to 0.7 ms
+  higher than the same run's `shapes`, `advance` the same or lower, a
+  retarget's `apply` 1.0 ms higher to 4.6 ms lower), and the tiers'
+  `richNodes` and `sync` added 1.6 to 2.2 ms between retargets, so the
+  step sum rose by 0.3 to 2.2 ms, to 15.5 to 16.6 ms against this launch's
+  17.5 to 17.8 ms tick. Across the twelve table runs, the smooth all-moving
+  step sum was 14.3 to 18.6 ms, and the runs at 17 ms or more missed 12.1%
+  to 21.7% of ticks, those below 16.5 ms 4.3% to 8.1%.
+- **Against the unpaired plain-shape rows, the ranges overlap.** The
+  2026-10-30 matrix's `fit` row missed 3.9% to 9.3%, and on the same day as
+  these rows, in an earlier launch, the [zoom 1
+  section](#zoom-1-at-10000-nodes-on-the-nvidia-rtx-4090-2026-11-18)'s row
+  missed 11.5% to 18.0% and its undisturbed `fit` readings 7.1% to 16.1%,
+  all counted against a 16.7 ms control tick. These are unpaired with these
+  rows and paced at another rate, and they read at or above this launch's
+  paired `shapes` at `fit` (3.6% to 3.9%), so the pairs above are the
+  comparison to use.
+- **The GPU frame is not what misses the tick.** It is about 1.4 ms or
+  less at the median and p95 on every row, and the tiers' labels are DOM,
+  which these timestamps do not see.
+
+Hit testing is not in these rows. Still not covered, all on the NVIDIA
+adapter: unrounded GPU timestamps and the WebGL2 fallback.
