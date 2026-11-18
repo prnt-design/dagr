@@ -450,6 +450,7 @@ The next section does the second.
 ### From WSL2, through the Windows side's Chrome
 
 ```
+python3 -m http.server 8733               # from the REPO ROOT; leave running in another terminal
 node bench/browser/windows-chrome.mjs --headless   # leave running; Ctrl-C closes Chrome
 DAGR_CDP=http://127.0.0.1:9445 node bench/browser/backend-probe.mjs --parity
 DAGR_CDP=http://127.0.0.1:9445 node bench/browser/frame-profile.mjs

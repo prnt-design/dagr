@@ -6,7 +6,7 @@
  * `<DagrCanvas>`'s to provide: shipping the sugar first would have meant
  * inventing that context in a package with no component to provide it, and then
  * living with the shape when the requirements that should have decided it
- * finally arrived. They have, and the whole package is five things, over two
+ * finally arrived. Its core canvas and layout APIs build on two
  * conversions: the one `scene.ts` owns, which turns a whole layout into a
  * drawing, and the one `animation.ts` owns, which turns a delta into a change
  * to one.
@@ -23,9 +23,12 @@
  * - {@link retarget} and the two conversions beside it are the delta half of
  *   `scene.ts`, for a caller driving `@prnt/dagr-render`'s scene motion themselves.
  *
+ * Hit indexes, interaction helpers and hooks also expose the canvas interaction
+ * contract to hosts driving their own surfaces.
+ *
  * **What this package is FOR is the seam nothing else in the workspace owns.**
  * `@prnt/dagr-render` refuses to name a `LayoutResult`, on the argument that the
- * y-down to y-up conversion belongs to whoever owns the layout, and until now
+ * y-down to y-up conversion belongs to whoever owns the layout, and originally
  * the only thing that owned both was `@dagr/campaign-stage`: private, written
  * for one dataset, and copied by every host that wanted a different one. The
  * conversion is `scene.ts` here, exported rather than hidden, because a caller
