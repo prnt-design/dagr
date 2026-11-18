@@ -36,10 +36,11 @@ The earlier jsdom 27 ms result used a different environment and method and
 is not a before/after comparison.
 
 All four cases asserted ArrowDown focus after 60 moves, End reaching the last
-item, Home returning to the first, selection, a drawer opening, a controlled
+item, selection, a drawer opening, a controlled
 map/outline roundtrip, outline scroll retention, drawer body scroll and focus
 retention, all items still mounted, and search selecting the final node.
-Custom names were recorded as `Node 00000 custom Test group`; no page errors
+Home was exercised before clicking the first item, but its focus result was
+not asserted. Custom names were recorded as `Node 00000 custom Test group`; no page errors
 were recorded. Keyboard, drawer, map and search screenshots and the exact
 capture harness are attached to the task/PR delivery record. The whole
 bundle/server/browser window used the canonical exclusive compute lock,
