@@ -852,6 +852,9 @@ targets at DPR 1 and 221.2 MB at DPR 2.
   Picks per run on the smooth animated rows varied from 158 to 295, so a
   hover can still trail a gliding drawing by a frame or two when it is busy.
 
+These Apple M4 pricing results describe the 2026-10-29 source and machine,
+not a rerun of current source or evidence for the current PC.
+
 ### What an edge hit costs a frame (M4.8b)
 
 ```

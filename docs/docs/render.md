@@ -2039,8 +2039,8 @@ complete, and `<DagrCanvas animate>` drives them from a graph a user is editing
   index and get no GPU pick id (see `bench/browser/README.md`, "What an edge
   hit costs a frame"). GPU node hover and clicks at ten thousand nodes were
   checked on AMD RDNA 2 (2026-10-28) and Apple M4 (2026-10-29), Chrome 156
-  (`bench/browser/gpu-hover.mjs`); the node pick pass was priced on AMD RDNA 2
-  (`frame-profile.mjs --pick`). WebGL2's pick cost is not measured.
+  (`bench/browser/gpu-hover.mjs`); the node pick pass was priced on both devices
+  on those dates (`frame-profile.mjs --pick`). WebGL2's pick cost is not measured.
   `DagrCanvas` picks through
   `pickNode` only behind its opt-in `hitTesting="gpu"`. See [Picking](#picking).
 - Backend parity beyond the probe scene and the one machine M4.9b compared on:
