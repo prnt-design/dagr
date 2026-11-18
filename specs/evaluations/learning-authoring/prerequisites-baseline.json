@@ -1,0 +1,51 @@
+{
+  "brief": "prerequisites",
+  "condition": "baseline",
+  "direction": "Read each edge as source, relationship, target. Ownership and dependency do not imply runtime order.",
+  "nodes": [
+    {
+      "id": "node",
+      "label": "Typed node",
+      "summary": "Identifies one concept with a stable ID.",
+      "explanation": "Identifies one concept with a stable ID. Source: skills/dagr-learning-explorer/references/learning-explorer.tsx",
+      "example": "Illustrative study question: explain typed node to a teammate.",
+      "source": "skills/dagr-learning-explorer/references/learning-explorer.tsx"
+    },
+    {
+      "id": "edge",
+      "label": "Typed edge",
+      "summary": "Connects source and target node IDs.",
+      "explanation": "Connects source and target node IDs. Source: skills/dagr-learning-explorer/references/learning-explorer.tsx",
+      "example": "Illustrative study question: explain typed edge to a teammate.",
+      "source": "skills/dagr-learning-explorer/references/learning-explorer.tsx"
+    },
+    {
+      "id": "explorer",
+      "label": "Explorer",
+      "summary": "Presents nodes and edges with search and details.",
+      "explanation": "Presents nodes and edges with search and details. Source: skills/dagr-learning-explorer/references/learning-explorer.tsx",
+      "example": "Illustrative study question: explain explorer to a teammate.",
+      "source": "skills/dagr-learning-explorer/references/learning-explorer.tsx"
+    }
+  ],
+  "edges": [
+    {
+      "id": "edge-node",
+      "source": "edge",
+      "target": "node",
+      "label": "references"
+    },
+    {
+      "id": "explorer-node",
+      "source": "explorer",
+      "target": "node",
+      "label": "requires data for"
+    },
+    {
+      "id": "explorer-edge",
+      "source": "explorer",
+      "target": "edge",
+      "label": "requires data for"
+    }
+  ]
+}

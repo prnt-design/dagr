@@ -1,0 +1,74 @@
+[
+  {
+    "name": "codebase-baseline-desktop",
+    "empty": "No matches",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "name": "codebase-baseline-phone",
+    "empty": "No matches",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "name": "codebase-guided-desktop",
+    "empty": "No matches",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "name": "codebase-guided-phone",
+    "empty": "No matches",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "name": "prerequisites-baseline-desktop",
+    "empty": "No matches",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "name": "prerequisites-baseline-phone",
+    "empty": "No matches",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "name": "prerequisites-guided-desktop",
+    "empty": "No matches",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "name": "prerequisites-guided-phone",
+    "empty": "No matches",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "name": "process-baseline-desktop",
+    "empty": "No matches",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "name": "process-baseline-phone",
+    "empty": "No matches",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "name": "process-guided-desktop",
+    "empty": "No matches",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "name": "process-guided-phone",
+    "empty": "No matches",
+    "overflow": false,
+    "errors": []
+  }
+]

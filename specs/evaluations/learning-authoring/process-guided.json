@@ -1,0 +1,113 @@
+{
+  "brief": "process",
+  "condition": "guided",
+  "direction": "Read each edge as source, relationship, target. Ownership and dependency do not imply runtime order.",
+  "nodes": [
+    {
+      "id": "gate",
+      "label": "Local gate",
+      "summary": "Run all five required checks.",
+      "explanation": "Run all five required checks. Source: AGENTS.md",
+      "example": "Illustrative study question: explain local gate to a teammate.",
+      "source": "AGENTS.md"
+    },
+    {
+      "id": "rebase",
+      "label": "Rebase",
+      "summary": "Rebase onto current origin/main.",
+      "explanation": "Rebase onto current origin/main. Source: AGENTS.md",
+      "example": "Illustrative study question: explain rebase to a teammate.",
+      "source": "AGENTS.md"
+    },
+    {
+      "id": "install",
+      "label": "Install and rerun",
+      "summary": "If rebase brings changes, install frozen lockfile and rerun the gate.",
+      "explanation": "If rebase brings changes, install frozen lockfile and rerun the gate. Source: AGENTS.md",
+      "example": "Illustrative study question: explain install and rerun to a teammate.",
+      "source": "AGENTS.md"
+    },
+    {
+      "id": "pr",
+      "label": "Pull request",
+      "summary": "Push the branch and open a PR with review records.",
+      "explanation": "Push the branch and open a PR with review records. Source: AGENTS.md",
+      "example": "Illustrative study question: explain pull request to a teammate.",
+      "source": "AGENTS.md"
+    },
+    {
+      "id": "ci",
+      "label": "CI",
+      "summary": "Wait until checks conclude.",
+      "explanation": "Wait until checks conclude. Source: AGENTS.md",
+      "example": "Illustrative study question: explain ci to a teammate.",
+      "source": "AGENTS.md"
+    },
+    {
+      "id": "repair",
+      "label": "Repair",
+      "summary": "Fix red CI on the branch and push again.",
+      "explanation": "Fix red CI on the branch and push again. Source: AGENTS.md",
+      "example": "Illustrative study question: explain repair to a teammate.",
+      "source": "AGENTS.md"
+    },
+    {
+      "id": "merge",
+      "label": "Merge",
+      "summary": "Merge only with green local gate and concluded green CI.",
+      "explanation": "Merge only with green local gate and concluded green CI. Source: AGENTS.md",
+      "example": "Illustrative study question: explain merge to a teammate.",
+      "source": "AGENTS.md"
+    }
+  ],
+  "edges": [
+    {
+      "id": "gate-rebase",
+      "source": "gate",
+      "target": "rebase",
+      "label": "then"
+    },
+    {
+      "id": "rebase-install",
+      "source": "rebase",
+      "target": "install",
+      "label": "if changes arrived"
+    },
+    {
+      "id": "install-pr",
+      "source": "install",
+      "target": "pr",
+      "label": "after passing"
+    },
+    {
+      "id": "rebase-pr",
+      "source": "rebase",
+      "target": "pr",
+      "label": "if no changes arrived"
+    },
+    {
+      "id": "pr-ci",
+      "source": "pr",
+      "target": "ci",
+      "label": "waits for"
+    },
+    {
+      "id": "ci-repair",
+      "source": "ci",
+      "target": "repair",
+      "label": "if red"
+    },
+    {
+      "id": "repair-ci",
+      "source": "repair",
+      "target": "ci",
+      "label": "push and rerun"
+    },
+    {
+      "id": "ci-merge",
+      "source": "ci",
+      "target": "merge",
+      "label": "if green"
+    }
+  ]
+}
