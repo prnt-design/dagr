@@ -19,6 +19,13 @@ lets someone explain a relationship or follow a process, not just name boxes.
   example where useful, and source references when evidence exists. Mark
   invented examples and uncertainty. Do not invent citations or turn a
   layout position into a factual claim.
+- Check universal claims ("only", "every", "never") against all supplied
+  sources. Distinguish a manifest declaration from verified runtime, build or
+  publication behavior; keep an inference qualified in both node text and edges.
+- Treat prerequisites as required knowledge only when justified. Label optional
+  topics and suggested learning order explicitly instead of making them hard
+  prerequisites. For process graphs, trace success, failure/retry and update
+  paths through the edges, preserving loops and every required repeated check.
 - Keep related data on one typed node/edge model. Use views for a learner's
   questions (overview, one process, prerequisites), retaining IDs for the same
   concepts across views. Cycles are allowed; do not imply the input is a DAG.

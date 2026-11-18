@@ -1,0 +1,13 @@
+import ts from '/tmp/dagr-learning-consumer/node_modules/typescript/lib/typescript.js';
+import {readFileSync,writeFileSync} from 'node:fs';
+const root='/tmp/dagr-learning-independent-collected';const results=[];
+const norm=s=>s.replace(/\s+/g,' ').trim();
+const source=norm(readFileSync('/tmp/dagr-authoring-independent/process-baseline/process-sources.md','utf8'));
+for(const arm of ['baseline','guided']){
+ const dir=`${root}/process-${arm}`;
+ writeFileSync(`${dir}/data-validation.mjs`,ts.transpileModule(readFileSync(`${dir}/initial/process-data.ts`,'utf8'),{compilerOptions:{module:ts.ModuleKind.ESNext,target:ts.ScriptTarget.ES2022}}).outputText);
+ const data=await import(`${dir}/data-validation.mjs`);const views=data.PROCESS_VIEWS??data.VIEWS;
+ const nodes=[...new Map(views.flatMap(v=>v.nodes).map(n=>[n.id,n])).values()];
+ results.push({arm,views:views.map(v=>({id:v.id,nodes:v.nodes.length,edges:v.edges.length,uniqueNodes:new Set(v.nodes.map(n=>n.id)).size===v.nodes.length,uniqueEdges:new Set(v.edges.map(e=>e.id)).size===v.edges.length,endpoints:v.edges.every(e=>v.nodes.some(n=>n.id===e.source)&&v.nodes.some(n=>n.id===e.target))})),quotes:nodes.flatMap(n=>(n.sources??[{quote:n.quote}]).map(s=>({node:n.id,matched:source.includes(norm(s.quote))})))});
+}
+writeFileSync(`${root}/process-structure-results.json`,JSON.stringify(results,null,2));

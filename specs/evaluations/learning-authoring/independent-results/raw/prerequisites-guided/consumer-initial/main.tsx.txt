@@ -1,0 +1,3 @@
+import {createRoot} from 'react-dom/client';
+import Component from './PrerequisitesExplorer';
+createRoot(document.getElementById('root')!).render(<Component/>);

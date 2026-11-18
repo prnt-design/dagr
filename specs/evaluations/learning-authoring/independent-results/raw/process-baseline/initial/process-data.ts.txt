@@ -1,0 +1,528 @@
+import type { ExplorerEdge, ExplorerNode, ExplorerView } from '@prnt/dagr-explorer';
+
+export type StepKind = 'step' | 'command' | 'decision' | 'outcome' | 'review' | 'rule';
+
+export interface ProcessNode extends ExplorerNode {
+  readonly kind: StepKind;
+  /** One sentence shown on the node and at the top of the drawer. */
+  readonly summary: string;
+  /** Longer explanation, paraphrasing the source. */
+  readonly detail?: readonly string[] | undefined;
+  /** A command to run, verbatim from the source. */
+  readonly command?: string | undefined;
+  /** Where in the source packet the claim comes from. */
+  readonly source: string;
+  /** A verbatim excerpt from that source. */
+  readonly quote: string;
+}
+
+export type ProcessEdge = ExplorerEdge;
+
+const SRC_PATH = 'AGENTS.md › How work reaches main';
+const SRC_COMMANDS = 'AGENTS.md › Commands';
+const SRC_UNATTENDED = 'AGENTS.md › What agents may do unattended';
+
+export const KIND_LABEL: Record<StepKind, string> = {
+  step: 'Step',
+  command: 'Command',
+  decision: 'Decision',
+  outcome: 'Outcome',
+  review: 'Review',
+  rule: 'Rule',
+};
+
+export const KIND_COLOR: Record<StepKind, string> = {
+  step: '#2563eb',
+  command: '#7c3aed',
+  decision: '#b45309',
+  outcome: '#15803d',
+  review: '#0e7490',
+  rule: '#b91c1c',
+};
+
+const GATE = 'pnpm typecheck && pnpm test && pnpm lint && pnpm build && pnpm bench:gate';
+
+const pathView: ExplorerView<ProcessNode, ProcessEdge> = {
+  id: 'path',
+  label: 'Path to main',
+  description: 'The six numbered steps every change follows from a branch to main.',
+  layout: { direction: 'right', nodeSize: { width: 260, height: 136 } },
+  nodes: [
+    {
+      id: 'path-branch',
+      label: 'Work on a branch',
+      kind: 'step',
+      color: KIND_COLOR.step,
+      summary: 'Every change reaches main through a pull request. No agent pushes to main directly.',
+      source: SRC_PATH,
+      quote: 'Every change reaches `main` through a pull request. No agent pushes to `main` directly.',
+    },
+    {
+      id: 'path-gate',
+      label: '1. Run the full local gate',
+      kind: 'step',
+      color: KIND_COLOR.step,
+      summary: 'Run all five gate commands from the repo root. All five must pass.',
+      command: GATE,
+      detail: [
+        'A skip explicitly printed by bench:gate counts as a pass.',
+        'Lint and build are in the gate because CI runs them, so skipping them locally is a way to turn main red.',
+        'The bench gate runs locally rather than on CI because the committed baseline is machine-matched (see bench/README.md).',
+      ],
+      source: `${SRC_PATH}, step 1`,
+      quote: 'All five must pass, including a skip explicitly printed by `bench:gate`.',
+    },
+    {
+      id: 'path-rebase',
+      label: '2. Rebase onto origin/main',
+      kind: 'step',
+      color: KIND_COLOR.step,
+      summary: 'Rebase onto origin/main. The changes it pulls in are the ones your local gate has never seen.',
+      source: `${SRC_PATH}, step 2`,
+      quote:
+        'Rebasing is not a formality: the changes it pulls in are exactly the ones your local gate has never seen.',
+    },
+    {
+      id: 'path-rebase-changed',
+      label: 'Did the rebase bring in changes?',
+      kind: 'decision',
+      color: KIND_COLOR.decision,
+      summary: 'If it did, reinstall from the lockfile and run the gate again before pushing.',
+      source: `${SRC_PATH}, step 2`,
+      quote:
+        'If the rebase brought in changes, run `pnpm install --frozen-lockfile` before running the gate again.',
+    },
+    {
+      id: 'path-install',
+      label: 'Reinstall from the lockfile',
+      kind: 'command',
+      color: KIND_COLOR.command,
+      summary: 'A rebase can bring in a new lockfile, and a stale node_modules fails like broken code.',
+      command: 'pnpm install --frozen-lockfile',
+      detail: [
+        'A stale node_modules against a new lockfile fails in a way that looks exactly like broken code, not a stale install.',
+      ],
+      source: `${SRC_PATH}, step 2`,
+      quote:
+        'A rebase can bring in a new lockfile, and a stale `node_modules` against it fails in a way that looks exactly like broken code, not a stale install.',
+    },
+    {
+      id: 'path-regate',
+      label: 'Run the gate again',
+      kind: 'command',
+      color: KIND_COLOR.command,
+      summary: 'Rerun the full local gate on the rebased branch.',
+      command: GATE,
+      source: `${SRC_PATH}, step 2`,
+      quote:
+        'If the rebase brought in changes, run `pnpm install --frozen-lockfile` before running the gate again.',
+    },
+    {
+      id: 'path-push',
+      label: '3. Push and open a pull request',
+      kind: 'step',
+      color: KIND_COLOR.step,
+      summary: 'Push the branch and open a pull request.',
+      source: `${SRC_PATH}, step 3`,
+      quote: 'Push the branch and open a pull request.',
+    },
+    {
+      id: 'path-reviews',
+      label: '4. Record the reviews in the PR body',
+      kind: 'step',
+      color: KIND_COLOR.step,
+      summary:
+        'The PR body records which reviews ran, what each found, and how every finding was resolved or accepted.',
+      detail: [
+        'Two reviews are the floor: one over the diff and one over the merged tree the diff produces.',
+        'Persona reviews are welcome on top and are recorded the same way.',
+        'The PR is the consolidated record of the run. See the Reviews view.',
+      ],
+      source: `${SRC_PATH}, step 4`,
+      quote:
+        'The PR body records this run\'s reviews: which reviews ran, what each found, and how every finding was resolved, or accepted with a reason.',
+    },
+    {
+      id: 'path-main-moved',
+      label: 'If main moves while the PR is open',
+      kind: 'decision',
+      color: KIND_COLOR.decision,
+      summary: 'Rebase onto it, push with --force-with-lease to your own PR branch, and let CI run again.',
+      detail: [
+        'This is the one force-push the workflow permits: to your own PR branch, never to main.',
+      ],
+      source: SRC_PATH,
+      quote:
+        'If `main` moves while the PR is open, rebase onto it and let CI run again. A rebase rewrites the branch, and pushing it to the open PR is the ONE force-push this workflow permits: `--force-with-lease`, to your own PR branch, never to `main`.',
+    },
+    {
+      id: 'path-ci',
+      label: '5. Wait for CI to conclude',
+      kind: 'step',
+      color: KIND_COLOR.step,
+      summary: 'Wait for CI to conclude on the PR. A run takes about 90 seconds.',
+      detail: ['Never merge a PR whose checks have not concluded.'],
+      source: `${SRC_PATH}, step 5`,
+      quote: 'Wait for CI to conclude on the PR. A run takes about 90 seconds.',
+    },
+    {
+      id: 'path-ci-result',
+      label: '6. Green or red?',
+      kind: 'decision',
+      color: KIND_COLOR.decision,
+      summary: 'Green CI merges the PR. Red CI does not merge.',
+      source: `${SRC_PATH}, step 6`,
+      quote: 'Green CI merges the PR and deletes the branch. Red CI does not merge',
+    },
+    {
+      id: 'path-merged',
+      label: 'Merged, branch deleted',
+      kind: 'outcome',
+      color: KIND_COLOR.outcome,
+      summary: 'Green CI merges the PR and deletes the branch.',
+      source: `${SRC_PATH}, step 6`,
+      quote: 'Green CI merges the PR and deletes the branch.',
+    },
+    {
+      id: 'path-red',
+      label: 'Fix on the branch, push again',
+      kind: 'step',
+      color: KIND_COLOR.decision,
+      summary: 'Red CI does not merge: fix it on the branch and push again.',
+      source: `${SRC_PATH}, step 6`,
+      quote: 'Red CI does not merge: fix it on the branch and push again.',
+    },
+    {
+      id: 'path-blocked',
+      label: 'Blocked: leave the PR open',
+      kind: 'outcome',
+      color: KIND_COLOR.outcome,
+      summary:
+        'If green cannot be reached, leave the PR open, record the blocker, release the workboard claim, and stop.',
+      detail: ['An open PR with a written blocker is a good outcome. A red main is not.'],
+      source: `${SRC_PATH}, step 6`,
+      quote:
+        'If green cannot be reached, leave the PR open, record the blocker, release the workboard claim, and stop. An open PR with a written blocker is a good outcome. A red `main` is not.',
+    },
+  ],
+  edges: [
+    { id: 'p-branch-gate', source: 'path-branch', target: 'path-gate' },
+    { id: 'p-gate-rebase', source: 'path-gate', target: 'path-rebase', label: 'all five pass' },
+    { id: 'p-rebase-changed', source: 'path-rebase', target: 'path-rebase-changed' },
+    { id: 'p-changed-install', source: 'path-rebase-changed', target: 'path-install', label: 'yes' },
+    { id: 'p-install-regate', source: 'path-install', target: 'path-regate' },
+    { id: 'p-regate-push', source: 'path-regate', target: 'path-push', label: 'all five pass' },
+    { id: 'p-changed-push', source: 'path-rebase-changed', target: 'path-push', label: 'no' },
+    { id: 'p-push-reviews', source: 'path-push', target: 'path-reviews' },
+    { id: 'p-reviews-ci', source: 'path-reviews', target: 'path-ci' },
+    {
+      id: 'p-reviews-moved',
+      source: 'path-reviews',
+      target: 'path-main-moved',
+      label: 'main moved',
+      dash: true,
+    },
+    {
+      id: 'p-moved-ci',
+      source: 'path-main-moved',
+      target: 'path-ci',
+      label: 'CI runs again',
+      dash: true,
+    },
+    { id: 'p-ci-result', source: 'path-ci', target: 'path-ci-result', label: 'concluded' },
+    {
+      id: 'p-result-merged',
+      source: 'path-ci-result',
+      target: 'path-merged',
+      label: 'green',
+      color: KIND_COLOR.outcome,
+    },
+    {
+      id: 'p-result-red',
+      source: 'path-ci-result',
+      target: 'path-red',
+      label: 'red',
+      color: KIND_COLOR.rule,
+    },
+    {
+      id: 'p-red-blocked',
+      source: 'path-red',
+      target: 'path-blocked',
+      label: 'green cannot be reached',
+      dash: true,
+    },
+  ],
+};
+
+const gateView: ExplorerView<ProcessNode, ProcessEdge> = {
+  id: 'gate',
+  label: 'Local gate',
+  description: 'The five commands that make up the local gate, run from the repo root.',
+  layout: { direction: 'right', nodeSize: { width: 260, height: 136 } },
+  nodes: [
+    {
+      id: 'gate-typecheck',
+      label: 'pnpm typecheck',
+      kind: 'command',
+      color: KIND_COLOR.command,
+      summary: 'First of the five canonical commands, run from the repo root.',
+      command: 'pnpm typecheck',
+      source: SRC_COMMANDS,
+      quote: 'The canonical commands from the repo root are:',
+    },
+    {
+      id: 'gate-test',
+      label: 'pnpm test',
+      kind: 'command',
+      color: KIND_COLOR.command,
+      summary: 'Second of the five gate commands.',
+      command: 'pnpm test',
+      source: SRC_COMMANDS,
+      quote: 'pnpm test',
+    },
+    {
+      id: 'gate-lint',
+      label: 'pnpm lint',
+      kind: 'command',
+      color: KIND_COLOR.command,
+      summary: 'CI runs lint, so skipping it locally is a way to turn main red.',
+      command: 'pnpm lint',
+      source: `${SRC_PATH}, step 1`,
+      quote:
+        'Lint and build are in this list because CI runs them, so skipping them locally is a way to turn main red.',
+    },
+    {
+      id: 'gate-build',
+      label: 'pnpm build',
+      kind: 'command',
+      color: KIND_COLOR.command,
+      summary: 'CI runs build, so skipping it locally is a way to turn main red.',
+      command: 'pnpm build',
+      source: `${SRC_PATH}, step 1`,
+      quote:
+        'Lint and build are in this list because CI runs them, so skipping them locally is a way to turn main red.',
+    },
+    {
+      id: 'gate-bench',
+      label: 'pnpm bench:gate',
+      kind: 'command',
+      color: KIND_COLOR.command,
+      summary: 'Selects performance checks from the diff against origin/main. A printed skip is a pass.',
+      command: 'pnpm bench:gate',
+      detail: [
+        'Never skip it by hand.',
+        'It runs locally rather than on CI because the committed baseline is machine-matched. See bench/README.md.',
+      ],
+      source: SRC_COMMANDS,
+      quote:
+        '`bench:gate` selects performance checks from the diff against `origin/main`. A printed skip is a pass; never skip it by hand.',
+    },
+    {
+      id: 'gate-pass',
+      label: 'All five pass',
+      kind: 'outcome',
+      color: KIND_COLOR.outcome,
+      summary: 'Only then continue to the rebase. A skip explicitly printed by bench:gate counts.',
+      source: `${SRC_PATH}, step 1`,
+      quote: 'All five must pass, including a skip explicitly printed by `bench:gate`.',
+    },
+    {
+      id: 'gate-bench-ci',
+      label: 'pnpm bench:ci',
+      kind: 'command',
+      color: KIND_COLOR.command,
+      summary: 'The full benchmark suite. It is not one of the five gate commands.',
+      command: 'pnpm bench:ci',
+      source: SRC_COMMANDS,
+      quote: '`bench:ci` remains the full benchmark suite.',
+    },
+  ],
+  edges: [
+    { id: 'g-typecheck-test', source: 'gate-typecheck', target: 'gate-test' },
+    { id: 'g-test-lint', source: 'gate-test', target: 'gate-lint' },
+    { id: 'g-lint-build', source: 'gate-lint', target: 'gate-build' },
+    { id: 'g-build-bench', source: 'gate-build', target: 'gate-bench' },
+    { id: 'g-bench-pass', source: 'gate-bench', target: 'gate-pass' },
+    {
+      id: 'g-bench-ci',
+      source: 'gate-bench',
+      target: 'gate-bench-ci',
+      label: 'full suite',
+      dash: true,
+    },
+  ],
+};
+
+const reviewsView: ExplorerView<ProcessNode, ProcessEdge> = {
+  id: 'reviews',
+  label: 'Reviews',
+  description: 'What the PR body records about the run\'s reviews.',
+  layout: { direction: 'right', nodeSize: { width: 260, height: 136 } },
+  nodes: [
+    {
+      id: 'rev-record',
+      label: 'The PR is the record',
+      kind: 'review',
+      color: KIND_COLOR.review,
+      summary:
+        'The PR is the consolidated record of the run. A later reader should not have to reconstruct the review from anywhere else.',
+      source: `${SRC_PATH}, step 4`,
+      quote:
+        'The PR is the consolidated record of the run, so someone reading it later should not have to reconstruct the review from anywhere else.',
+    },
+    {
+      id: 'rev-diff',
+      label: 'Diff review',
+      kind: 'review',
+      color: KIND_COLOR.review,
+      summary: 'Required. A review over the diff asks whether the change is right.',
+      source: `${SRC_PATH}, step 4`,
+      quote: 'A diff review asks whether the change is right',
+    },
+    {
+      id: 'rev-tree',
+      label: 'Merged-tree review',
+      kind: 'review',
+      color: KIND_COLOR.review,
+      summary: 'Required. A review over the merged tree the diff produces asks whether the result is right.',
+      detail: [
+        'It is the one that catches stale numbers that predate the change.',
+        'It catches ordering bugs a diff cannot show.',
+        'It catches a defect the diff review\'s own fix introduced.',
+      ],
+      source: `${SRC_PATH}, step 4`,
+      quote:
+        'a tree review asks whether the result is, and it is the one that catches stale numbers that predate the change, ordering bugs a diff cannot show, and a defect the diff review\'s own fix introduced.',
+    },
+    {
+      id: 'rev-persona',
+      label: 'Persona reviews',
+      kind: 'review',
+      color: KIND_COLOR.review,
+      summary: 'Optional. Welcome on top of the two required reviews, and recorded the same way.',
+      source: `${SRC_PATH}, step 4`,
+      quote: 'Persona reviews are welcome on top and are recorded the same way.',
+    },
+    {
+      id: 'rev-findings',
+      label: 'Every finding resolved',
+      kind: 'review',
+      color: KIND_COLOR.review,
+      summary:
+        'For each review, the PR body says what it found and how every finding was resolved, or accepted with a reason.',
+      source: `${SRC_PATH}, step 4`,
+      quote:
+        'which reviews ran, what each found, and how every finding was resolved, or accepted with a reason.',
+    },
+    {
+      id: 'rev-followup',
+      label: 'Follow-up commits, never amend',
+      kind: 'rule',
+      color: KIND_COLOR.rule,
+      summary: 'Review rounds are follow-up commits, because a rewritten commit erases the record of what the review changed.',
+      source: SRC_PATH,
+      quote:
+        'review rounds are follow-up commits, never an amend, because a rewritten commit erases the record of what the review changed.',
+    },
+  ],
+  edges: [
+    { id: 'r-record-diff', source: 'rev-record', target: 'rev-diff', label: 'floor' },
+    { id: 'r-record-tree', source: 'rev-record', target: 'rev-tree', label: 'floor' },
+    {
+      id: 'r-record-persona',
+      source: 'rev-record',
+      target: 'rev-persona',
+      label: 'optional',
+      dash: true,
+    },
+    { id: 'r-diff-findings', source: 'rev-diff', target: 'rev-findings' },
+    { id: 'r-tree-findings', source: 'rev-tree', target: 'rev-findings' },
+    { id: 'r-persona-findings', source: 'rev-persona', target: 'rev-findings', dash: true },
+    { id: 'r-findings-followup', source: 'rev-findings', target: 'rev-followup', label: 'fixes' },
+  ],
+};
+
+const rulesView: ExplorerView<ProcessNode, ProcessEdge> = {
+  id: 'rules',
+  label: 'Guardrails',
+  description: 'The rules that hold at every step.',
+  layout: { direction: 'down', nodeSize: { width: 260, height: 136 } },
+  nodes: [
+    {
+      id: 'rule-no-main-push',
+      label: 'No direct pushes to main',
+      kind: 'rule',
+      color: KIND_COLOR.rule,
+      summary: 'Every change reaches main through a pull request.',
+      source: SRC_PATH,
+      quote: 'No agent pushes to `main` directly.',
+    },
+    {
+      id: 'rule-one-force-push',
+      label: 'One permitted force-push',
+      kind: 'rule',
+      color: KIND_COLOR.rule,
+      summary:
+        'After rebasing an open PR: --force-with-lease, to your own PR branch, never to main.',
+      source: SRC_PATH,
+      quote:
+        'pushing it to the open PR is the ONE force-push this workflow permits: `--force-with-lease`, to your own PR branch, never to `main`.',
+    },
+    {
+      id: 'rule-append-only',
+      label: 'Everything else is append-only',
+      kind: 'rule',
+      color: KIND_COLOR.rule,
+      summary: 'Review rounds are follow-up commits, never an amend.',
+      source: SRC_PATH,
+      quote: 'Everything else stays append-only: review rounds are follow-up commits, never an amend',
+    },
+    {
+      id: 'rule-ci-concluded',
+      label: 'Wait for checks to conclude',
+      kind: 'rule',
+      color: KIND_COLOR.rule,
+      summary: 'Never merge a PR whose checks have not concluded.',
+      source: SRC_PATH,
+      quote: 'Never merge a PR whose checks have not concluded.',
+    },
+    {
+      id: 'rule-self-merge',
+      label: 'Merging your own PR',
+      kind: 'rule',
+      color: KIND_COLOR.rule,
+      summary: 'Agents may merge their own pull request, but only with a green local gate and green CI on the PR.',
+      source: SRC_UNATTENDED,
+      quote:
+        'Merge their own pull request, but only with a green local gate and green CI on the PR.',
+    },
+    {
+      id: 'rule-bench-skip',
+      label: 'Never skip bench:gate by hand',
+      kind: 'rule',
+      color: KIND_COLOR.rule,
+      summary: 'A skip that bench:gate prints itself is a pass. Skipping it by hand is not.',
+      source: SRC_COMMANDS,
+      quote: 'A printed skip is a pass; never skip it by hand.',
+    },
+    {
+      id: 'rule-red-main',
+      label: 'An open PR beats a red main',
+      kind: 'rule',
+      color: KIND_COLOR.rule,
+      summary: 'An open PR with a written blocker is a good outcome. A red main is not.',
+      source: `${SRC_PATH}, step 6`,
+      quote: 'An open PR with a written blocker is a good outcome. A red `main` is not.',
+    },
+  ],
+  edges: [],
+};
+
+export const PROCESS_VIEWS: readonly ExplorerView<ProcessNode, ProcessEdge>[] = [
+  pathView,
+  gateView,
+  reviewsView,
+  rulesView,
+];
+
+export const SOURCE_SNAPSHOT = 'ccb66cad9dfc3baf650d65338e2bb2ae6c38aae2';

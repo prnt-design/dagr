@@ -1,0 +1,102 @@
+{
+  "provenance": "Coordinator export of successful launch_agent tool arguments from this conversation; file hashes calculated from preserved input copies. Prompt strings reconstructed verbatim from those arguments, not a server session export. Provider alias opus is recorded as requested; no immutable backend model revision was supplied.",
+  "skillCommit": "ccb66cad9dfc3baf650d65338e2bb2ae6c38aae2",
+  "records": [
+    {
+      "condition": "baseline",
+      "brief": "codebase",
+      "agentId": "agt_32615f171976",
+      "type": "claude",
+      "model": "opus",
+      "effort": "medium",
+      "cwd": "/tmp/dagr-authoring-independent/codebase-baseline",
+      "useWorktree": false,
+      "prompt": "Fresh isolated authoring task. Work only in /tmp/dagr-authoring-independent/codebase-baseline. Read codebase-brief.md and codebase-sources.md there, and produce the requested self-contained React TypeScript learning Explorer component for published @prnt/dagr-explorer 0.2.0. Use supplied content sources exclusively for factual claims. Public published 0.2.0 package README/types/API docs may be consulted for implementation. Do not read repository onboarding, authoring skills/references, other author outputs, study protocol/rubric, or pilot material. No other agents. Before any compile/browser repairs, save immutable initial component/data files under initial/ and a SHA256 manifest. Parent will arrange validation afterward, so do not install/build/run browser or repair in this authoring session. Save source access notes and output file paths; do not claim unperformed checks. No repo commits/PRs, external publication or scheduling. Source-only authoring should not need compute. Report completion to parent with initial output paths and limitations. This session has no prior authoring context; do not seek it.",
+      "inputSha256": {
+        "codebase-brief.md": "17ce305d0f89a3b35e7809af10bc38fc63f9d90ae63d6588342dca623a85ba59",
+        "codebase-sources.md": "27e0c1558a9ad828622ec835315dc11512fb29eaea8888f6c41bf240dc12cdd1"
+      }
+    },
+    {
+      "condition": "guided",
+      "brief": "codebase",
+      "agentId": "agt_9fb3fcd3ab68",
+      "type": "claude",
+      "model": "opus",
+      "effort": "medium",
+      "cwd": "/tmp/dagr-authoring-independent/codebase-guided",
+      "useWorktree": false,
+      "prompt": "Fresh isolated authoring task. Work only in /tmp/dagr-authoring-independent/codebase-guided. Read codebase-brief.md and codebase-sources.md there, and produce the requested self-contained React TypeScript learning Explorer component for published @prnt/dagr-explorer 0.2.0. Use supplied content sources exclusively for factual claims. Public published 0.2.0 package README/types/API docs may be consulted for implementation. Additionally apply the supplied SKILL.md and references/learning-explorer.tsx (pinned canonical authoring guidance). Do not read repository onboarding, other author outputs, study protocol/rubric, or pilot material. No other agents. Before any compile/browser repairs, save immutable initial component/data files under initial/ and a SHA256 manifest. Parent will arrange validation afterward, so do not install/build/run browser or repair in this authoring session. Save source access notes and output file paths; do not claim unperformed checks. No repo commits/PRs, external publication or scheduling. Source-only authoring should not need compute. Report completion to parent with initial output paths and limitations. This session has no prior authoring context; do not seek it.",
+      "inputSha256": {
+        "codebase-brief.md": "17ce305d0f89a3b35e7809af10bc38fc63f9d90ae63d6588342dca623a85ba59",
+        "codebase-sources.md": "27e0c1558a9ad828622ec835315dc11512fb29eaea8888f6c41bf240dc12cdd1",
+        "SKILL.md": "ae2e532441eee423d17459eff6a31f983a7750db4dec13f796e8338004b70331",
+        "references/learning-explorer.tsx": "55402c1de63eed1f8f6f158b0041575521788fd0e336e353dc9750345d558a77"
+      }
+    },
+    {
+      "condition": "baseline",
+      "brief": "prerequisites",
+      "agentId": "agt_cee47463470b",
+      "type": "claude",
+      "model": "opus",
+      "effort": "medium",
+      "cwd": "/tmp/dagr-authoring-independent/prerequisites-baseline",
+      "useWorktree": false,
+      "prompt": "Fresh isolated authoring task. Work only in /tmp/dagr-authoring-independent/prerequisites-baseline. Read prerequisites-brief.md and prerequisites-sources.md there, and produce the requested self-contained React TypeScript learning Explorer component for published @prnt/dagr-explorer 0.2.0. Use supplied content sources exclusively for factual claims. Public published 0.2.0 package README/types/API docs may be consulted for implementation. Do not read repository onboarding, authoring skills/references, other author outputs, study protocol/rubric, or pilot material. No other agents. Before any compile/browser repairs, save immutable initial component/data files under initial/ and a SHA256 manifest. Parent will arrange validation afterward, so do not install/build/run browser or repair in this authoring session. Save source access notes and output file paths; do not claim unperformed checks. No repo commits/PRs, external publication or scheduling. Source-only authoring should not need compute. Report completion to parent with initial output paths and limitations. This session has no prior authoring context; do not seek it.",
+      "inputSha256": {
+        "prerequisites-brief.md": "96409531663f823e5736398cf8f3e25985e2d431cab2a7306c4756a02a47ba64",
+        "prerequisites-sources.md": "fc9678fd017bcf6e942689cbd77d9da62d147e3356a37a4b7bdfa7fc0f64eeb0"
+      }
+    },
+    {
+      "condition": "guided",
+      "brief": "prerequisites",
+      "agentId": "agt_be0c6ec8f0dc",
+      "type": "claude",
+      "model": "opus",
+      "effort": "medium",
+      "cwd": "/tmp/dagr-authoring-independent/prerequisites-guided",
+      "useWorktree": false,
+      "prompt": "Fresh isolated authoring task. Work only in /tmp/dagr-authoring-independent/prerequisites-guided. Read prerequisites-brief.md and prerequisites-sources.md there, and produce the requested self-contained React TypeScript learning Explorer component for published @prnt/dagr-explorer 0.2.0. Use supplied content sources exclusively for factual claims. Public published 0.2.0 package README/types/API docs may be consulted for implementation. Additionally apply the supplied SKILL.md and references/learning-explorer.tsx (pinned canonical authoring guidance). Do not read repository onboarding, other author outputs, study protocol/rubric, or pilot material. No other agents. Before any compile/browser repairs, save immutable initial component/data files under initial/ and a SHA256 manifest. Parent will arrange validation afterward, so do not install/build/run browser or repair in this authoring session. Save source access notes and output file paths; do not claim unperformed checks. No repo commits/PRs, external publication or scheduling. Source-only authoring should not need compute. Report completion to parent with initial output paths and limitations. This session has no prior authoring context; do not seek it.",
+      "inputSha256": {
+        "prerequisites-brief.md": "96409531663f823e5736398cf8f3e25985e2d431cab2a7306c4756a02a47ba64",
+        "prerequisites-sources.md": "fc9678fd017bcf6e942689cbd77d9da62d147e3356a37a4b7bdfa7fc0f64eeb0",
+        "SKILL.md": "ae2e532441eee423d17459eff6a31f983a7750db4dec13f796e8338004b70331",
+        "references/learning-explorer.tsx": "55402c1de63eed1f8f6f158b0041575521788fd0e336e353dc9750345d558a77"
+      }
+    },
+    {
+      "condition": "baseline",
+      "brief": "process",
+      "agentId": "agt_a41630a965ab",
+      "type": "claude",
+      "model": "opus",
+      "effort": "medium",
+      "cwd": "/tmp/dagr-authoring-independent/process-baseline",
+      "useWorktree": false,
+      "prompt": "Fresh isolated authoring task. Work only in /tmp/dagr-authoring-independent/process-baseline. Read process-brief.md and process-sources.md there, and produce the requested self-contained React TypeScript learning Explorer component for published @prnt/dagr-explorer 0.2.0. Use supplied content sources exclusively for factual claims. Public published 0.2.0 package README/types/API docs may be consulted for implementation. Do not read repository onboarding, authoring skills/references, other author outputs, study protocol/rubric, or pilot material. No other agents. Before any compile/browser repairs, save immutable initial component/data files under initial/ and a SHA256 manifest. Parent will arrange validation afterward, so do not install/build/run browser or repair in this authoring session. Save source access notes and output file paths; do not claim unperformed checks. No repo commits/PRs, external publication or scheduling. Source-only authoring should not need compute. Report completion to parent with initial output paths and limitations. This session has no prior authoring context; do not seek it.",
+      "inputSha256": {
+        "process-brief.md": "d13112019cd6cfe133986a8ce230b896fac144ea985a17641952ebad401931fc",
+        "process-sources.md": "36fdb37d11053d075fd8f10b33a2076fd40508e84300b3666a8bad134d93d6fc"
+      }
+    },
+    {
+      "condition": "guided",
+      "brief": "process",
+      "agentId": "agt_a68ef2ad58e0",
+      "type": "claude",
+      "model": "opus",
+      "effort": "medium",
+      "cwd": "/tmp/dagr-authoring-independent/process-guided",
+      "useWorktree": false,
+      "prompt": "Fresh isolated authoring task. Work only in /tmp/dagr-authoring-independent/process-guided. Read process-brief.md and process-sources.md there, and produce the requested self-contained React TypeScript learning Explorer component for published @prnt/dagr-explorer 0.2.0. Use supplied content sources exclusively for factual claims. Public published 0.2.0 package README/types/API docs may be consulted for implementation. Additionally apply the supplied SKILL.md and references/learning-explorer.tsx (pinned canonical authoring guidance). Do not read repository onboarding, other author outputs, study protocol/rubric, or pilot material. No other agents. Before any compile/browser repairs, save immutable initial component/data files under initial/ and a SHA256 manifest. Parent will arrange validation afterward, so do not install/build/run browser or repair in this authoring session. Save source access notes and output file paths; do not claim unperformed checks. No repo commits/PRs, external publication or scheduling. Source-only authoring should not need compute. Report completion to parent with initial output paths and limitations. This session has no prior authoring context; do not seek it.",
+      "inputSha256": {
+        "process-brief.md": "d13112019cd6cfe133986a8ce230b896fac144ea985a17641952ebad401931fc",
+        "process-sources.md": "36fdb37d11053d075fd8f10b33a2076fd40508e84300b3666a8bad134d93d6fc",
+        "SKILL.md": "ae2e532441eee423d17459eff6a31f983a7750db4dec13f796e8338004b70331",
+        "references/learning-explorer.tsx": "55402c1de63eed1f8f6f158b0041575521788fd0e336e353dc9750345d558a77"
+      }
+    }
+  ]
+}

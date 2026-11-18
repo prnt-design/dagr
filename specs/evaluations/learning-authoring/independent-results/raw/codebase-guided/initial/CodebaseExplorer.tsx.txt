@@ -1,0 +1,162 @@
+import type { CSSProperties } from 'react';
+import { DagrExplorer } from '@prnt/dagr-explorer';
+import type { ExplorerConnection } from '@prnt/dagr-explorer';
+import '@prnt/dagr-explorer/styles.css';
+import { SNAPSHOT, views } from './codebase-data';
+import type { CodebaseEdge, CodebaseNode, NodeKind, SourceRef } from './codebase-data';
+
+const KIND_LABEL: Record<NodeKind, string> = {
+  package: 'Dagr package',
+  external: 'Named by a package',
+  stage: 'Shared step',
+};
+
+const css = `
+.cbx { font: inherit; }
+.cbx-intro { margin: 0 0 12px; color: var(--dagr-explorer-fg); max-width: 70ch; }
+.cbx-node { display: flex; flex-direction: column; gap: 4px; min-width: 0; text-align: start; }
+.cbx-kind { font-size: 11px; letter-spacing: 0.04em; text-transform: uppercase; color: var(--dagr-explorer-fg-muted); }
+.cbx-label { font-weight: 600; overflow-wrap: anywhere; }
+.cbx-summary {
+  font-size: 13px; line-height: 1.35; color: var(--dagr-explorer-fg-muted);
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden;
+}
+.cbx-details { display: grid; gap: 12px; line-height: 1.45; }
+.cbx-details h3, .cbx-details h4, .cbx-details p, .cbx-details ul { margin: 0; }
+.cbx-details h4 { font-size: 0.9em; }
+.cbx-details ul { padding-inline-start: 1.1em; display: grid; gap: 6px; }
+.cbx-meta { color: var(--dagr-explorer-fg-muted); font-size: 0.9em; }
+.cbx-note { border-inline-start: 3px solid var(--dagr-explorer-border); padding-inline-start: 8px; }
+.cbx-follow {
+  font: inherit; text-align: start; cursor: pointer; padding: 4px 8px; border-radius: 6px;
+  border: 1px solid var(--dagr-explorer-border); background: var(--dagr-explorer-bg); color: var(--dagr-explorer-fg);
+}
+.cbx-follow:focus-visible { outline: 2px solid var(--dagr-explorer-focus); outline-offset: 2px; }
+.cbx-edge-detail { display: block; font-size: 0.9em; color: var(--dagr-explorer-fg-muted); }
+.cbx-sources code { overflow-wrap: anywhere; }
+`;
+
+const PACKAGE_COUNT = 5;
+
+/** Groups one field cited in several package.json files into one line. */
+function SourceList({ sources }: { readonly sources: readonly SourceRef[] }) {
+  const byField = new Map<string, string[]>();
+  for (const { file, field } of sources) {
+    const files = byField.get(field) ?? [];
+    if (!files.includes(file)) files.push(file);
+    byField.set(field, files);
+  }
+  return (
+    <ul className="cbx-sources">
+      {[...byField].map(([field, files]) => (
+        <li key={field}>
+          <code>{files.length === PACKAGE_COUNT ? 'packages/*/package.json' : files.join(', ')}</code>
+          {' › '}
+          <code>{field}</code>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function sentence(node: CodebaseNode, { edge, node: other }: ExplorerConnection<CodebaseNode, CodebaseEdge>): string {
+  return edge.source === node.id
+    ? `${node.label} ${edge.label} ${other.label}`
+    : `${other.label} ${edge.label} ${node.label}`;
+}
+
+function ConnectionGroup({
+  title,
+  node,
+  connections,
+  follow,
+}: {
+  readonly title: string;
+  readonly node: CodebaseNode;
+  readonly connections: readonly ExplorerConnection<CodebaseNode, CodebaseEdge>[];
+  readonly follow: (id: string) => void;
+}) {
+  if (connections.length === 0) return null;
+  return (
+    <section>
+      <h4>{title}</h4>
+      <ul>
+        {connections.map((connection) => (
+          <li key={connection.edge.id}>
+            <button type="button" className="cbx-follow" onClick={() => follow(connection.node.id)}>
+              {sentence(node, connection)}
+            </button>
+            <span className="cbx-edge-detail">
+              {connection.edge.inferred ? 'Inferred. ' : ''}
+              {connection.edge.detail}
+            </span>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+export function CodebaseExplorer() {
+  return (
+    <div className="cbx">
+      <style>{css}</style>
+      <p className="cbx-intro">
+        A map of the Dagr repository&apos;s five published packages, read from their package.json files at
+        snapshot <code>{SNAPSHOT.slice(0, 7)}</code>. Switch views for outside packages and the shared build
+        flow; search by name or term, and open any node for its sources.
+      </p>
+      <DagrExplorer
+        label={`Dagr codebase, snapshot ${SNAPSHOT.slice(0, 7)}: arrows point from a package to what it needs, or along the build flow`}
+        views={views}
+        style={{ '--dagr-explorer-height': '560px' } as CSSProperties}
+        searchText={(node) =>
+          [node.label, node.summary, node.explanation, node.location ?? '', ...node.terms].join(' ')
+        }
+        renderNode={(node, { tier }) => (
+          <span className="cbx-node">
+            {tier === 'rich' && <span className="cbx-kind">{KIND_LABEL[node.kind]}</span>}
+            <span className="cbx-label">{node.label}</span>
+            {tier === 'rich' && <span className="cbx-summary">{node.summary}</span>}
+          </span>
+        )}
+        renderDetails={({ node, connections, follow }) => {
+          const outgoing = connections.filter((c) => c.edge.source === node.id);
+          const incoming = connections.filter((c) => c.edge.source !== node.id);
+          return (
+            <div className="cbx-details">
+              <h3>{node.label}</h3>
+              <p className="cbx-meta">
+                {KIND_LABEL[node.kind]}
+                {node.location ? ` · ${node.location}` : ''}
+              </p>
+              <section>
+                <h4>What it is</h4>
+                <p>{node.explanation}</p>
+              </section>
+              <section>
+                <h4>Why it matters</h4>
+                <p>{node.whyItMatters}</p>
+              </section>
+              {node.example && <p className="cbx-note">{node.example}</p>}
+              {node.uncertainty && (
+                <p className="cbx-note">
+                  <strong>Not settled by the sources: </strong>
+                  {node.uncertainty}
+                </p>
+              )}
+              <ConnectionGroup title="This node points to" node={node} connections={outgoing} follow={follow} />
+              <ConnectionGroup title="Points to this node" node={node} connections={incoming} follow={follow} />
+              <section>
+                <h4>Sources</h4>
+                <SourceList sources={node.sources} />
+              </section>
+            </div>
+          );
+        }}
+      />
+    </div>
+  );
+}
+
+export default CodebaseExplorer;

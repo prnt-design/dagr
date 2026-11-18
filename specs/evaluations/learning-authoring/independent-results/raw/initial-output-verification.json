@@ -1,0 +1,50 @@
+[
+  {
+    "path": "codebase-baseline/initial/DagrCodebaseExplorer.tsx",
+    "sha256": "e6660e3162fbf884dad6f32fa76193644dd642f8b708a17619946ec12867dfff"
+  },
+  {
+    "path": "codebase-baseline/initial/codebase-data.ts",
+    "sha256": "cd84ff957dcda79e0d59bb88a1bec878bdea9aa1107f553b8358e6905ed9fe70"
+  },
+  {
+    "path": "codebase-guided/initial/CodebaseExplorer.tsx",
+    "sha256": "a38ee1acb7d7432af7df3c87f49d02860037b274e03c31520c7a3bf1c7d903c1"
+  },
+  {
+    "path": "codebase-guided/initial/codebase-data.ts",
+    "sha256": "1f532639242ca793ad221a8a7d994754139316309ccaefde7d51278408faf785"
+  },
+  {
+    "path": "prerequisites-baseline/initial/PrerequisitesExplorer.tsx",
+    "sha256": "0e789c71e4093149d72de084eeb848b04a101f9a0cc9e8e3f4036928ad416a03"
+  },
+  {
+    "path": "prerequisites-baseline/initial/prerequisitesData.ts",
+    "sha256": "b890c80f6c71aeb898ee9c77563e98990b5a271152fe7626ad5a643d7f3109df"
+  },
+  {
+    "path": "prerequisites-guided/initial/PrerequisitesExplorer.tsx",
+    "sha256": "2c281612fecd659fc5d02cd0124099b93139a08b54e3ae6c0d169a70520c1a6e"
+  },
+  {
+    "path": "prerequisites-guided/initial/prerequisites-data.ts",
+    "sha256": "df2dd62d2cca2f4cd295285eb8cfb7b99dfb884c0ef09532406d6aea932f556d"
+  },
+  {
+    "path": "process-baseline/initial/ProcessExplorer.tsx",
+    "sha256": "718a0d6ae37d861c54b2ca02aa73fbfef8317feea67c86b4359aa99c9d2eb2e5"
+  },
+  {
+    "path": "process-baseline/initial/process-data.ts",
+    "sha256": "d8c9715e155794f58e462e64406454388fd3e4854c01ff02f1ccb399a1e0aad0"
+  },
+  {
+    "path": "process-guided/initial/ProcessExplorer.tsx",
+    "sha256": "3775cf5e43996a9abb19252fcde1542bf2082a595b5d91c0e1c6b4a64a23e4a5"
+  },
+  {
+    "path": "process-guided/initial/process-data.ts",
+    "sha256": "d5b9daa7b2f628dec51d61f7b48745a7cb3728487b20076ab2d2940b432f7ca7"
+  }
+]

@@ -1,0 +1,12 @@
+import ts from '/tmp/dagr-learning-consumer/node_modules/typescript/lib/typescript.js';
+import {readFileSync,writeFileSync} from 'node:fs';
+const root='/tmp/dagr-learning-independent-collected';const result=[];
+for(const arm of ['baseline','guided']){
+ const dir=`${root}/codebase-${arm}`;
+ const name='codebase-data.ts';
+ const code=ts.transpileModule(readFileSync(`${dir}/initial/${name}`,'utf8'),{compilerOptions:{module:ts.ModuleKind.ESNext,target:ts.ScriptTarget.ES2022}}).outputText;
+ writeFileSync(`${dir}/data-validation.mjs`,code);const data=await import(`${dir}/data-validation.mjs`);
+ const views=data.VIEWS??data.views;
+ result.push({arm,views:views.map(v=>({id:v.id,nodes:v.nodes.length,edges:v.edges.length,uniqueNodes:new Set(v.nodes.map(n=>n.id)).size===v.nodes.length,uniqueEdges:new Set(v.edges.map(e=>e.id)).size===v.edges.length,endpoints:v.edges.every(e=>v.nodes.some(n=>n.id===e.source)&&v.nodes.some(n=>n.id===e.target))}))});
+}
+writeFileSync(`${root}/codebase-structure-results.json`,JSON.stringify(result,null,2));
