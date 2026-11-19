@@ -2015,15 +2015,15 @@ in `test/layout.relayout.test.ts`. See
 [Batching](./graph-model.md#batching) for what a batch is and what it is not.
 
 **It costs most of a cold run, unless it runs no stage at all, only resizes,
-or removes a leaf.** For any other patch that adds or removes a node or an edge
+or adds or removes a leaf.** For any other patch that adds or removes a node or an edge
 the whole pipeline runs again, and the tests hold it to landing the same
 geometry a cold run of the same graph does. The order stage in that run sweeps
-only the layers the warm start does not hold whole, which takes an added leaf
-well under a cold run's cost: see
+only the layers the warm start does not hold whole: see
 [What a relayout costs](./incremental-layout.md#what-a-relayout-costs). A
-resize or a removed leaf runs only position and route: see
-[the resize that keeps its ranks and order](#the-resize-that-keeps-its-ranks-and-order)
-and [the removed leaf](#the-removed-leaf).
+resize or a removed leaf runs only position and route, and an added leaf skips
+the rank stage: see
+[the resize that keeps its ranks and order](#the-resize-that-keeps-its-ranks-and-order),
+[the removed leaf](#the-removed-leaf) and [the added leaf](#the-added-leaf).
 Running the whole pipeline for a structural edit is the point of shipping it in
 this shape first: it makes the delta
 contract, the engine lifetime and the retained state testable before any
@@ -2187,6 +2187,34 @@ a layer; when the edges reversed to break cycles come to more than half of the
 edges left, since the cycle breaker then starts again from nothing; and in the
 same cases a resize does. On the 10k-node corpus a removed leaf drops from about
 700ms to about 110ms; see
+[What a relayout costs](./incremental-layout.md#what-a-relayout-costs).
+
+### The added leaf
+
+Adding a node whose one edge comes in from a node already drawn skips the rank
+stage. The engine ranks the leaf one below that node, keeps every other rank,
+reversed edge and dummy chain it holds, and runs the other three stages:
+
+```ts
+graph.batch(() => {
+  graph.addNode('leaf');
+  graph.addEdge('n7', 'leaf');
+});
+
+engine.relayout(patch).ran; // ['order', 'position', 'route']
+```
+
+Ranks count up from the sources, so a node with no edge out sets no other
+node's rank and sits one below its one predecessor. Its edge is one rank long,
+so it needs no dummy chain, and it closes no cycle, so the cycle breaker's
+warm start would return the reversals the engine holds. The answer is the one a
+full run gives, checked the same way as the resize and over random graphs with
+cycles and parallel edges. A leaf under the last rank opens a new layer, which
+the order stage builds. A patch that also carries inert ops or a size for the
+leaf takes it too; one that adds another node or edge, or a node whose edge
+leaves it, does not, and neither does an engine in the cases a resize runs all
+four. On the 10k-node corpus an added leaf drops from about 400ms to about
+270ms; see
 [What a relayout costs](./incremental-layout.md#what-a-relayout-costs).
 
 ### The tolerance, on the engine

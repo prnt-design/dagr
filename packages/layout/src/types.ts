@@ -198,7 +198,10 @@ export interface PreparedState {
  */
 export type PreviousLayout = Omit<RoutedState, 'graph' | 'config' | 'previous'>;
 
-/** {@link PreparedState} plus the output of the rank stage. */
+/**
+ * {@link PreparedState} plus the output of the rank stage, or the held ranks
+ * with an added leaf ranked into them on the engine's added-leaf path.
+ */
 export interface RankedState extends PreparedState {
   /**
    * Layer index per node. Has an entry for every node in the roster: every node

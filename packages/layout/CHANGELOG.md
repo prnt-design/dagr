@@ -11,6 +11,12 @@ of doc prose.
 
 ## Unreleased
 
+- Adding a sink leaf, a new node whose one edge comes in from a node already
+  drawn, skips the rank stage: the engine ranks the leaf one below its parent
+  in the held ranks and runs order, position and route, landing the full
+  path's answer under the same conditions as a resize. `ran` names `order`,
+  `position` and `route`. On the 10k corpus an added leaf drops from 400ms to
+  266ms.
 - The order stage no longer reorders or rescores a layer the warm start holds
   whole, since a sweep can only put back that layer's held order. The layers it
   returns are unchanged; a warm relayout that adds a leaf to the 10k corpus

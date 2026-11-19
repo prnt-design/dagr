@@ -22,6 +22,7 @@ import type {
 import type { GraphSpec } from '@dagr/bench';
 import type { Node, Patch } from '@prnt/dagr-graph';
 import { recordingStages } from './fakes.js';
+import { mulberry32, randomDigraph } from './random.js';
 
 /**
  * M3.9a: the relayout that runs no stage.
@@ -37,6 +38,7 @@ import { recordingStages } from './fakes.js';
 
 const ALL_STAGES = ['rank', 'order', 'position', 'route'];
 const PLACED_STAGES = ['position', 'route'];
+const ORDERED_STAGES = ['order', 'position', 'route'];
 
 const nodeSize = (node: Node): { width: number; height: number } | undefined =>
   node.attrs['big'] === true ? { width: 400, height: 300 } : undefined;
@@ -264,7 +266,7 @@ function unmarked(stages: LayoutStageOverrides): LayoutStageOverrides {
 
 /**
  * Each stage set the skipping paths are checked under, and what a resize or a
- * removed leaf runs with it. A warm simplex run can move ranks, with or without
+ * removed leaf runs with it; `added` derives what an added leaf runs. A warm simplex run can move ranks, with or without
  * its pivot budget running out, so both have to run it.
  */
 const STAGE_SETS: readonly (readonly [string, LayoutStageOverrides, readonly string[]])[] = [
@@ -275,6 +277,11 @@ const STAGE_SETS: readonly (readonly [string, LayoutStageOverrides, readonly str
   ['insertion order', { order: insertionOrderStage }, PLACED_STAGES],
   ['Brandes-Koepf positions', { position: brandesKoepfPositionStage }, PLACED_STAGES],
 ];
+
+/** What an added leaf runs under a stage set that runs `resized` for a resize. */
+function added(resized: readonly string[]): readonly string[] {
+  return resized === ALL_STAGES ? ALL_STAGES : ORDERED_STAGES;
+}
 
 describe('the relayout that skips rank and order', () => {
   for (const [name, stages, resized] of STAGE_SETS) {
@@ -293,7 +300,7 @@ describe('the relayout that skips rank and order', () => {
         [resized, (graph) => graph.updateNodeAttrs(middle, { big: true })],
         [resized, (graph) => graph.updateNodeAttrs(first, { big: true })],
         [
-          ALL_STAGES,
+          added(resized),
           (graph) =>
             graph.batch(() => {
               graph.addNode('leaf');
@@ -497,8 +504,8 @@ describe('the relayout that drops a removed leaf', () => {
       const middle = spec.nodes[Math.floor(spec.nodes.length / 2)] ?? '';
       const first = spec.nodes[0] ?? '';
 
-      step(ALL_STAGES, addLeaf(middle, 'leaf'));
-      step(ALL_STAGES, addLeaf(first, 'other'));
+      step(added(removed), addLeaf(middle, 'leaf'));
+      step(added(removed), addLeaf(first, 'other'));
       step(removed, (graph) => graph.removeNode('leaf'));
       step(removed, (graph) =>
         graph.batch(() => {
@@ -506,7 +513,7 @@ describe('the relayout that drops a removed leaf', () => {
           graph.updateNodeAttrs(middle, { big: true });
         }),
       );
-      step(ALL_STAGES, addLeaf(first, 'leaf'));
+      step(added(removed), addLeaf(first, 'leaf'));
       step(removed, (graph) => graph.removeNode('leaf'));
     }, 60_000);
   }
@@ -519,14 +526,14 @@ describe('the relayout that drops a removed leaf', () => {
     );
     const middle = spec.nodes[Math.floor(spec.nodes.length / 2)] ?? '';
 
-    step(ALL_STAGES, addLeaf(middle, 'leaf'));
+    step(ORDERED_STAGES, addLeaf(middle, 'leaf'));
     step(PLACED_STAGES, (graph) => graph.removeNode('leaf'));
   }, 60_000);
 
   it('runs all four when the leaf held the reversed edges to half the arcs', () => {
     const step = lockstep({ name: 'two-cycle', nodes: ['a', 'b'], edges: [['a', 'b'], ['b', 'a']] }, {});
 
-    step(ALL_STAGES, addLeaf('a', 'x'));
+    step(ORDERED_STAGES, addLeaf('a', 'x'));
     step(ALL_STAGES, (copy) => copy.addEdge('b', 'a', 'ba2'));
     step(ALL_STAGES, (copy) => copy.removeNode('x'));
   });
@@ -616,6 +623,132 @@ describe('the relayout that drops a removed leaf', () => {
 
     await laid.runAsync(graph);
     graph.removeNode('e');
+
+    expect(laid.relayout(last(patches)).ran).toEqual(ALL_STAGES);
+    stop();
+    channel.port1.close();
+    channel.port2.close();
+  });
+});
+
+/** A random digraph as a spec, so `lockstep` can build two copies of it. */
+function randomSpec(seed: number): GraphSpec {
+  const graph = randomDigraph(mulberry32(seed));
+  return {
+    name: `random-${String(seed)}`,
+    nodes: [...graph.nodes()].map((node) => node.id),
+    edges: [...graph.edges()].map((edge) => [edge.source, edge.target] as const),
+  };
+}
+
+describe('the relayout that ranks an added leaf without the rank stage', () => {
+  it('gives the answer the full path gives over random graphs, cycles and parallel edges included', () => {
+    let fired = 0;
+    for (let seed = 1; seed <= 40; seed += 1) {
+      const spec = randomSpec(seed);
+      if (spec.nodes.length === 0) continue;
+      const step = lockstep(spec, {});
+      const random = mulberry32(seed * 7919);
+      const drawn = [...spec.nodes];
+      for (let leaf = 0; leaf < 3; leaf += 1) {
+        const parent = drawn[Math.floor(random() * drawn.length)] ?? '';
+        drawn.push(`leaf${String(leaf)}`);
+        step(ORDERED_STAGES, addLeaf(parent, `leaf${String(leaf)}`));
+        fired += 1;
+      }
+    }
+    expect(fired).toBeGreaterThan(60);
+  }, 60_000);
+
+  it('gives the cold answer for a leaf under the last rank, which opens a new layer', () => {
+    const { graph, patches } = watched(diamond());
+    const laid = engine();
+    laid.run(graph);
+
+    addLeaf('d', 'e')(graph);
+    const relaid = laid.relayout(last(patches));
+    const cold = engine().run(graph);
+
+    expect(relaid.ran).toEqual(ORDERED_STAGES);
+    expect(boxes(relaid.result)).toEqual(boxes(cold));
+    expect(routes(relaid.result)).toEqual(routes(cold));
+  });
+
+  it('ranks a leaf alongside inert ops and a size of its own', () => {
+    const spec = smallCorpus();
+    const step = lockstep(spec, {});
+
+    step(ORDERED_STAGES, (graph) =>
+      graph.batch(() => {
+        graph.addNode({ id: 'leaf', attrs: { big: true } });
+        graph.updateEdgeAttrs([...graph.edges()][0]?.id ?? '', { weight: 2 });
+        graph.addEdge(spec.nodes[0] ?? '', 'leaf');
+      }),
+    );
+  });
+
+  it('runs all four for an added node whose one edge leaves it', () => {
+    const { graph, patches } = watched(diamond());
+    const laid = engine();
+    laid.run(graph);
+
+    graph.batch(() => {
+      graph.addNode('e');
+      graph.addEdge('e', 'd', 'ed');
+    });
+
+    expect(laid.relayout(last(patches)).ran).toEqual(ALL_STAGES);
+  });
+
+  it('runs all four for an added node with more than one edge', () => {
+    const { graph, patches } = watched(diamond());
+    const laid = engine();
+    laid.run(graph);
+
+    graph.batch(() => {
+      graph.addNode('e');
+      graph.addEdge('b', 'e', 'be');
+      graph.addEdge('c', 'e', 'ce');
+    });
+
+    expect(laid.relayout(last(patches)).ran).toEqual(ALL_STAGES);
+  });
+
+  it('runs all four for an added node with a self loop', () => {
+    const { graph, patches } = watched(diamond());
+    const laid = engine();
+    laid.run(graph);
+
+    graph.batch(() => {
+      graph.addNode('e');
+      graph.addEdge('e', 'e', 'ee');
+    });
+
+    expect(laid.relayout(last(patches)).ran).toEqual(ALL_STAGES);
+  });
+
+  it('runs all four when the patch also adds another edge', () => {
+    const { graph, patches } = watched(diamond());
+    const laid = engine();
+    laid.run(graph);
+
+    graph.batch(() => {
+      graph.addNode('e');
+      graph.addEdge('b', 'e', 'be');
+      graph.addEdge('b', 'c', 'bc');
+    });
+
+    expect(laid.relayout(last(patches)).ran).toEqual(ALL_STAGES);
+  });
+
+  it('runs all four for an added leaf when the drawing it holds came from a worker', async () => {
+    const channel = new MessageChannel();
+    const stop = serveLayout(channel.port2 as unknown as LayoutPort);
+    const { graph, patches } = watched(diamond());
+    const laid = engine({ worker: channel.port1 as unknown as LayoutPort });
+
+    await laid.runAsync(graph);
+    addLeaf('b', 'e')(graph);
 
     expect(laid.relayout(last(patches)).ran).toEqual(ALL_STAGES);
     stop();

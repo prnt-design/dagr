@@ -1,4 +1,4 @@
-import type { EdgeId, Graph, NodeId, RemoveEdgeOp } from '@prnt/dagr-graph';
+import type { AddEdgeOp, EdgeId, Graph, NodeId, RemoveEdgeOp } from '@prnt/dagr-graph';
 import { measureNodes, resolveConfig } from './config.js';
 import { InternalLayoutError, StageContractError } from './errors.js';
 import { defaultStages } from './stages.js';
@@ -923,13 +923,45 @@ export function runPipeline(
  * {@link withoutLeaf} took out of them: `engine.ts` decides when that holds.
  *
  * Neither check before the position stage runs again. Both held of these
- * fields when that run produced them, and dropping a leaf keeps them true.
+ * fields when a full run produced them, and dropping a leaf here or adding one
+ * through {@link withLeaf} keeps them true.
  */
 export function runPlaced(
   prepared: PreparedState,
   held: PreviousLayout,
   stages?: LayoutStageOverrides,
 ): { readonly result: LayoutResult; readonly routed: RoutedState } {
+  return placed({ ...heldRanked(prepared, held, held.ranks), layers: held.layers }, stages);
+}
+
+/**
+ * Order, position and route over the held drawing's reversals and dummies, with
+ * `ranks` from {@link withLeaf} in place of its own: `engine.ts` decides when
+ * that holds.
+ *
+ * The rank check does not run again. It held of the held fields when a full
+ * run produced them, every fast path since kept it true, and the one rank
+ * `withLeaf` adds is one below a ranked node, on an edge that needs no
+ * chain. The order stage's output is checked as on the full path.
+ */
+export function runRanked(
+  prepared: PreparedState,
+  held: PreviousLayout,
+  ranks: ReadonlyMap<NodeId, number>,
+  stages?: LayoutStageOverrides,
+): { readonly result: LayoutResult; readonly routed: RoutedState } {
+  const ranked = heldRanked(prepared, held, ranks);
+  const order = stages?.order ?? defaultStages.order;
+  const ordered: OrderedState = { ...ranked, layers: order.run(ranked).layers };
+  checkOrdered(order.name, prepared.graph, ordered);
+  return placed(ordered, stages);
+}
+
+function heldRanked(
+  prepared: PreparedState,
+  held: PreviousLayout,
+  ranks: ReadonlyMap<NodeId, number>,
+): RankedState {
   const sizes = new Map(prepared.sizes);
   for (const id of held.virtualNodes) {
     const size = held.sizes.get(id);
@@ -938,20 +970,37 @@ export function runPlaced(
     }
     sizes.set(id, size);
   }
-  return placed(
-    {
-      graph: prepared.graph,
-      config: prepared.config,
-      previous: prepared.previous,
-      ranks: held.ranks,
-      reversedEdges: held.reversedEdges,
-      virtualNodes: held.virtualNodes,
-      virtualChains: held.virtualChains,
-      sizes,
-      layers: held.layers,
-    },
-    stages,
-  );
+  return {
+    graph: prepared.graph,
+    config: prepared.config,
+    previous: prepared.previous,
+    ranks,
+    reversedEdges: held.reversedEdges,
+    virtualNodes: held.virtualNodes,
+    virtualChains: held.virtualChains,
+    sizes,
+  };
+}
+
+/**
+ * The held ranks with an added sink leaf ranked, when those are the ranks a
+ * full run would give, or `undefined`.
+ *
+ * Ranks count up from the sources, so a node with no successor sets no other
+ * node's rank, and with one predecessor it sits one rank below it: its edge is
+ * short and mints no dummies, so the held chains are the ones a full run mints.
+ * With no edge out the leaf closes no cycle and joins no strongly connected
+ * component, so the warm feedback arc set is the held one: each held reversal
+ * is still inside one, the seeded view stays acyclic, and one more arc only loosens the
+ * half-arcs bound. A leaf under the last rank opens a layer of its own, which
+ * the order stage builds.
+ */
+export function withLeaf(held: PreviousLayout, edge: AddEdgeOp): ReadonlyMap<NodeId, number> | undefined {
+  const rank = held.ranks.get(edge.source);
+  if (rank === undefined || held.ranks.has(edge.target)) return undefined;
+  const ranks = new Map(held.ranks);
+  ranks.set(edge.target, rank + 1);
+  return ranks;
 }
 
 /**
