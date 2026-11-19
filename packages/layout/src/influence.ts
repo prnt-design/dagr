@@ -167,10 +167,9 @@ interface Row {
  * graph, which is a bound costing more than the thing it is supposed to make
  * cheap. A layer is already the members of one rank, so a band read from the
  * rows is a slice. The rows still hold every dummy drawn through them, though,
- * so a wide band read that way walks most of the roster after all, and the band
- * is now read off the graph's own nodes instead, one lookup each. The rows
- * remain the heights, and the fallback for a node the graph lost outside the
- * patch.
+ * so a wide band read that way walks most of the roster after all. The band is
+ * read off the graph's own nodes, one lookup each; the rows supply the heights,
+ * and the fallback for a node the graph lost outside the patch.
  *
  * `tallest` is a count rather than a flag because removing one of two equally
  * tall nodes leaves the row exactly as tall as it was, and a region that
@@ -334,12 +333,11 @@ function requireRankWindow(rankWindow: number | undefined): number {
  *
  * ## What it costs
  *
- * One pass over the ranks of the drawing, one over the graph's nodes, and one
- * over the graph's edges. NOT a pass over the roster, which is the thing worth
- * stating because the roster is where the dummies are: see {@link Rows}. The
- * exception is a node the graph lost outside the patch, whose fallback walks
- * the band's rows, dummies and all. When
- * M3.5 measured it, a batched add-leaf patch cost 2.2ms on a graph of 1k nodes
+ * One pass over the graph's nodes and one over the graph's edges. NOT a pass
+ * over the roster, which is the thing worth stating because the roster is where
+ * the dummies are: see {@link Rows}. The exception is a node the graph lost
+ * outside the patch, whose fallback walks the band's rows, dummies and all.
+ * When M3.5 measured it, a batched add-leaf patch cost 2.2ms on a graph of 1k nodes
  * and 4k edges carrying 17k dummies, and 5.9ms on 4k nodes and 16k edges
  * carrying 233k dummies. On the 10k corpus (Ryzen 9 9900X, Node 22.22.1,
  * 2026-11-19 UTC) its band runs to the bottom of the drawing or covers all of

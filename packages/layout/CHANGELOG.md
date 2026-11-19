@@ -14,7 +14,7 @@ of doc prose.
 - `influenceRegion`, and so a relayout's `region`, reads its band off the
   graph's nodes rather than off the previous drawing's rows, which also hold
   every dummy drawn through them. It names the same nodes and edges; on the 10k
-  corpus it takes about half as long.
+  corpus it drops from 13ms to 17ms to 7ms to 9ms (Ryzen 9 9900X, Node 22.22.1).
 - The order stage no longer scores the gaps between two layers the warm start
   holds whole, since they add the same crossings to every layering it compares.
   The layers it returns are unchanged; on the 10k corpus an added leaf's order
