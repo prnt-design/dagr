@@ -110,10 +110,11 @@ reads rather than passed to one of them, because ranking, ordering and
 positioning each have a previous answer to start from and a channel per stage
 would be three contracts to keep in step. The order stage reads `layers`, both
 rank stages read `reversedEdges`, and `brandes-koepf-position` reads
-`positions`; nothing reads `ranks` yet. What those readers buy is a stable
-answer more than a cheaper one, and the one saving is the order stage's, which
-leaves a layer the warm start holds whole unswept (see
-[What a relayout costs](./incremental-layout.md#what-a-relayout-costs)): see [the warm start](#the-warm-start) for the order stage's,
+`positions`; nothing reads `ranks` yet. The one saving these readers buy is
+the order stage's, which leaves a layer the warm start holds whole unswept: see
+[What a relayout costs](./incremental-layout.md#what-a-relayout-costs). Mostly
+they buy a stable answer rather than a cheaper one: see
+[the warm start](#the-warm-start) for the order stage's,
 [the reversed set across a relayout](#the-reversed-set-across-a-relayout) for
 the rankers', and [where a drawing is read](#where-a-drawing-is-read) for the
 position stage's, which is a reader of a different kind: it does not seed the
