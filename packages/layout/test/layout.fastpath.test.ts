@@ -678,7 +678,7 @@ describe('the relayout that ranks an added leaf without the rank stage', () => {
 
     step(ORDERED_STAGES, (graph) =>
       graph.batch(() => {
-        graph.addNode('leaf', { big: true });
+        graph.addNode({ id: 'leaf', attrs: { big: true } });
         graph.updateEdgeAttrs([...graph.edges()][0]?.id ?? '', { weight: 2 });
         graph.addEdge(spec.nodes[0] ?? '', 'leaf');
       }),
