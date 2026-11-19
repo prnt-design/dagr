@@ -2,7 +2,7 @@ import { Graph } from '@prnt/dagr-graph';
 import type { NodeId, Patch } from '@prnt/dagr-graph';
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_LAYOUT_CONFIG, resolveConfig } from '../src/config.js';
-import { barycenterOrder, countCrossings } from '../src/order.js';
+import { barycenterOrder, countCrossings, unboundedBarycenterOrder } from '../src/order.js';
 import { createLayout } from '../src/engine.js';
 import { prepare, runPipeline } from '../src/pipeline.js';
 import { goldenCorpus, buildCorpusGraph } from './golden-corpus.js';
@@ -433,6 +433,49 @@ describe('an unchanged subgraph keeps its order across a relayout', () => {
       ['b2', 'b3', 'b4'],
     ]) {
       expect(across(result, row)).toEqual(across(before, row));
+    }
+  });
+});
+
+describe('a layer the warm start holds whole', () => {
+  /**
+   * The order stage leaves such a layer where it is and scores the gaps between
+   * two of them once. Every edit below leaves some layers whole and some not: a
+   * leaf, an edge that can move ranks, a removed node, and a node joining the
+   * middle of the graph.
+   */
+  it('lays out what the stage that sweeps every layer lays out', () => {
+    const config = resolveConfig(undefined);
+    const bounded = { order: barycenterOrder() };
+    const unbounded = { order: unboundedBarycenterOrder() };
+    for (let seed = 1; seed <= 30; seed += 1) {
+      const random = mulberry32(seed * 13 + 5);
+      const { graph } = randomLayered(random, 40, 6, 60);
+      const pick = (): NodeId => {
+        const nodes = graph.nodes();
+        return nodes[Math.floor(random() * nodes.length)]?.id ?? 'n0';
+      };
+      const edits: (() => void)[] = [
+        () => graph.batch(() => {
+          graph.addNode('leaf');
+          graph.addEdge(pick(), 'leaf');
+        }),
+        () => graph.addEdge(pick(), pick()),
+        () => graph.removeNode(pick()),
+        () => graph.batch(() => {
+          graph.addNode('joined');
+          graph.addEdge(pick(), 'joined');
+          graph.addEdge('joined', pick());
+        }),
+      ];
+      let warm = warmStartOf(runPipeline(prepare(graph, config, undefined), bounded).routed);
+      for (const edit of edits) {
+        edit();
+        const fast = runPipeline(prepare(graph, config, undefined, warm), bounded).routed;
+        const full = runPipeline(prepare(graph, config, undefined, warm), unbounded).routed;
+        expect(fast.layers).toEqual(full.layers);
+        warm = warmStartOf(fast);
+      }
     }
   });
 });

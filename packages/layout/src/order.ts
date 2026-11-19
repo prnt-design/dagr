@@ -1525,6 +1525,19 @@ function cohortsOf(
  * of passes that is zero or greater.
  */
 export function barycenterOrder(options?: BarycenterOrderOptions): OrderStage {
+  return orderStage(options, true);
+}
+
+/**
+ * {@link barycenterOrder} reordering and rescoring every layer, including the
+ * ones the warm start holds whole. Exported for the test suite and NOT from
+ * `index.ts`: it is the reference the bounded stage is held to.
+ */
+export function unboundedBarycenterOrder(options?: BarycenterOrderOptions): OrderStage {
+  return orderStage(options, false);
+}
+
+function orderStage(options: BarycenterOrderOptions | undefined, bounded: boolean): OrderStage {
   const budget = resolveBudget(options?.maxSweeps);
   const passBudget = resolveTransposeBudget(options?.maxTransposePasses);
   const hint = options?.initialOrder;
@@ -1552,6 +1565,20 @@ export function barycenterOrder(options?: BarycenterOrderOptions): OrderStage {
       reposition();
       for (const layer of layers) held.impose(layer, position);
 
+      // A layer whose nodes are all one cohort is in that cohort's order now,
+      // and a sweep over it can only re-impose the same order, so it is never
+      // reordered and the gaps between two such layers are scored once. After
+      // a warm relayout that adds a leaf, that is every layer but the leaf's.
+      const frozen = new Uint8Array(layers.length);
+      if (bounded) {
+        for (const [number, layer] of layers.entries()) {
+          const first = layer[0];
+          const cohort = first === undefined ? -1 : at(held.cohortOf, first);
+          const whole = cohort !== -1 && layer.every((node) => at(held.cohortOf, node) === cohort);
+          if (layer.length < 2 || whole) frozen[number] = 1;
+        }
+      }
+
       let widest = 0;
       for (const layer of layers) widest = Math.max(widest, layer.length);
       let busiest = 0;
@@ -1566,23 +1593,31 @@ export function barycenterOrder(options?: BarycenterOrderOptions): OrderStage {
       const movable: number[] = [];
       const slots: number[] = [];
 
+      const gapScore = (gap: number): number => {
+        const start = at(index.gapStart, gap);
+        const end = at(index.gapStart, gap + 1);
+        const stride = layers[gap + 1]?.length ?? 0;
+        if (end === start || stride === 0) return 0;
+        const view = encoded.subarray(0, end - start);
+        for (let slot = start; slot < end; slot += 1) {
+          view[slot - start] =
+            at(position, at(index.segUpper, slot)) * stride +
+            at(position, at(index.segLower, slot));
+        }
+        view.sort();
+        return gapCrossings(view, stride, tree);
+      };
+      const live: number[] = [];
+      let still = 0;
+      for (let gap = 0; gap + 1 < index.layerCount; gap += 1) {
+        if (at(frozen, gap) === 1 && at(frozen, gap + 1) === 1) still += gapScore(gap);
+        else live.push(gap);
+      }
+
       /** What the layering costs as it stands, over every gap. */
       const score = (): number => {
-        let total = 0;
-        for (let gap = 0; gap + 1 < index.layerCount; gap += 1) {
-          const start = at(index.gapStart, gap);
-          const end = at(index.gapStart, gap + 1);
-          const stride = layers[gap + 1]?.length ?? 0;
-          if (end === start || stride === 0) continue;
-          const view = encoded.subarray(0, end - start);
-          for (let slot = start; slot < end; slot += 1) {
-            view[slot - start] =
-              at(position, at(index.segUpper, slot)) * stride +
-              at(position, at(index.segLower, slot));
-          }
-          view.sort();
-          total += gapCrossings(view, stride, tree);
-        }
+        let total = still;
+        for (const gap of live) total += gapScore(gap);
         return total;
       };
 
@@ -1650,13 +1685,13 @@ export function barycenterOrder(options?: BarycenterOrderOptions): OrderStage {
       const sweepDown = (): void => {
         for (let layer = 1; layer < layers.length; layer += 1) {
           const row = layers[layer];
-          if (row !== undefined) settle(row, true);
+          if (row !== undefined && at(frozen, layer) === 0) settle(row, true);
         }
       };
       const sweepUp = (): void => {
         for (let layer = layers.length - 2; layer >= 0; layer -= 1) {
           const row = layers[layer];
-          if (row !== undefined) settle(row, false);
+          if (row !== undefined && at(frozen, layer) === 0) settle(row, false);
         }
       };
 

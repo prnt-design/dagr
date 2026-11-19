@@ -11,6 +11,10 @@ of doc prose.
 
 ## Unreleased
 
+- The order stage no longer reorders or rescores a layer the warm start holds
+  whole, since a sweep can only put back that layer's held order. The layers it
+  returns are unchanged; a warm relayout that adds a leaf to the 10k corpus
+  spends about a third as long in it.
 - Removing a sink leaf, a node whose one edge comes in from the rank above,
   runs only position and route over the held ranks and layers with the leaf
   taken out, under the same conditions as a resize, and lands the full

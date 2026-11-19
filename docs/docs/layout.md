@@ -110,9 +110,10 @@ reads rather than passed to one of them, because ranking, ordering and
 positioning each have a previous answer to start from and a channel per stage
 would be three contracts to keep in step. The order stage reads `layers`, both
 rank stages read `reversedEdges`, and `brandes-koepf-position` reads
-`positions`; nothing reads `ranks` yet, so a relayout is still correct and no
-faster than a cold run. What those readers buy is a stable answer rather than a
-cheaper one: see [the warm start](#the-warm-start) for the order stage's,
+`positions`; nothing reads `ranks` yet. What those readers buy is a stable
+answer more than a cheaper one, and the one saving is the order stage's, which
+leaves a layer the warm start holds whole unswept (see
+[What a relayout costs](./incremental-layout.md#what-a-relayout-costs)): see [the warm start](#the-warm-start) for the order stage's,
 [the reversed set across a relayout](#the-reversed-set-across-a-relayout) for
 the rankers', and [where a drawing is read](#where-a-drawing-is-read) for the
 position stage's, which is a reader of a different kind: it does not seed the
@@ -2012,10 +2013,13 @@ you meant, and reports the node once. The suite measures both paths side by side
 in `test/layout.relayout.test.ts`. See
 [Batching](./graph-model.md#batching) for what a batch is and what it is not.
 
-**It is no faster than a cold run, unless it runs no stage at all, only
-resizes, or removes a leaf.** For any other patch that adds or removes a node or
-an edge the whole pipeline runs again, and the tests hold it to landing the same
-geometry a cold run of the same graph does. A resize or a removed leaf runs only
+**It costs most of a cold run, unless it runs no stage at all, only resizes,
+or removes a leaf.** For any other patch that adds or removes a node or an edge
+the whole pipeline runs again, and the tests hold it to landing the same
+geometry a cold run of the same graph does. The order stage in that run sweeps
+only the layers the warm start does not hold whole, which is what keeps an
+added leaf under a cold run's cost: see
+[What a relayout costs](./incremental-layout.md#what-a-relayout-costs). A resize or a removed leaf runs only
 position and route: see
 [the resize that keeps its ranks and order](#the-resize-that-keeps-its-ranks-and-order)
 and [the removed leaf](#the-removed-leaf).
