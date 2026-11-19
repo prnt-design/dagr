@@ -1617,7 +1617,7 @@ function orderStage(options: BarycenterOrderOptions | undefined, bounded: boolea
         if (at(frozen, gap) === 0 || at(frozen, gap + 1) === 0) live.push(gap);
       }
 
-      /** What the layering costs as it stands, less the gaps no sweep can change. */
+      /** What the layering costs as it stands, less the gaps nothing in this stage can change. */
       const score = (): number => {
         let total = 0;
         for (const gap of live) total += gapScore(gap);

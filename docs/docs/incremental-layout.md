@@ -199,10 +199,11 @@ order it already has, so the stage leaves those layers alone and never scores
 the gaps between two of them, which add the same crossings to every score it
 compares. The layers it returns are the ones a stage that sweeps every layer
 returns. Leaving those layers unswept took the order stage from 351ms to 128ms,
-and leaving their gaps unscored took it from 119ms to 103ms, each measured on
-the same machine on 2026-11-19 UTC before and after that change. What is left
+each measured on the same machine on 2026-11-19 UTC before and after that
+change. Leaving their gaps unscored then took it from 119ms, measured that day
+at a load average of 1.81, to the 103ms in the table above. What is left
 of it is building its index and its warm-start cohorts and putting each layer
-in its cohort's order, not sweeping. A cold run of
+in its cohort's order, not sweeping the held layers. A cold run of
 the same graph, measured in the same session, takes 699ms, and an
 added leaf takes 15 frames at 60 Hz, against M3.9b's budget of one; a removed
 leaf takes 7. The order stage is 41% of an added leaf. Skipping stages alone
