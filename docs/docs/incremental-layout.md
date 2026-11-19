@@ -212,7 +212,10 @@ frames on its own for an added leaf, and about 3 even for a resize, which skips
 the rank and order contract checks. It
 includes measuring nodes, the influence region, merging the dummy sizes, the
 stage contract checks, assembling the result, the delta and retaining the warm
-start.
+start. Measured separately on a different machine, the influence region is 7ms
+to 9ms for each patch kind (Ryzen 9 9900X, Node 22.22.1, 2026-11-19 UTC), down from 13ms
+to 17ms before it stopped reading its band from rows full of dummies. The
+figures above predate that change and were not re-measured on the Apple M4.
 
 Like the pipeline page's [What a run costs](layout.md#what-a-run-costs), which
 was measured on a different machine, this is a measurement and not a baseline:

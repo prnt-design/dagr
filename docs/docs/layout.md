@@ -2117,9 +2117,10 @@ empty, and they are exact rather than conservative for the first time: a
 relayout that ran no stage was entitled to move nothing, and the exact bound on
 a patch that changes nothing is the empty one. That matters for the budget as
 much as for the honesty. Computing a [region](#influence-regions) costs a pass
-over the graph's edges, which on the 10k-node corpus is more than a frame on its
-own, so a fast path that bounded itself could not meet a frame budget however
-many stages it went on to skip.
+over the graph's nodes and one over its edges, 7ms to 9ms on the 10k-node corpus
+on a Ryzen 9 9900X (Node 22.22.1, 2026-11-19 UTC), about half a frame on its
+own, so a fast path that bounded itself would spend half its frame budget before
+it skipped a stage.
 
 **It is refused in two cases, both about not knowing what would have run.** A
 stage you wrote yourself may read anything it likes: a router that reads ports
