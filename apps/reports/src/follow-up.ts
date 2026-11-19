@@ -9,7 +9,7 @@ type Decision = 'draft' | 'deferred' | 'rejected' | 'accepted';
 type WorkState = 'queued' | 'running' | 'blocked' | 'failed' | 'canceled' | 'completed' | 'unknown';
 interface Payload { repository: string; date: string; nodeId: string; key: string; title: string; scope: string; criteria: string[]; sources: Report['sources'] }
 interface Task { id: string; proposalId: string; repository: string; state: WorkState; observedAt: string }
-interface Proposal { id: string; payload: Payload; decision: Decision; acceptedAt?: string; submission: 'none' | 'pending' | 'failed' | 'submitted'; error?: string; taskId?: string; observation?: Task }
+export interface Proposal { id: string; payload: Payload; decision: Decision; acceptedAt?: string; submission: 'none' | 'pending' | 'failed' | 'submitted'; error?: string; taskId?: string; observation?: Task }
 interface Ledger { version: 0; adapter: 'simulated-fixture'; proposals: Record<string, Proposal>; tasks: Record<string, Task> }
 export type Action =
   | { kind: 'draft'; report: unknown; previous?: unknown; nodeId: string; key: string; title: string; scope: string; criteria: string[] }

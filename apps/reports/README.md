@@ -167,3 +167,38 @@ use existing Dispatch task tools, but task creation has no idempotency argument.
 It needs a reviewed durable proposal-to-task reconciliation scheme before retrying
 uncertain submissions. This fixture does not establish that live guarantee. Live
 integration, authenticated approval, execution and scheduling are outside this slice.
+
+## P4 slice 2: external protocol boundary, fake transport only
+
+`src/dispatch-protocol.ts` defines an injected task-tool transport and the narrow
+prepared/attempting/mapped submission protocol. There is no live transport, CLI,
+authentication host or production journal implementation. `prepareDispatch` takes
+an accepted proposal from the existing validated follow-up path and an injected
+approval capability. A local simulated decision alone is insufficient: the future
+trusted host must verify original user authorship and bind exact payload, project,
+column and provenance to that evidence. JSON cannot authenticate its own author.
+
+The host must serialize all calls for one namespace, persist the initial journal,
+and durably checkpoint attempting before create. This module neither locks nor
+writes storage. Tests serialize checkpoints and inject transport failures; they do
+not prove production storage durability, process locking or authenticity. Missing
+and malformed journals are rejected. A syntactically valid journal rollback is
+undetectable without external monotonic authority and is explicitly unsupported,
+as are lost storage, multiple independent writers and marker tampering.
+
+An uncertain create is never automatically repeated, including zero-match scans.
+A complete active-plus-archived scan can recover one exact body/creator/project
+match. Duplicate or conflicting matches fail closed. The body carries scope,
+criteria, sources and the approval binding in the original create operation.
+There is no exactly-once or eventual-creation guarantee. The transport adapter must
+hydrate task bodies and honestly report incomplete scans, and must disable create
+retries. This contract uses the existing task tools, without implementing them.
+
+Inert-column preflight rejects automation, but cannot prevent a configuration race.
+Live creation remains blocked until the owner maintains the column without triggers
+or the server provides conditional inert creation. No Dispatch configuration changes
+are included. Receipt verification is separate from completion. Projection reports
+board progress/review/completion, archive and launch failure independently; this
+board has no native failed/canceled/blocked outcomes. Stale or failed observations
+are unknown. Later integration must retain raw observations and mapping provenance.
+Overall P4 and a verified live cycle remain open.
