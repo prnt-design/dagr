@@ -1391,7 +1391,8 @@ function cohortsOf(
  * constraint: the sweeps re-impose it on each layer they reorder, and the
  * transpose pass will not swap a pair it holds. A layer the hint holds whole
  * therefore cannot move, so the sweeps skip it and the gaps between two such
- * layers are scored once, which returns the same layers for less work.
+ * layers are never scored, since they add the same count to every score the
+ * stage compares. That returns the same layers for less work.
  *
  * WHAT IT BUYS, over the same corpus and the same four patch kinds, against
  * M3.5's 8, 11, 15 and 0 escapes: ZERO, ZERO, ZERO AND ZERO, with zero
@@ -1569,8 +1570,10 @@ function orderStage(options: BarycenterOrderOptions | undefined, bounded: boolea
 
       // A layer whose nodes are all one cohort is in that cohort's order now,
       // and a sweep over it can only re-impose the same order, so it is never
-      // reordered and the gaps between two such layers are scored once. After
-      // a warm relayout that adds a leaf, that is every layer but the leaf's.
+      // reordered. A gap between two such layers therefore adds the same
+      // crossings to every score, and scores are only ever compared with each
+      // other, so it is never scored. After a warm relayout that adds a leaf,
+      // that is every layer but the leaf's.
       const frozen = new Uint8Array(layers.length);
       if (bounded) {
         for (const [number, layer] of layers.entries()) {
@@ -1610,15 +1613,13 @@ function orderStage(options: BarycenterOrderOptions | undefined, bounded: boolea
         return gapCrossings(view, stride, tree);
       };
       const live: number[] = [];
-      let still = 0;
       for (let gap = 0; gap + 1 < index.layerCount; gap += 1) {
-        if (at(frozen, gap) === 1 && at(frozen, gap + 1) === 1) still += gapScore(gap);
-        else live.push(gap);
+        if (at(frozen, gap) === 0 || at(frozen, gap + 1) === 0) live.push(gap);
       }
 
-      /** What the layering costs as it stands, over every gap. */
+      /** What the layering costs as it stands, less the gaps no sweep can change. */
       const score = (): number => {
-        let total = still;
+        let total = 0;
         for (const gap of live) total += gapScore(gap);
         return total;
       };
