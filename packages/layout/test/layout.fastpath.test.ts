@@ -649,8 +649,10 @@ describe('the relayout that ranks an added leaf without the rank stage', () => {
       if (spec.nodes.length === 0) continue;
       const step = lockstep(spec, {});
       const random = mulberry32(seed * 7919);
+      const drawn = [...spec.nodes];
       for (let leaf = 0; leaf < 3; leaf += 1) {
-        const parent = spec.nodes[Math.floor(random() * spec.nodes.length)] ?? '';
+        const parent = drawn[Math.floor(random() * drawn.length)] ?? '';
+        drawn.push(`leaf${String(leaf)}`);
         step(ORDERED_STAGES, addLeaf(parent, `leaf${String(leaf)}`));
         fired += 1;
       }

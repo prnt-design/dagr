@@ -197,9 +197,10 @@ outside the stages 167ms, measured on the same machine on 2026-11-19 UTC.
 the warm start holds whole, and a sweep over such a layer can only put back the
 order it already has, so the stage leaves those layers alone and scores the
 gaps between two of them once. The layers it returns are the ones a stage that
-sweeps every layer returns. That took the order stage from 351ms, measured on
-the same machine the same day before the change, to 128ms, and what is left of
-it is building its index and its warm-start cohorts, not sweeping. A cold run of
+sweeps every layer returns. That took the order stage from 351ms to 128ms,
+measured on the same machine on 2026-11-19 UTC before and after that change
+(119ms in the table above), and what is left of it is building its index and
+its warm-start cohorts, not sweeping. A cold run of
 the same graph, measured in the same session, takes 665ms, and an
 added leaf takes 16 frames at 60 Hz, against M3.9b's budget of one; a removed
 leaf takes 7. The order stage is 45% of an added leaf. Skipping stages alone
