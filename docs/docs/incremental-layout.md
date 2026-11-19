@@ -156,19 +156,19 @@ left.
 
 Wall-clock milliseconds for one `engine.relayout(patch)` on the 10k corpus
 (10,000 nodes, 40,000 edges) at the defaults, measured on an Apple M4 under Node
-25.6.1 at a one-minute load average of 2.37. A cycle adds a leaf under a node in
+25.6.1 at a one-minute load average of 3.18. A cycle adds a leaf under a node in
 the middle of the graph, grows that node with a `nodeSize` callback, shrinks it
 back and removes the leaf. Each figure is a median over eleven cycles after two
 warmups, so the resize column pools both size changes, 22 relayouts.
 
 | Phase | add a leaf | remove a leaf | resize a node |
 | --- | --- | --- | --- |
-| `longest-path-rank` | 57.9ms | not run | not run |
-| `barycenter-order` | 358ms | not run | not run |
-| `grid-position` | 19.9ms | 17.7ms | 17.7ms |
-| `polyline-route` | 25.3ms | 24.8ms | 24.1ms |
-| everything else | 161ms | 67.8ms | 58.3ms |
-| **whole relayout** | **623ms** | **111ms** | **101ms** |
+| `longest-path-rank` | 58.4ms | not run | not run |
+| `barycenter-order` | 128ms | not run | not run |
+| `grid-position` | 20.1ms | 18.3ms | 18.7ms |
+| `polyline-route` | 24.2ms | 24.6ms | 24.8ms |
+| everything else | 167ms | 69.8ms | 59.6ms |
+| **whole relayout** | **400ms** | **114ms** | **103ms** |
 
 **A resize runs only position and route.** Neither the rank stage nor the order
 stage reads a size, and run again over an unchanged graph both would land where
@@ -184,16 +184,22 @@ one a full run gives. It runs all four stages instead when the leaf was the only
 node on its rank, since the drawing then loses a layer, or when the edges
 reversed to break cycles would come to more than half of the edges left.
 
-An added leaf still runs all four stages and costs about what a cold layout
-does: a cold run of the same graph, measured in the same session, takes 693ms,
-and an added leaf takes 37 frames at 60 Hz, against M3.9b's budget of one; a
-removed leaf takes 7. The order stage is 57% of an added leaf, so a fast path
-for a leaf that still sweeps every rank cannot meet that budget. Neither can one
-that only skips stages: "everything else", the work outside them, is about 10
-frames on its own for an added leaf, and about 3 even for a resize, which skips
-the rank and order contract checks. It includes measuring nodes, the influence
-region, merging the dummy sizes, the stage contract checks, assembling the
-result, the delta and retaining the warm start.
+An added leaf still runs all four stages, but **the order stage sweeps only
+the leaf's layer.** Every other layer is one the warm start holds whole, and a
+sweep over such a layer can only put back the order it already has, so the
+stage leaves those layers alone and scores the gaps between two of them once.
+The layers it returns are the ones a stage that sweeps every layer returns. That
+took the order stage from 351ms, measured on the same machine the same day
+before the change, to 128ms, and what is left of it is building its index and
+its warm-start cohorts, not sweeping. A cold run of the same graph, measured in
+the same session, takes 688ms, and an added leaf takes 24 frames at 60 Hz,
+against M3.9b's budget of one; a removed leaf takes 7. The order stage is 32% of
+an added leaf. Skipping stages alone cannot meet that budget: "everything else",
+the work outside them, is about 10 frames on its own for an added leaf, and
+about 4 even for a resize, which skips the rank and order contract checks. It
+includes measuring nodes, the influence region, merging the dummy sizes, the
+stage contract checks, assembling the result, the delta and retaining the warm
+start.
 
 Like the pipeline page's [What a run costs](layout.md#what-a-run-costs), which
 was measured on a different machine, this is a measurement and not a baseline:
@@ -206,7 +212,7 @@ fires there without a re-measure fails it.
 Every relayout in the session corpus is a full pipeline run, with one exception
 noted below; no session resizes a node or removes a single leaf on its own, so
 neither path above fires there. The stability above comes from what the stages are handed rather than
-from work they skip, so a structural patch still costs about a cold layout in
+from work they skip, so a structural patch still costs most of a cold layout in
 time.
 
 This page predicted that the incremental ranking, the stable coordinate

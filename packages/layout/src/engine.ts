@@ -481,7 +481,7 @@ export interface LayoutEngine {
    * node still gets a rank and a position. A batch emits the whole edit as one
    * patch, so the engine sees the one graph state you meant.
    *
-   * A STRUCTURAL EDIT IS NO FASTER THAN A COLD RUN, on purpose, apart from a
+   * A STRUCTURAL EDIT COSTS MOST OF A COLD RUN, on purpose, apart from a
    * removed sink leaf, and the tests hold it to landing the same geometry a cold
    * run of the same graph does. The whole pipeline runs again. That is what makes the delta contract, the engine
    * lifetime and the retained state testable before any incremental algorithm
@@ -495,9 +495,11 @@ export interface LayoutEngine {
    * costs what a cold run costs and lands inside the region anyway. M3.7b
    * confined one stage's sweep to the ranks a patch actually moved, and measured
    * what that is worth at half a percent of the rank stage, because the stage's
-   * cost is the dummy chains it re-mints and not the sweep it now skips. So a
-   * run that happens is still a cold run's work for every reading a caller can
-   * take, and M3.8b and M3.9b are still what change that. M3.9a is the first
+   * cost is the dummy chains it re-mints and not the sweep it now skips. The
+   * order stage sweeps only the layers the warm start does not hold whole,
+   * which on an added leaf is one layer, and the rest of its cost is building
+   * its index and cohorts. So a run that happens is still most of a cold run's
+   * work, and M3.8b and M3.9b are still what change that. M3.9a is the first
    * thing here that costs LESS, and it does it by not running rather than by
    * running less: a patch that changes nothing the pipeline reads is answered
    * from the drawing already in hand. M3.9b's resize path runs less: a patch
