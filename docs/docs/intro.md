@@ -12,6 +12,11 @@ layout engine, a GPU renderer, and React bindings. Use the layers together or
 bring your own renderer. The visual-language toolkit adds node specifications
 and connection validation without deciding what your nodes mean.
 
+Dagr is intended for coding agents as well as human developers to build
+visualizations people can read and use. Its typed APIs, package contracts,
+examples and [authoring skills](https://github.com/prnt-design/dagr#agent-authored-learning-explorers)
+help agents integrate the existing layers and verify their work.
+
 [Explore the architecture](/) to see how the pieces fit, try an actual mutation
 in [Follow an edit](/demos/living), or start with the example below.
 

@@ -122,6 +122,14 @@ All changes follow the reviews, local gates and CI requirements in [AGENTS.md](A
 
 ## Development
 
+Dagr is built primarily by an autonomous engineering agent, with a human
+maintainer setting direction and retaining accountability. It is also intended
+for other agents to use as a reusable visualization library, alongside human
+developers. The maintainer believes agent consumption of frameworks and
+libraries will become normal; Dagr adopts that approach early. Typed APIs,
+explicit package contracts, examples, documentation, the authoring skills above
+and verification help agents build integrations people can read and use.
+
 Requires Node 20 or newer and pnpm.
 
 ```bash

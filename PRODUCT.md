@@ -6,11 +6,11 @@ brand
 
 ## Users
 
-Developers building interactive data visualizations, including large, changing directed-graph interfaces, are the primary audience. Engineering peers, potential collaborators, and portfolio visitors also need a direct path from working examples to usable documentation and reproducible evidence.
+Coding agents building interactive data visualizations are a primary audience for Dagr as a reusable library, alongside human developers, including those building large, changing directed-graph interfaces. Engineering peers, potential collaborators, and portfolio visitors also need a direct path from working examples to usable documentation and reproducible evidence.
 
 ## Product Purpose
 
-Dagr is a general data visualization toolkit. The maintainer's 2026-11-07 direction broadens the [2026-10-17 renderer-first decision](specs/roadmap-notes.md#priority-reset-webgpu-renderer-first-2026-10-17-utc), retaining stable graph identity, incremental layout and animated GPU rendering as strengths. Claims about the renderer name the workload, adapter and measured limit. WebGL2 is the fallback, with parity verified separately.
+Dagr is a general data visualization toolkit intended for other agents to use, not only for an agent to implement. The maintainer believes reusable frameworks and libraries designed for agent consumption will become normal; Dagr is an early adoption of that approach, not a claim to be the first. Existing typed APIs, explicit package contracts, examples, documentation, authoring skills and verification give agents practical ways to integrate and check their work. The human maintainer sets direction and remains accountable for the product. The maintainer's 2026-11-07 direction broadens the [2026-10-17 renderer-first decision](specs/roadmap-notes.md#priority-reset-webgpu-renderer-first-2026-10-17-utc), retaining stable graph identity, incremental layout and animated GPU rendering as strengths. Claims about the renderer name the workload, adapter and measured limit. WebGL2 is the fallback, with parity verified separately.
 
 The graph model owns identity and patches; layout owns positions and routes; the renderer owns drawing and motion; React binds those layers to applications. Explorer adds graph reading and navigation, while VDSL adapts a consumer's node and connection types. The published chart package adds animated bar and line charts through GPU or SVG rendering. It is installed separately and is not forwarded by the public umbrella. This direction does not promise additional chart types or editor features.
 
