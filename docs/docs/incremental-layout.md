@@ -209,8 +209,8 @@ frames on its own for an added leaf, and about 4 even for a resize, which skips
 the rank and order contract checks. It
 includes measuring nodes, the influence region, merging the dummy sizes, the
 stage contract checks, assembling the result, the delta and retaining the warm
-start. The influence region is 7ms to 9ms of it for each patch kind on a
-different machine (Ryzen 9 9900X, Node 22.22.1, 2026-11-19 UTC), down from 13ms
+start. Measured separately on a different machine, the influence region is 7ms
+to 9ms for each patch kind (Ryzen 9 9900X, Node 22.22.1, 2026-11-19 UTC), down from 13ms
 to 17ms before it stopped reading its band from rows full of dummies.
 
 Like the pipeline page's [What a run costs](layout.md#what-a-run-costs), which

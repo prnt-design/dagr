@@ -158,7 +158,7 @@ interface Row {
 /**
  * The rows of the previous drawing, by rank, and how tall each one is on demand.
  *
- * THE ROSTER IS NEVER WALKED, which is why the band is not read by walking
+ * THE RANKS MAP IS NEVER WALKED, which is why the band is not read by walking
  * `previous.ranks`. Both that map and `previous.layers` answer "which nodes are
  * at rank r", and the map answers it by being walked whole: a graph of 4k nodes
  * whose edges span a few ranks each carries about 233k dummies, so a pass over
@@ -336,7 +336,9 @@ function requireRankWindow(rankWindow: number | undefined): number {
  *
  * One pass over the ranks of the drawing, one over the graph's nodes, and one
  * over the graph's edges. NOT a pass over the roster, which is the thing worth
- * stating because the roster is where the dummies are: see {@link Rows}. When
+ * stating because the roster is where the dummies are: see {@link Rows}. The
+ * exception is a node the graph lost outside the patch, whose fallback walks
+ * the band's rows, dummies and all. When
  * M3.5 measured it, a batched add-leaf patch cost 2.2ms on a graph of 1k nodes
  * and 4k edges carrying 17k dummies, and 5.9ms on 4k nodes and 16k edges
  * carrying 233k dummies. On the 10k corpus (Ryzen 9 9900X, Node 22.22.1,
@@ -583,7 +585,7 @@ export function influenceRegion(input: InfluenceRegionInput): InfluenceSet {
   const nodes = new Set<NodeId>(seedNodes);
   // The band is read off the graph's own nodes rather than off the rows, since
   // a row also holds the dummies of every edge drawn through it: on the 10k
-  // corpus a band of every rank was most of this function's time, spent
+  // corpus a band of every rank was about half of this function's time, spent
   // skipping dummies. A node the previous run never ranked arrived with this
   // patch or one the engine has not laid out yet, and either way its
   // coordinates are new.

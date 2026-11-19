@@ -279,7 +279,7 @@ branches never enter public docs, source, npm artifacts, or job fixtures.
   60fps), not a ratio, and the fallback needs a stated ceiling: a small
   multiple of a cold run, measured. Also owns the worker session (the worker
   retains pipeline state, the patch crosses the wire) and M3.5's remaining
-  cost: the influence edge pass is 33ms on 10k on M3.9a's machine, where a
+  cost: the influence region is 33ms on 10k on M3.9a's machine, where a
   full relayout took 3,317ms. On 2026-11-19 UTC the region stopped reading its
   band from the rows, which walked every dummy in a band that covers most or
   all of the drawing for each of this milestone's patch kinds, and reads it off

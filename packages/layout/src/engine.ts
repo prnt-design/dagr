@@ -922,9 +922,9 @@ export function createLayout(options: LayoutEngineOptions = {}): LayoutEngine {
    *
    * IT DOES NOT COMPUTE A REGION, and that is the saving that makes this
    * proportional to something small. `influenceRegion` costs a pass over the
-   * graph's edges, 2.2ms on 1k nodes and 5.9ms on 4k when M3.5 measured it, and
-   * that module names the pass as the thing this milestone would have to look
-   * at. A run that skips every stage needs no bound on what a stage may touch:
+   * graph's nodes and one over its edges, 2.2ms on 1k nodes and 5.9ms on 4k
+   * when M3.5 measured it and 7ms to 9ms on the 10k on the machine that module
+   * names. A run that skips every stage needs no bound on what a stage may touch:
    * the exact region is the empty one and this is the first patch kind that has
    * one.
    */
