@@ -499,7 +499,7 @@ export interface LayoutEngine {
    * cost is the dummy chains it re-mints and not the sweep it now skips. The
    * order stage sweeps only the layers the warm start does not hold whole,
    * which on an added leaf is one layer, and the rest of its cost is building
-   * its index and cohorts. So a run that happens is still most of a cold run's
+   * its index and cohorts and putting each layer in its cohort's order. So a run that happens is still most of a cold run's
    * work, and M3.8b and M3.9b are still what change that. M3.9a is the first
    * thing here that costs LESS, and it does it by not running rather than by
    * running less: a patch that changes nothing the pipeline reads is answered

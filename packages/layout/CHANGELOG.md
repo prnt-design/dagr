@@ -15,6 +15,10 @@ of doc prose.
   graph's nodes rather than off the previous drawing's rows, which also hold
   every dummy drawn through them. It names the same nodes and edges; on the 10k
   corpus it takes about half as long.
+- The order stage no longer scores the gaps between two layers the warm start
+  holds whole, since they add the same crossings to every layering it compares.
+  The layers it returns are unchanged; on the 10k corpus an added leaf's order
+  stage drops from 119ms to 103ms.
 - Adding a sink leaf, a new node whose one edge comes in from a node already
   drawn, skips the rank stage: the engine ranks the leaf one below its parent
   in the held ranks and runs order, position and route, landing the full
