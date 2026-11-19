@@ -9,7 +9,7 @@ type Decision = 'draft' | 'deferred' | 'rejected' | 'accepted';
 type WorkState = 'queued' | 'running' | 'blocked' | 'failed' | 'canceled' | 'completed' | 'unknown';
 interface Payload { repository: string; date: string; nodeId: string; key: string; title: string; scope: string; criteria: string[]; sources: Report['sources'] }
 interface Task { id: string; proposalId: string; repository: string; state: WorkState; observedAt: string }
-interface Proposal { id: string; payload: Payload; decision: Decision; acceptedAt?: string; submission: 'none' | 'pending' | 'failed' | 'submitted'; error?: string; taskId?: string; observation?: Task }
+export interface Proposal { id: string; payload: Payload; decision: Decision; acceptedAt?: string; submission: 'none' | 'pending' | 'failed' | 'submitted'; error?: string; taskId?: string; observation?: Task }
 interface Ledger { version: 0; adapter: 'simulated-fixture'; proposals: Record<string, Proposal>; tasks: Record<string, Task> }
 export type Action =
   | { kind: 'draft'; report: unknown; previous?: unknown; nodeId: string; key: string; title: string; scope: string; criteria: string[] }
@@ -18,7 +18,7 @@ export type Action =
   | { kind: 'observe'; id: string }
   | { kind: 'fixture-status'; id: string; state: WorkState };
 const states: WorkState[] = ['queued', 'running', 'blocked', 'failed', 'canceled', 'completed', 'unknown'];
-const digest = (value: unknown) => createHash('sha256').update(JSON.stringify(value)).digest('hex');
+export const digest = (value: unknown) => createHash('sha256').update(JSON.stringify(value)).digest('hex');
 const nonempty = (s: string) => typeof s === 'string' && s.trim().length > 0;
 
 /** All fixture operations share one writer lock, including task creation and readback. */
