@@ -2018,10 +2018,10 @@ in `test/layout.relayout.test.ts`. See
 or removes a leaf.** For any other patch that adds or removes a node or an edge
 the whole pipeline runs again, and the tests hold it to landing the same
 geometry a cold run of the same graph does. The order stage in that run sweeps
-only the layers the warm start does not hold whole, which is what keeps an
-added leaf under a cold run's cost: see
-[What a relayout costs](./incremental-layout.md#what-a-relayout-costs). A resize or a removed leaf runs only
-position and route: see
+only the layers the warm start does not hold whole, which takes an added leaf
+well under a cold run's cost: see
+[What a relayout costs](./incremental-layout.md#what-a-relayout-costs). A
+resize or a removed leaf runs only position and route: see
 [the resize that keeps its ranks and order](#the-resize-that-keeps-its-ranks-and-order)
 and [the removed leaf](#the-removed-leaf).
 Running the whole pipeline for a structural edit is the point of shipping it in

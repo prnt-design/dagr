@@ -1389,7 +1389,9 @@ function cohortsOf(
  * previous OUTPUT is four sweeps and sixteen passes away from a layering the
  * previous run had already swept. So the hint is carried THROUGH the run as a
  * constraint: the sweeps re-impose it on each layer they reorder, and the
- * transpose pass will not swap a pair it holds.
+ * transpose pass will not swap a pair it holds. A layer the hint holds whole
+ * therefore cannot move, so the sweeps skip it and the gaps between two such
+ * layers are scored once, which returns the same layers for less work.
  *
  * WHAT IT BUYS, over the same corpus and the same four patch kinds, against
  * M3.5's 8, 11, 15 and 0 escapes: ZERO, ZERO, ZERO AND ZERO, with zero

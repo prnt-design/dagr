@@ -190,16 +190,16 @@ sweep over such a layer can only put back the order it already has, so the
 stage leaves those layers alone and scores the gaps between two of them once.
 The layers it returns are the ones a stage that sweeps every layer returns. That
 took the order stage from 351ms, measured on the same machine the same day
-before the change, to 128ms, and what is left of it is
-building its index and its warm-start cohorts, not sweeping. A cold run of the
-same graph, measured in the same session, takes 688ms, and an added leaf takes
-24 frames at 60 Hz, against M3.9b's budget of one; a removed leaf takes 7. The
-order stage is 32% of an added leaf. Skipping stages alone cannot meet that
-budget: "everything else", the work outside them, is about 10 frames on its own
-for an added leaf, and about 4 even for a resize, which skips the rank and order
-contract checks. It includes measuring nodes, the influence
-region, merging the dummy sizes, the stage contract checks, assembling the
-result, the delta and retaining the warm start.
+before the change, to 128ms, and what is left of it is building its index and
+its warm-start cohorts, not sweeping. A cold run of the same graph, measured in
+the same session, takes 688ms, and an added leaf takes 24 frames at 60 Hz,
+against M3.9b's budget of one; a removed leaf takes 7. The order stage is 32% of
+an added leaf. Skipping stages alone cannot meet that budget: "everything else",
+the work outside them, is about 10 frames on its own for an added leaf, and
+about 4 even for a resize, which skips the rank and order contract checks. It
+includes measuring nodes, the influence region, merging the dummy sizes, the
+stage contract checks, assembling the result, the delta and retaining the warm
+start.
 
 Like the pipeline page's [What a run costs](layout.md#what-a-run-costs), which
 was measured on a different machine, this is a measurement and not a baseline:
