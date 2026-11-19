@@ -6,8 +6,8 @@
  * changes no geometry at all, so the right answer is the drawing the caller
  * already holds, an empty delta, and no stage run. `engine.ts` is where the
  * decision is taken, and this is the pair of questions it takes it on. It also
- * recognises the one structural patch M3.9b answers without a rank or order
- * run, {@link removedLeaf}.
+ * recognises the two structural patches M3.9b answers without a rank stage run,
+ * {@link removedLeaf} and {@link addedLeaf}.
  *
  * ## What the pipeline reads
  *
@@ -37,7 +37,7 @@
  * this union in this repo is written out arm by arm.
  */
 
-import type { NodeId, Patch, PatchOp, RemoveEdgeOp } from '@prnt/dagr-graph';
+import type { AddEdgeOp, NodeId, Patch, PatchOp, RemoveEdgeOp } from '@prnt/dagr-graph';
 import type { Size } from './types.js';
 
 /**
@@ -104,6 +104,31 @@ export function removedLeaf(patch: Patch): RemoveEdgeOp | undefined {
       if (node !== undefined) return undefined;
       node = op.id;
     } else if (op.op === 'remove-edge') {
+      if (edge !== undefined) return undefined;
+      edge = op;
+    } else if (!isInert(op)) {
+      return undefined;
+    }
+  }
+  if (node === undefined || edge === undefined) return undefined;
+  if (edge.target !== node || edge.source === node) return undefined;
+  return edge;
+}
+
+/**
+ * The one edge of an added sink leaf, when that and inert ops are all this
+ * patch does, or `undefined`: one new node, and one new edge into it from
+ * another node. Whether the held drawing lets the engine rank it without a
+ * rank stage run is `withLeaf`'s question in `pipeline.ts`.
+ */
+export function addedLeaf(patch: Patch): AddEdgeOp | undefined {
+  let node: NodeId | undefined;
+  let edge: AddEdgeOp | undefined;
+  for (const op of patch) {
+    if (op.op === 'add-node') {
+      if (node !== undefined) return undefined;
+      node = op.id;
+    } else if (op.op === 'add-edge') {
       if (edge !== undefined) return undefined;
       edge = op;
     } else if (!isInert(op)) {
