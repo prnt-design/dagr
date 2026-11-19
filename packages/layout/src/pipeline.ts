@@ -923,7 +923,8 @@ export function runPipeline(
  * {@link withoutLeaf} took out of them: `engine.ts` decides when that holds.
  *
  * Neither check before the position stage runs again. Both held of these
- * fields when that run produced them, and dropping a leaf keeps them true.
+ * fields when a full run produced them, and dropping a leaf here or adding one
+ * through {@link withLeaf} keeps them true.
  */
 export function runPlaced(
   prepared: PreparedState,
@@ -938,8 +939,9 @@ export function runPlaced(
  * `ranks` from {@link withLeaf} in place of its own: `engine.ts` decides when
  * that holds.
  *
- * The rank check does not run again. It held of the held fields, and the one
- * rank `withLeaf` adds is one below a ranked node, on an edge that needs no
+ * The rank check does not run again. It held of the held fields when a full
+ * run produced them, every fast path since kept it true, and the one rank
+ * `withLeaf` adds is one below a ranked node, on an edge that needs no
  * chain. The order stage's output is checked as on the full path.
  */
 export function runRanked(
@@ -987,9 +989,9 @@ function heldRanked(
  * Ranks count up from the sources, so a node with no successor sets no other
  * node's rank, and with one predecessor it sits one rank below it: its edge is
  * short and mints no dummies, so the held chains are the ones a full run mints.
- * With no edge out the leaf closes no cycle and joins no component, so the
- * warm feedback arc set is the held one: each held reversal is still inside a
- * component, the seeded view stays acyclic, and one more arc only loosens the
+ * With no edge out the leaf closes no cycle and joins no strongly connected
+ * component, so the warm feedback arc set is the held one: each held reversal
+ * is still inside one, the seeded view stays acyclic, and one more arc only loosens the
  * half-arcs bound. A leaf under the last rank opens a layer of its own, which
  * the order stage builds.
  */

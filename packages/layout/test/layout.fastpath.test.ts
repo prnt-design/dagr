@@ -266,7 +266,7 @@ function unmarked(stages: LayoutStageOverrides): LayoutStageOverrides {
 
 /**
  * Each stage set the skipping paths are checked under, and what a resize or a
- * removed leaf runs with it. A warm simplex run can move ranks, with or without
+ * removed leaf runs with it; `added` derives what an added leaf runs. A warm simplex run can move ranks, with or without
  * its pivot budget running out, so both have to run it.
  */
 const STAGE_SETS: readonly (readonly [string, LayoutStageOverrides, readonly string[]])[] = [

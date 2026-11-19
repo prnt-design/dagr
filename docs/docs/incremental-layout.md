@@ -222,8 +222,8 @@ fires there without a re-measure fails it.
 Every relayout in the session corpus is a full pipeline run, with one exception
 noted below; no session resizes a node or adds or removes a single leaf on its
 own, so none of the paths above fires there. The stability above comes from what the stages are handed rather than
-from work they skip, so a structural patch still costs most of a cold layout in
-time.
+from work they skip, so a structural patch other than a single leaf still costs
+most of a cold layout in time.
 
 This page predicted that the incremental ranking, the stable coordinate
 assignment and the fast paths would each move the incremental column when they
