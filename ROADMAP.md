@@ -280,7 +280,12 @@ branches never enter public docs, source, npm artifacts, or job fixtures.
   multiple of a cold run, measured. Also owns the worker session (the worker
   retains pipeline state, the patch crosses the wire) and M3.5's remaining
   cost: the influence edge pass is 33ms on 10k on M3.9a's machine, where a
-  full relayout took 3,317ms. Starting point measured 2026-11-12 (Apple M4,
+  full relayout took 3,317ms. On 2026-11-19 UTC the region stopped reading its
+  band from the rows, which walked every dummy in a band that covers most or
+  all of the drawing for each of this milestone's patch kinds, and reads it off
+  the graph's nodes instead, with the same answer: 13ms to 17ms a relayout to
+  7ms to 9ms on the 10k (Ryzen 9 9900X, Node 22.22.1), most of what is left
+  the edge pass. Starting point measured 2026-11-12 (Apple M4,
   Node 25.6.1): an added leaf, a removed leaf and a resize each still run all
   four stages, 677ms to 702ms against a 779ms cold run; the order stage is over
   half of each and the work outside the stages is about 11 frames; see

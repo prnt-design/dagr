@@ -11,6 +11,10 @@ of doc prose.
 
 ## Unreleased
 
+- `influenceRegion`, and so a relayout's `region`, reads its band off the
+  graph's nodes rather than off the previous drawing's rows, which also hold
+  every dummy drawn through them. It names the same nodes and edges; on the 10k
+  corpus it takes about half as long.
 - Adding a sink leaf, a new node whose one edge comes in from a node already
   drawn, skips the rank stage: the engine ranks the leaf one below its parent
   in the held ranks and runs order, position and route, landing the full

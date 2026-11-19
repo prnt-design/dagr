@@ -158,15 +158,19 @@ interface Row {
 /**
  * The rows of the previous drawing, by rank, and how tall each one is on demand.
  *
- * THE ROWS ARE THE INDEX THIS WHOLE COMPUTATION TURNS ON, and it is why the band
- * is read out of `previous.layers` rather than out of `previous.ranks`. Both
- * answer "which nodes are at rank r", and the map answers it by being walked
- * whole: a graph of 4k nodes whose edges span a few ranks each carries about
- * 233k dummies, so a pass over the ranks is a pass over a quarter of a million
- * entries to collect a band of a dozen. Measured on this run, that pass was 87ms
- * of a 90ms region on that graph, which is a bound costing more than the thing it
- * is supposed to make cheap. A layer is already the members of one rank, so the
- * band is a slice, and the roster never gets walked at all.
+ * THE ROSTER IS NEVER WALKED, which is why the band is not read by walking
+ * `previous.ranks`. Both that map and `previous.layers` answer "which nodes are
+ * at rank r", and the map answers it by being walked whole: a graph of 4k nodes
+ * whose edges span a few ranks each carries about 233k dummies, so a pass over
+ * the ranks is a pass over a quarter of a million entries to collect a band of a
+ * dozen. Measured on M3.5's run, that pass was 87ms of a 90ms region on that
+ * graph, which is a bound costing more than the thing it is supposed to make
+ * cheap. A layer is already the members of one rank, so a band read from the
+ * rows is a slice. The rows still hold every dummy drawn through them, though,
+ * so a wide band read that way walks most of the roster after all, and the band
+ * is now read off the graph's own nodes instead, one lookup each. The rows
+ * remain the heights, and the fallback for a node the graph lost outside the
+ * patch.
  *
  * `tallest` is a count rather than a flag because removing one of two equally
  * tall nodes leaves the row exactly as tall as it was, and a region that
@@ -330,16 +334,18 @@ function requireRankWindow(rankWindow: number | undefined): number {
  *
  * ## What it costs
  *
- * One pass over the ranks of the drawing, one over the members of the rows
- * inside the band, and one over the graph's edges. NOT a pass over the roster,
- * which is the thing worth stating because the roster is where the dummies are:
- * see {@link Rows}. Measured on this run, a batched add-leaf patch cost 2.2ms on
- * a graph of 1k nodes and 4k edges carrying 17k dummies, and 5.9ms on 4k nodes
- * and 16k edges carrying 233k dummies, which is the edge pass rather than the
- * dummies. THAT PASS IS WHAT M3.9 WILL HAVE TO LOOK AT: its budget is one frame
- * on the 10k corpus, and an edge pass is proportional to the drawing where a
- * fast path is supposed to be proportional to the patch. The band's own work
- * already is.
+ * One pass over the ranks of the drawing, one over the graph's nodes, and one
+ * over the graph's edges. NOT a pass over the roster, which is the thing worth
+ * stating because the roster is where the dummies are: see {@link Rows}. When
+ * M3.5 measured it, a batched add-leaf patch cost 2.2ms on a graph of 1k nodes
+ * and 4k edges carrying 17k dummies, and 5.9ms on 4k nodes and 16k edges
+ * carrying 233k dummies. On the 10k corpus (Ryzen 9 9900X, Node 22.22.1,
+ * 2026-11-19 UTC) its band runs to the bottom of the drawing or covers all of
+ * it for each of M3.9b's patch kinds, and reading that band from the rows was
+ * 13ms to 17ms a relayout, about half of it skipping dummies; read off the
+ * graph's nodes it is 7ms to 9ms, most of what is left the edge pass. Both
+ * passes are proportional to the drawing where a fast path is supposed to be
+ * proportional to the patch.
  *
  * ## What it names
  *
@@ -575,20 +581,36 @@ export function influenceRegion(input: InfluenceRegionInput): InfluenceSet {
   const deepest = bottom + window;
 
   const nodes = new Set<NodeId>(seedNodes);
-  // A slice of the rows rather than a pass over the roster: see {@link Rows}.
-  // The rank list is short (one entry per row of the drawing) and only the rows
-  // inside the band are descended into, so the dummies of a rank nothing
-  // touched are never looked at.
-  for (const rank of rows.ranks()) {
-    if (rank < lowest || rank > deepest) continue;
-    for (const id of rows.members(rank) ?? []) {
-      if (!previous.virtualNodes.has(id)) nodes.add(id);
+  // The band is read off the graph's own nodes rather than off the rows, since
+  // a row also holds the dummies of every edge drawn through it: on the 10k
+  // corpus a band of every rank was most of this function's time, spent
+  // skipping dummies. A node the previous run never ranked arrived with this
+  // patch or one the engine has not laid out yet, and either way its
+  // coordinates are new.
+  let ranked = 0;
+  for (const node of graph.nodes()) {
+    const rank = previous.ranks.get(node.id);
+    if (rank === undefined) {
+      nodes.add(node.id);
+    } else if (!previous.virtualNodes.has(node.id)) {
+      ranked += 1;
+      if (rank >= lowest && rank <= deepest) nodes.add(node.id);
     }
   }
-  // A node the previous run never ranked arrived with this patch or one the
-  // engine has not laid out yet, and either way its coordinates are new.
-  for (const node of graph.nodes()) {
-    if (!previous.ranks.has(node.id)) nodes.add(node.id);
+  // The pass names every node of the previous run except those the graph no
+  // longer has. A removal in the patch is already a seed; any other node gone
+  // from the graph is found the old way, a slice of the rows (see {@link Rows}).
+  let gone = 0;
+  for (const id of seedNodes) {
+    if (!graph.hasNode(id) && previous.ranks.has(id) && !previous.virtualNodes.has(id)) gone += 1;
+  }
+  if (ranked + gone !== previous.ranks.size - previous.virtualNodes.size) {
+    for (const rank of rows.ranks()) {
+      if (rank < lowest || rank > deepest) continue;
+      for (const id of rows.members(rank) ?? []) {
+        if (!previous.virtualNodes.has(id)) nodes.add(id);
+      }
+    }
   }
 
   const edges = new Set<EdgeId>(seedEdges);

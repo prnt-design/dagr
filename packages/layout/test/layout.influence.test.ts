@@ -181,6 +181,22 @@ describe('influenceRegion', () => {
     expect(graph.hasNode('n2')).toBe(false);
   });
 
+  it('names a node in the band that left the graph outside the patch', () => {
+    const graph = chain(6);
+    const { previous } = pipelineState(graph);
+    graph.removeNode('n4');
+    const patch = watched(graph);
+    graph.batch(() => {
+      graph.addNode('leaf');
+      graph.addEdge('n3', 'leaf', 'toLeaf');
+    });
+    const { sizes } = pipelineState(graph);
+    const region = influenceRegion({ graph, patch: patch(), previous, sizes });
+
+    // `leaf` lands at rank 4, so the band is ranks 2 to 5, where `n4` was.
+    expect(ids(region.nodes)).toEqual(['leaf', 'n2', 'n3', 'n4', 'n5']);
+  });
+
   it('keeps the band for an added edge that already runs downhill', () => {
     const graph = chain(6);
     // `n4` sits three ranks below `n1`, so the constraint this edge adds is one
