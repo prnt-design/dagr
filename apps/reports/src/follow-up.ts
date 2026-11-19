@@ -18,7 +18,7 @@ export type Action =
   | { kind: 'observe'; id: string }
   | { kind: 'fixture-status'; id: string; state: WorkState };
 const states: WorkState[] = ['queued', 'running', 'blocked', 'failed', 'canceled', 'completed', 'unknown'];
-const digest = (value: unknown) => createHash('sha256').update(JSON.stringify(value)).digest('hex');
+export const digest = (value: unknown) => createHash('sha256').update(JSON.stringify(value)).digest('hex');
 const nonempty = (s: string) => typeof s === 'string' && s.trim().length > 0;
 
 /** All fixture operations share one writer lock, including task creation and readback. */

@@ -1,13 +1,13 @@
-import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { expect, it } from 'vitest';
 import { prepareDispatch, submitDispatch, readDispatchJournal, dispatchStatus, type DispatchRecord, type DispatchTransport, type Journal } from '../src/dispatch-protocol.js';
-import type { Proposal } from '../src/follow-up.js';
+import { digest, type Proposal } from '../src/follow-up.js';
 
 function setup() {
   const report = JSON.parse(readFileSync(new URL('../fixtures/day-1.json', import.meta.url), 'utf8'));
   const proposal: Proposal = { id: 'a'.repeat(64), payload: { repository: report.repository, date: report.date, nodeId: report.nodes[0].id, key: 'review', title: 'Review finding', scope: 'Inspect evidence', criteria: ['Record result'], sources: report.sources }, decision: 'accepted', acceptedAt: '2026-11-19T00:00:00Z', submission: 'none' };
-  const binding = { proposalId: proposal.id, payloadHash: createHash('sha256').update(JSON.stringify(proposal.payload)).digest('hex'), projectId: 'project', column: 'backlog', namespace: 'namespace', actorId: 'writer', approvalMessageId: 'original-user-message' };
+  proposal.id = digest([proposal.payload.repository, proposal.payload.date, proposal.payload.nodeId, proposal.payload.key]);
+  const binding = { proposalId: proposal.id, payloadHash: digest(proposal.payload), projectId: 'project', column: 'backlog', namespace: 'namespace', actorId: 'writer', approvalMessageId: 'original-user-message' };
   const journal = prepareDispatch(proposal, binding, () => true);
   let saved = structuredClone(journal);
   const records: DispatchRecord[] = [];
@@ -81,15 +81,15 @@ it('refuses missing and corrupt journals', () => {
   for (const value of [undefined, {}, { ...s.journal, body: '{}' }, { ...s.journal, phase: 'mapped' }]) expect(() => readDispatchJournal(value)).toThrow('journal');
 });
 it('projects board observations without inferring execution, cancellation or work failure', () => {
-  const s = setup(); const r = s.record(); const at = '2026-11-19T01:00:00Z';
-  expect(dispatchStatus(r, at, '2026-11-19')).toContain('queued');
-  expect(dispatchStatus({ ...r, column: 'in_progress' }, at, '2026-11-19')).toContain('board in progress');
-  expect(dispatchStatus({ ...r, column: 'in_review', archivedAt: at, latestFailure: {} }, at, '2026-11-19')).toContain('review pending; archived: true; launch pending: false; launch failure: true');
-  expect(dispatchStatus({ ...r, column: 'done', completedAt: at }, at, '2026-11-19')).toContain('board completed');
-  for (const column of ['blocked', 'failed', 'canceled']) expect(dispatchStatus({ ...r, column }, at, '2026-11-19')).toContain('unknown');
-  expect(dispatchStatus({ ...r, column: 'done' }, at, '2026-11-19')).toContain('contradictory');
-  expect(dispatchStatus(r, at, '2026-11-20')).toContain('stale');
-  expect(dispatchStatus(r, at, '2026-11-19', true)).toContain('failed');
+  const s = setup(); const j: Journal = { ...s.journal, phase: 'mapped', taskId: 'task-1' }; const r = s.record(); const at = '2026-11-19T01:00:00Z';
+  expect(dispatchStatus(j, r, at, '2026-11-19')).toContain('queued');
+  expect(dispatchStatus(j, { ...r, column: 'in_progress' }, at, '2026-11-19')).toContain('board in progress');
+  expect(dispatchStatus(j, { ...r, column: 'in_review', archivedAt: at, latestFailure: {} }, at, '2026-11-19')).toContain('review pending; archived: true; launch pending: false; launch failure: true');
+  expect(dispatchStatus(j, { ...r, column: 'done', completedAt: at }, at, '2026-11-19')).toContain('board completed');
+  for (const column of ['blocked', 'failed', 'canceled']) expect(dispatchStatus(j, { ...r, column }, at, '2026-11-19')).toContain('unknown');
+  expect(dispatchStatus(j, { ...r, column: 'done' }, at, '2026-11-19')).toContain('contradictory');
+  expect(dispatchStatus(j, r, at, '2026-11-20')).toContain('stale');
+  expect(dispatchStatus(j, r, at, '2026-11-19', true)).toContain('failed');
 });
 
 it('retains uncertainty after a persisted checkpoint interruption before send', async () => {
@@ -108,4 +108,39 @@ it('does not recreate when mapped identity changes or receipt verification fails
   t.transport.get = async () => ({ ...t.record(), id: 'wrong' });
   await expect(submitDispatch(t.journal, t.transport, t.checkpoint)).rejects.toThrow('identity');
   expect(t.saved().phase).toBe('attempting');
+});
+
+it('rechecks derived proposal identity during preparation and journal read', () => {
+  const s = setup(); const wrong = 'b'.repeat(64);
+  expect(() => prepareDispatch({ ...s.proposal, id: wrong }, { ...s.binding, proposalId: wrong }, () => true)).toThrow('approval');
+  const binding = { ...s.binding, proposalId: wrong };
+  const body = JSON.parse(s.journal.body); body.binding = binding;
+  expect(() => readDispatchJournal({ ...s.journal, binding, body: JSON.stringify(body) })).toThrow('journal');
+});
+it('approves one canonical frozen binding and excludes extra host fields', () => {
+  const s = setup(); const host = { secret: 'do-not-publish', ...s.binding };
+  let approved: unknown;
+  const j = prepareDispatch(s.proposal, host, binding => {
+    approved = binding;
+    expect(Object.isFrozen(binding)).toBe(true);
+    host.projectId = 'changed-after-approval';
+    return true;
+  });
+  expect(j.binding).toBe(approved);
+  expect(j.binding.projectId).toBe('project');
+  expect(j.body).not.toContain('do-not-publish');
+  expect(JSON.parse(j.body).binding).toEqual(j.binding);
+  expect(Object.keys(j.binding)).toEqual(['proposalId', 'payloadHash', 'projectId', 'column', 'namespace', 'actorId', 'approvalMessageId']);
+  const binding = { ...j.binding, secret: 'extra' };
+  const body = JSON.parse(j.body); body.binding = binding;
+  expect(() => readDispatchJournal({ ...j, binding, body: JSON.stringify(body) })).toThrow('journal');
+});
+it('projects unknown for unmapped or mismatched observations without invented source', () => {
+  const s = setup(); const j: Journal = { ...s.journal, phase: 'mapped', taskId: 'task-1' };
+  const at = '2026-11-19T01:00:00Z';
+  for (const r of [{ ...s.record(), id: 'wrong' }, { ...s.record(), projectId: 'wrong' }, { ...s.record(), body: 'changed' }, { ...s.record(), createdBy: { kind: 'agent', agentId: 'wrong' } }]) {
+    expect(dispatchStatus(j, r, at, '2026-11-19')).toContain('unknown');
+  }
+  expect(dispatchStatus(s.journal, s.record(), at, '2026-11-19')).toContain('unknown');
+  expect(dispatchStatus(j, s.record(), at, '2026-11-19')).not.toContain('source:');
 });

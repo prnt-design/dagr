@@ -164,8 +164,8 @@ Do not manually edit the private ledger. Back it up separately.
 
 Live acceptance into the workboard remains future work. An external bridge could
 use existing Dispatch task tools, but task creation has no idempotency argument.
-It needs a reviewed durable proposal-to-task reconciliation scheme before retrying
-uncertain submissions. This fixture does not establish that live guarantee. Live
+Slice 2 below defines a reconciliation protocol for fake transports only;
+uncertain creates are never retried. This fixture does not establish that live guarantee. Live
 integration, authenticated approval, execution and scheduling are outside this slice.
 
 ## P4 slice 2: external protocol boundary, fake transport only
@@ -199,6 +199,8 @@ Live creation remains blocked until the owner maintains the column without trigg
 or the server provides conditional inert creation. No Dispatch configuration changes
 are included. Receipt verification is separate from completion. Projection reports
 board progress/review/completion, archive and launch failure independently; this
-board has no native failed/canceled/blocked outcomes. Stale or failed observations
+board has no native failed/canceled/blocked outcomes. Projection assumes exactly
+the backlog, ready, in_progress, in_review and done column keys, with done as
+the completion column; other keys produce unknown. Stale or failed observations
 are unknown. Later integration must retain raw observations and mapping provenance.
 Overall P4 and a verified live cycle remain open.

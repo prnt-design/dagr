@@ -1,5 +1,4 @@
-import { createHash } from 'node:crypto';
-import type { Proposal } from './follow-up.js';
+import { digest as hash, type Proposal } from './follow-up.js';
 
 export interface Binding {
   proposalId: string;
@@ -34,29 +33,33 @@ export interface Journal {
   phase: 'prepared' | 'attempting' | 'mapped';
   taskId?: string;
 }
-const hash = (value: unknown) => createHash('sha256').update(JSON.stringify(value)).digest('hex');
-const validBinding = (b: Binding) => b && ['proposalId', 'payloadHash', 'projectId', 'column', 'namespace', 'actorId', 'approvalMessageId'].every(key => typeof b[key as keyof Binding] === 'string' && b[key as keyof Binding].trim()) &&
+const identity = (p: Proposal['payload']) => hash([p.repository, p.date, p.nodeId, p.key]);
+const bindingKeys = ['proposalId', 'payloadHash', 'projectId', 'column', 'namespace', 'actorId', 'approvalMessageId'] as const;
+const canonicalBinding = (b: Binding): Binding => Object.freeze({ proposalId: b.proposalId, payloadHash: b.payloadHash, projectId: b.projectId, column: b.column, namespace: b.namespace, actorId: b.actorId, approvalMessageId: b.approvalMessageId });
+const validBinding = (b: Binding) => b && bindingKeys.every(key => typeof b[key as keyof Binding] === 'string' && b[key as keyof Binding].trim()) &&
   /^[a-f0-9]{64}$/.test(b.proposalId) && /^[a-f0-9]{64}$/.test(b.payloadHash);
 
 /** The host verifies original user evidence. This callback is a capability, not JSON authentication. */
 export function prepareDispatch(proposal: Proposal, binding: Binding, authorize: (binding: Readonly<Binding>) => boolean): Journal {
-  if (!validBinding(binding) || proposal.decision !== 'accepted' || !proposal.acceptedAt ||
-      binding.proposalId !== proposal.id || binding.payloadHash !== hash(proposal.payload) || !authorize(Object.freeze({ ...binding }))) {
+  if (!validBinding(binding)) throw new Error('Verified exact-scope approval required');
+  const approved = canonicalBinding(binding);
+  if (proposal.id !== identity(proposal.payload) || proposal.decision !== 'accepted' || !proposal.acceptedAt ||
+      approved.proposalId !== proposal.id || approved.payloadHash !== hash(proposal.payload) || !authorize(approved)) {
     throw new Error('Verified exact-scope approval required');
   }
-  return { version: 1, binding: { ...binding }, title: proposal.payload.title,
-    body: JSON.stringify({ protocol: 'dagr-dispatch-v1', binding, payload: proposal.payload }), phase: 'prepared' };
+  return { version: 1, binding: approved, title: proposal.payload.title,
+    body: JSON.stringify({ protocol: 'dagr-dispatch-v1', binding: approved, payload: proposal.payload }), phase: 'prepared' };
 }
 
 export function readDispatchJournal(value: unknown): Journal {
   if (!value || typeof value !== 'object') throw new Error('Missing or corrupt journal');
   const j = value as Journal;
-  if (j.version !== 1 || !validBinding(j.binding) || !['prepared', 'attempting', 'mapped'].includes(j.phase) ||
+  if (j.version !== 1 || !validBinding(j.binding) || Object.keys(j.binding).length !== bindingKeys.length || !['prepared', 'attempting', 'mapped'].includes(j.phase) ||
       typeof j.body !== 'string' || typeof j.title !== 'string' || !j.title.trim() ||
       (j.phase === 'mapped' ? typeof j.taskId !== 'string' || !j.taskId.trim() : j.taskId !== undefined)) throw new Error('Missing or corrupt journal');
   try {
     const body = JSON.parse(j.body);
-    if (body.protocol !== 'dagr-dispatch-v1' || JSON.stringify(body.binding) !== JSON.stringify(j.binding) ||
+    if (body.protocol !== 'dagr-dispatch-v1' || identity(body.payload) !== j.binding.proposalId || JSON.stringify(body.binding) !== JSON.stringify(j.binding) ||
         hash(body.payload) !== j.binding.payloadHash || body.payload.title !== j.title) throw new Error();
   } catch { throw new Error('Missing or corrupt journal'); }
   return structuredClone(j);
@@ -76,7 +79,8 @@ const matches = (j: Journal, r: DispatchRecord) => r.projectId === j.binding.pro
 export async function submitDispatch(value: unknown, transport: DispatchTransport, checkpoint: (journal: Journal) => Promise<void>): Promise<Journal> {
   const j = readDispatchJournal(value);
   if (j.phase === 'mapped') {
-    if (!matches(j, await transport.get(j.taskId!))) throw new Error('Mapped identity mismatch');
+    const record = await transport.get(j.taskId!);
+    if (record.id !== j.taskId || !matches(j, record)) throw new Error('Mapped identity mismatch');
     return j;
   }
   const scan = await transport.scan();
@@ -102,9 +106,11 @@ export async function submitDispatch(value: unknown, transport: DispatchTranspor
   await checkpoint(structuredClone(j)); return j;
 }
 
-export function dispatchStatus(record: DispatchRecord | undefined, retrievedAt: string, asOf: string, refreshFailed = false): string {
-  if (!record || refreshFailed || !Number.isFinite(Date.parse(retrievedAt)) || retrievedAt.slice(0, 10) !== asOf || !Number.isFinite(Date.parse(record.updatedAt))) return 'unknown (missing, failed or stale observation)';
+export function dispatchStatus(journal: Journal, record: DispatchRecord | undefined, retrievedAt: string, asOf: string, refreshFailed = false): string {
+  const j = readDispatchJournal(journal);
+  if (!record || j.phase !== 'mapped' || record.id !== j.taskId || !matches(j, record)) return 'unknown (unverified identity)';
+  if (refreshFailed || !Number.isFinite(Date.parse(retrievedAt)) || retrievedAt.slice(0, 10) !== asOf || !Number.isFinite(Date.parse(record.updatedAt))) return 'unknown (missing, failed or stale observation)';
   if ((record.column === 'done') !== !!record.completedAt || (record.completedAt && !Number.isFinite(Date.parse(record.completedAt)))) return 'unknown (contradictory completion)';
   const state = ({ backlog: 'queued', ready: 'queued', in_progress: 'board in progress', in_review: 'review pending', done: 'board completed' } as Record<string, string>)[record.column] ?? 'unknown (unsupported column)';
-  return `${state}; archived: ${!!record.archivedAt}; launch pending: ${!!record.launching}; launch failure: ${!!record.latestFailure}; observed: ${retrievedAt}; task: ${record.id}; project: ${record.projectId}; source: Dispatch task_get`;
+  return `${state}; archived: ${!!record.archivedAt}; launch pending: ${!!record.launching}; launch failure: ${!!record.latestFailure}; observed: ${retrievedAt}; task: ${record.id}; project: ${record.projectId}`;
 }
