@@ -305,13 +305,6 @@ describe('the cohort rule for a node whose rank changed', () => {
   });
 
   /**
-   * A newcomer at a rank is a node no cohort there claims, and it keeps the
-   * slot the walk gave it, which is the rule an unnamed node already had. This
-   * is the M3.6 sentence "it is a newcomer at its new rank": the seed says
-   * nothing about it, and the sweeps that follow put it at a barycenter-derived
-   * slot among the nodes that did keep theirs.
-   */
-  /**
    * A cohort's keys have gaps wherever the hint listed a node that is now in
    * another layer. The near and the far gaps take different paths through the
    * placement, and both must come out in the hint's order.
@@ -339,6 +332,13 @@ describe('the cohort rule for a node whose rank changed', () => {
     expect(far).toEqual([['a'], ['y', 'x'], ['p', 'q', 'r']]);
   });
 
+  /**
+   * A newcomer at a rank is a node no cohort there claims, and it keeps the
+   * slot the walk gave it, which is the rule an unnamed node already had. This
+   * is the M3.6 sentence "it is a newcomer at its new rank": the seed says
+   * nothing about it, and the sweeps that follow put it at a barycenter-derived
+   * slot among the nodes that did keep theirs.
+   */
   it('keeps a newcomer at its walk slot and lets the sweeps place it', () => {
     const fan = build(
       ['a', 'x', 'n', 'y'],

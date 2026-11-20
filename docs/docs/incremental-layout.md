@@ -205,8 +205,9 @@ at a load average of 1.81, to 103ms at a load average of 3.1. Putting each
 layer in its cohort's order by dropping members into buckets by key, rather
 than by a comparison sort, then took that step from about 20ms to about 4ms and
 the stage to the 86.8ms in the table above. What is left of it is mostly
-building its index and its warm-start cohorts, not sweeping the held layers. A cold run of
-the same graph, measured in the same session, takes 692ms, and an
+building its index and its warm-start cohorts and sweeping the leaf's layer,
+not sweeping the held layers.
+A cold run of the same graph, measured in the same session, takes 692ms, and an
 added leaf takes 14 frames at 60 Hz, against M3.9b's budget of one; a removed
 leaf takes 7. The order stage is 38% of an added leaf. Skipping stages alone
 cannot meet that budget: "everything else", the work outside them, is about 6
