@@ -11,6 +11,10 @@ of doc prose.
 
 ## Unreleased
 
+- The order stage builds its index by writing each segment into typed arrays
+  sized up front rather than pushing onto growing arrays. The layers are
+  unchanged; on the 10k corpus an added leaf's order stage drops from 87ms to
+  75ms (Apple M4, Node 25.6.1).
 - The order stage puts each layer in its warm-start cohort's order by
   dropping members into buckets by key rather than by a comparison sort,
   falling back to the sort when a cohort's keys are spread thin. The layers
