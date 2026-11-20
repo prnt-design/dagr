@@ -11,6 +11,11 @@ of doc prose.
 
 ## Unreleased
 
+- The checks on the order and position stages' output no longer build a set
+  of the roster or walk it through a generator. They reject the same output;
+  on the 10k corpus the work outside the stages for an added leaf drops from
+  97ms to 86ms, and the whole relayout from 219ms to 206ms (Apple M4, Node
+  25.6.1).
 - The order stage builds its index by writing each segment into typed arrays
   sized up front rather than pushing onto growing arrays. The layers are
   unchanged; on the 10k corpus an added leaf's order stage drops from 87ms to

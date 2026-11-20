@@ -7,7 +7,7 @@
     "cpu": "Apple M4",
     "cores": 10,
     "node": "v25.6.1",
-    "loadAverage": 2.95
+    "loadAverage": 2
   },
   "runs": 11,
   "corpus": {
@@ -21,7 +21,7 @@
     "position": "grid-position",
     "route": "polyline-route"
   },
-  "cold": 687.045,
+  "cold": 674.441,
   "kinds": {
     "add-leaf": {
       "ran": [
@@ -31,12 +31,12 @@
       ],
       "stages": {
         "rank": 0,
-        "order": 74.959,
-        "position": 19.351,
-        "route": 23.591
+        "order": 72.84,
+        "position": 19.455,
+        "route": 24.086
       },
-      "outside": 96.753,
-      "total": 218.553
+      "outside": 86.004,
+      "total": 206.351
     },
     "remove-leaf": {
       "ran": [
@@ -46,11 +46,11 @@
       "stages": {
         "rank": 0,
         "order": 0,
-        "position": 18.382,
-        "route": 23.956
+        "position": 18.145,
+        "route": 24.209
       },
-      "outside": 65.03,
-      "total": 108.898
+      "outside": 62.564,
+      "total": 105.406
     },
     "resize": {
       "ran": [
@@ -60,11 +60,11 @@
       "stages": {
         "rank": 0,
         "order": 0,
-        "position": 18.227,
-        "route": 24.8
+        "position": 17.974,
+        "route": 24.27
       },
-      "outside": 56.757,
-      "total": 99.936
+      "outside": 52.55,
+      "total": 95.009
     }
   }
 }

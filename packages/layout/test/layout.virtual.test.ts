@@ -118,6 +118,25 @@ describe('virtual nodes', () => {
   // could not: see the graph-mutation test further down for the one way still
   // left to put a roster member in front of the runner that nothing measured.
 
+  it('names a declared virtual node the order stage left out of the layers', () => {
+    const dropping: OrderStage = { name: 'dropping-order', run: () => ({ layers: [['a'], ['b']] }) };
+    const error = expectContractError({ rank: dummyRankStage(), order: dropping });
+    expect(error.stage).toBe('dropping-order');
+    expect(error.id).toBe('ab#1');
+    expect(error.message).toContain('missing from the layers');
+  });
+
+  it('rejects an id in the layers that neither the graph nor the ranker holds', () => {
+    const inventing: OrderStage = {
+      name: 'inventing-order',
+      run: () => ({ layers: [['a'], ['ab#2'], ['b']] }),
+    };
+    const error = expectContractError({ rank: dummyRankStage(), order: inventing });
+    expect(error.stage).toBe('inventing-order');
+    expect(error.id).toBe('ab#2');
+    expect(error.message).toContain('not in the roster');
+  });
+
   it('rejects an unusable declared size, naming the ranker', () => {
     // The one size in a run the config never validated: prepare measured and
     // checked every node the graph holds, and this one was minted afterwards by

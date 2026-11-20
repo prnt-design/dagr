@@ -40,11 +40,16 @@ import type {
  *
  * The virtual segment comes out in id order, because {@link declaredRoster}
  * put it in id order. That is the roster's order for every consumer, this
- * generator and the order stage alike, and the reason it matters is there.
+ * function and the order stage alike, and the reason it matters is there.
+ *
+ * An array rather than a generator: on the 10k corpus the roster is some
+ * 184,000 ids, and resuming a generator for each cost more than the array.
  */
-function* rosterOf(graph: Graph, virtualNodes: ReadonlySet<NodeId>): Generator<NodeId> {
-  for (const node of graph.nodes()) yield node.id;
-  for (const id of virtualNodes) yield id;
+function rosterOf(graph: Graph, virtualNodes: ReadonlySet<NodeId>): NodeId[] {
+  const roster: NodeId[] = [];
+  for (const node of graph.nodes()) roster.push(node.id);
+  for (const id of virtualNodes) roster.push(id);
+  return roster;
 }
 
 /**
@@ -436,7 +441,7 @@ function checkRanked(
  * consume a row of vertical space downstream.
  */
 function checkOrdered(stage: string, graph: Graph, ordered: OrderedState): void {
-  const roster = new Set(rosterOf(graph, ordered.virtualNodes));
+  const { virtualNodes } = ordered;
   const placed = new Set<NodeId>();
   let previousRank: number | undefined;
   for (const [index, layer] of ordered.layers.entries()) {
@@ -449,7 +454,7 @@ function checkOrdered(stage: string, graph: Graph, ordered: OrderedState): void 
     }
     let layerRank: number | undefined;
     for (const id of layer) {
-      if (!roster.has(id)) {
+      if (!graph.hasNode(id) && !virtualNodes.has(id)) {
         throw new StageContractError(stage, id, 'the layers list a node that is not in the roster');
       }
       if (placed.has(id)) throw new StageContractError(stage, id, 'listed in the layers twice');
@@ -475,8 +480,14 @@ function checkOrdered(stage: string, graph: Graph, ordered: OrderedState): void 
     }
     previousRank = layerRank;
   }
-  for (const id of roster) {
-    if (!placed.has(id)) throw new StageContractError(stage, id, 'missing from the layers');
+  // Every placed id is a distinct roster member, and the roster holds at most
+  // this many, so reaching the count means none is missing. Only a shortfall
+  // pays for the walk that names one: on the 10k corpus the roster is some
+  // 180,000 ids, nearly all of them dummies.
+  if (placed.size < graph.nodeCount + virtualNodes.size) {
+    for (const id of rosterOf(graph, virtualNodes)) {
+      if (!placed.has(id)) throw new StageContractError(stage, id, 'missing from the layers');
+    }
   }
 }
 

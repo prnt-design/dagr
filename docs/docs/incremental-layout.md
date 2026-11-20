@@ -156,7 +156,7 @@ left.
 
 Wall-clock milliseconds for one `engine.relayout(patch)` on the 10k corpus
 (10,000 nodes, 40,000 edges) at the defaults, measured on an Apple M4 under Node
-25.6.1 at a one-minute load average of 2.95. A cycle adds a leaf under a node in
+25.6.1 at a one-minute load average of 2. A cycle adds a leaf under a node in
 the middle of the graph, grows that node with a `nodeSize` callback, shrinks it
 back and removes the leaf. Each figure is a median over eleven cycles after two
 warmups, so the resize column pools both size changes, 22 relayouts.
@@ -164,11 +164,11 @@ warmups, so the resize column pools both size changes, 22 relayouts.
 | Phase | add a leaf | remove a leaf | resize a node |
 | --- | --- | --- | --- |
 | `longest-path-rank` | not run | not run | not run |
-| `barycenter-order` | 75.0ms | not run | not run |
-| `grid-position` | 19.4ms | 18.4ms | 18.2ms |
-| `polyline-route` | 23.6ms | 24.0ms | 24.8ms |
-| everything else | 96.8ms | 65.0ms | 56.8ms |
-| **whole relayout** | **219ms** | **109ms** | **99.9ms** |
+| `barycenter-order` | 72.8ms | not run | not run |
+| `grid-position` | 19.5ms | 18.1ms | 18.0ms |
+| `polyline-route` | 24.1ms | 24.2ms | 24.3ms |
+| everything else | 86.0ms | 62.6ms | 52.5ms |
+| **whole relayout** | **206ms** | **105ms** | **95.0ms** |
 
 **A resize runs only position and route.** Neither the rank stage nor the order
 stage reads a size, and run again over an unchanged graph both would land where
@@ -206,14 +206,14 @@ layer in its cohort's order by dropping members into buckets by key, rather
 than by a comparison sort, then took that step from about 20ms to about 4ms and
 the stage to 86.8ms at a load average of 1.61. Building its index with each
 segment written into a typed array sized up front, rather than pushed onto
-growing arrays, then took the stage to the 75.0ms in the table above. What is
+growing arrays, then took the stage to 75.0ms at a load average of 2.95. What is
 left of it is mostly building that index, which still numbers every node and
 dummy by id, and its warm-start cohorts and sweeping the leaf's layer, not
 sweeping the held layers.
-A cold run of the same graph, measured in the same session, takes 687ms, and an
-added leaf takes 13 frames at 60 Hz, against M3.9b's budget of one; a removed
-leaf takes 7. The order stage is 34% of an added leaf. Skipping stages alone
-cannot meet that budget: "everything else", the work outside them, is about 6
+A cold run of the same graph, measured in the same session, takes 674ms, and an
+added leaf takes 12 frames at 60 Hz, against M3.9b's budget of one; a removed
+leaf takes 6. The order stage is 35% of an added leaf. Skipping stages alone
+cannot meet that budget: "everything else", the work outside them, is about 5
 frames on its own for an added leaf, and about 3 even for a resize, which skips
 the rank and order contract checks. It
 includes measuring nodes, the influence region, merging the dummy sizes, the
@@ -221,7 +221,11 @@ stage contract checks, assembling the result, the delta and retaining the warm
 start. Measured separately on a different machine, the influence region is 7ms
 to 9ms for each patch kind (Ryzen 9 9900X, Node 22.22.1, 2026-11-19 UTC), down from 13ms
 to 17ms before it stopped reading its band from rows full of dummies. The
-table above was measured after that change.
+checks on the order and position stages' output no longer build a set of the
+roster, some 184,000 ids, nearly all of them dummies, or walk it through a
+generator, which took the work outside the stages for an added leaf from 96.8ms
+at a load average of 2.95 to the 86.0ms above. The table was measured after both
+changes.
 
 Like the pipeline page's [What a run costs](layout.md#what-a-run-costs), which
 was measured on a different machine, this is a measurement and not a baseline:
