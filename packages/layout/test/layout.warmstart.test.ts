@@ -305,6 +305,34 @@ describe('the cohort rule for a node whose rank changed', () => {
   });
 
   /**
+   * A cohort's keys have gaps wherever the hint listed a node that is now in
+   * another layer. The near and the far gaps take different paths through the
+   * placement, and both must come out in the hint's order.
+   */
+  it('orders a cohort whose keys have gaps, near and far', () => {
+    const tree = build(
+      ['a', 'x', 'y', 'p', 'q', 'r'],
+      [
+        ['a', 'x'],
+        ['a', 'y'],
+        ['x', 'p'],
+        ['x', 'q'],
+        ['x', 'r'],
+      ],
+    );
+    const layers = [['a'], ['x', 'y'], ['p', 'q', 'r']];
+    expect(ordered(stateOf(tree, layers), { maxSweeps: 0 })).toEqual(layers);
+    const near = ordered(stateOf(tree, layers, [['a'], ['y', 'p', 'x', 'r', 'q']]), {
+      maxSweeps: 0,
+    });
+    expect(near).toEqual([['a'], ['y', 'x'], ['p', 'r', 'q']]);
+    const far = ordered(stateOf(tree, layers, [['a'], ['y', 'p', 'q', 'r', 'x']]), {
+      maxSweeps: 0,
+    });
+    expect(far).toEqual([['a'], ['y', 'x'], ['p', 'q', 'r']]);
+  });
+
+  /**
    * A newcomer at a rank is a node no cohort there claims, and it keeps the
    * slot the walk gave it, which is the rule an unnamed node already had. This
    * is the M3.6 sentence "it is a newcomer at its new rank": the seed says

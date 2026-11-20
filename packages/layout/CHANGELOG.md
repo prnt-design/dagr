@@ -11,6 +11,11 @@ of doc prose.
 
 ## Unreleased
 
+- The order stage puts each layer in its warm-start cohort's order by
+  dropping members into buckets by key rather than by a comparison sort,
+  falling back to the sort when a cohort's keys are spread thin. The layers
+  are unchanged; on the 10k corpus an added leaf's order stage drops from
+  103ms to 87ms (Apple M4, Node 25.6.1).
 - `influenceRegion`, and so a relayout's `region`, reads its band off the
   graph's nodes rather than off the previous drawing's rows, which also hold
   every dummy drawn through them. It names the same nodes and edges; on the 10k
