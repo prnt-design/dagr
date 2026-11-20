@@ -228,7 +228,7 @@ check on the order stage's output no longer builds a set of the roster, some
 walks the roster through a generator. That took the work outside the stages for
 an added leaf from 96.8ms at a load average of 2.95 to the 86.0ms above, part of
 which may be the lower load: run alternately in one session, the builds before
-and after it differ by 10ms to 15ms for an added leaf. The table was measured after both
+and after it differ by about 10ms to 15ms for an added leaf. The table was measured after both
 changes. Much of what is left there is copying the ranks and sizes the engine
 holds, an entry for every node and dummy, before the stages run.
 
