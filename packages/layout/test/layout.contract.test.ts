@@ -106,6 +106,7 @@ describe('layout stage contract', () => {
     const error = expectContractError({ order: inventing });
     expect(error.stage).toBe('inventing-order');
     expect(error.id).toBe('ghost');
+    expect(error.message).toContain('not in the roster');
   });
 
   it('catches a rank stage that ranks a target above its source', () => {

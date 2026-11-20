@@ -11,6 +11,12 @@ of doc prose.
 
 ## Unreleased
 
+- The stage contract checks walk the roster through a callback rather than a
+  generator, and the order check keeps one set of the roster, emptied as the
+  layers place it, rather than a roster set and a placed set. They throw the
+  same errors for the same ids; on the 10k corpus the work outside the stages
+  for an added leaf drops from 166ms to 167ms to 126ms to 128ms, and a cold
+  run from about 875ms to about 815ms (Ryzen 9 9900X, Node 22.22.1).
 - The order stage builds its index by writing each segment into typed arrays
   sized up front rather than pushing onto growing arrays. The layers are
   unchanged; on the 10k corpus an added leaf's order stage drops from 87ms to
