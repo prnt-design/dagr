@@ -40,11 +40,20 @@ import type {
  *
  * The virtual segment comes out in id order, because {@link declaredRoster}
  * put it in id order. That is the roster's order for every consumer, this
- * generator and the order stage alike, and the reason it matters is there.
+ * walk and the order stage alike, and the reason it matters is there.
+ *
+ * A callback rather than a generator, for the reason `forEachSegment` gives:
+ * the 10k bench corpus has 184,222 roster members, three checks walk them on
+ * every run, and the position check alone took 27ms resuming a generator once
+ * per member against about 12ms through this callback, on a Ryzen 9 9900X.
  */
-function* rosterOf(graph: Graph, virtualNodes: ReadonlySet<NodeId>): Generator<NodeId> {
-  for (const node of graph.nodes()) yield node.id;
-  for (const id of virtualNodes) yield id;
+function forEachRosterMember(
+  graph: Graph,
+  virtualNodes: ReadonlySet<NodeId>,
+  visit: (id: NodeId) => void,
+): void {
+  for (const node of graph.nodes()) visit(node.id);
+  for (const id of virtualNodes) visit(id);
 }
 
 /**
@@ -199,7 +208,7 @@ function checkRanked(
   // routinely not on the chain being blamed for skipping it.
   const occupied = new Map<number, NodeId>();
   const chainsDeclared = ranked.virtualChains.size > 0;
-  for (const id of rosterOf(graph, ranked.virtualNodes)) {
+  forEachRosterMember(graph, ranked.virtualNodes, (id) => {
     const rank = ranked.ranks.get(id);
     if (rank === undefined) throw new StageContractError(stage, id, 'no rank was assigned');
     if (!Number.isFinite(rank)) {
@@ -216,7 +225,7 @@ function checkRanked(
           'with its size in virtualNodes',
       );
     }
-  }
+  });
 
   // A stale or invented id here would sit invisible until a router tried to
   // un-reverse a route and quietly did nothing.
@@ -436,8 +445,12 @@ function checkRanked(
  * consume a row of vertical space downstream.
  */
 function checkOrdered(stage: string, graph: Graph, ordered: OrderedState): void {
-  const roster = new Set(rosterOf(graph, ordered.virtualNodes));
-  const placed = new Set<NodeId>();
+  // One set, emptied as the layers place its members, rather than a roster set
+  // and a placed set beside it: on the 10k corpus that halves the inserts. An id
+  // the set does not hold is either foreign or a repeat, and telling those apart
+  // takes the roster, which only an error has to build.
+  const unplaced = new Set<NodeId>();
+  forEachRosterMember(graph, ordered.virtualNodes, (id) => unplaced.add(id));
   let previousRank: number | undefined;
   for (const [index, layer] of ordered.layers.entries()) {
     if (layer.length === 0) {
@@ -449,11 +462,14 @@ function checkOrdered(stage: string, graph: Graph, ordered: OrderedState): void 
     }
     let layerRank: number | undefined;
     for (const id of layer) {
-      if (!roster.has(id)) {
-        throw new StageContractError(stage, id, 'the layers list a node that is not in the roster');
+      if (!unplaced.delete(id)) {
+        const roster = new Set<NodeId>();
+        forEachRosterMember(graph, ordered.virtualNodes, (member) => roster.add(member));
+        if (!roster.has(id)) {
+          throw new StageContractError(stage, id, 'the layers list a node that is not in the roster');
+        }
+        throw new StageContractError(stage, id, 'listed in the layers twice');
       }
-      if (placed.has(id)) throw new StageContractError(stage, id, 'listed in the layers twice');
-      placed.add(id);
       const rank = ordered.ranks.get(id);
       if (rank === undefined) throw new StageContractError(stage, id, 'no rank was assigned');
       if (layerRank === undefined) layerRank = rank;
@@ -475,14 +491,13 @@ function checkOrdered(stage: string, graph: Graph, ordered: OrderedState): void 
     }
     previousRank = layerRank;
   }
-  for (const id of roster) {
-    if (!placed.has(id)) throw new StageContractError(stage, id, 'missing from the layers');
-  }
+  const missing = unplaced.values().next();
+  if (missing.done !== true) throw new StageContractError(stage, missing.value, 'missing from the layers');
 }
 
 /** Checks the position stage gave every roster member a usable coordinate. */
 function checkPositioned(stage: string, graph: Graph, positioned: PositionedState): void {
-  for (const id of rosterOf(graph, positioned.virtualNodes)) {
+  forEachRosterMember(graph, positioned.virtualNodes, (id) => {
     const point = positioned.positions.get(id);
     if (point === undefined) {
       throw new StageContractError(stage, id, 'no position was assigned');
@@ -494,7 +509,7 @@ function checkPositioned(stage: string, graph: Graph, positioned: PositionedStat
         `position (${String(point.x)}, ${String(point.y)}) is not a finite point`,
       );
     }
-  }
+  });
 }
 
 /**
