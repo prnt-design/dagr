@@ -156,7 +156,7 @@ left.
 
 Wall-clock milliseconds for one `engine.relayout(patch)` on the 10k corpus
 (10,000 nodes, 40,000 edges) at the defaults, measured on an Apple M4 under Node
-25.6.1 at a one-minute load average of 2.95. A cycle adds a leaf under a node in
+25.6.1 at a one-minute load average of 1.72. A cycle adds a leaf under a node in
 the middle of the graph, grows that node with a `nodeSize` callback, shrinks it
 back and removes the leaf. Each figure is a median over eleven cycles after two
 warmups, so the resize column pools both size changes, 22 relayouts.
@@ -164,11 +164,11 @@ warmups, so the resize column pools both size changes, 22 relayouts.
 | Phase | add a leaf | remove a leaf | resize a node |
 | --- | --- | --- | --- |
 | `longest-path-rank` | not run | not run | not run |
-| `barycenter-order` | 75.0ms | not run | not run |
-| `grid-position` | 19.4ms | 18.4ms | 18.2ms |
-| `polyline-route` | 23.6ms | 24.0ms | 24.8ms |
-| everything else | 96.8ms | 65.0ms | 56.8ms |
-| **whole relayout** | **219ms** | **109ms** | **99.9ms** |
+| `barycenter-order` | 76.6ms | not run | not run |
+| `grid-position` | 19.1ms | 17.6ms | 17.9ms |
+| `polyline-route` | 25.8ms | 24.6ms | 24.5ms |
+| everything else | 77.4ms | 58.5ms | 49.4ms |
+| **whole relayout** | **202ms** | **103ms** | **92.3ms** |
 
 **A resize runs only position and route.** Neither the rank stage nor the order
 stage reads a size, and run again over an unchanged graph both would land where
@@ -206,14 +206,15 @@ layer in its cohort's order by dropping members into buckets by key, rather
 than by a comparison sort, then took that step from about 20ms to about 4ms and
 the stage to 86.8ms at a load average of 1.61. Building its index with each
 segment written into a typed array sized up front, rather than pushed onto
-growing arrays, then took the stage to the 75.0ms in the table above. What is
+growing arrays, then took the stage to 75.0ms at a load average of 2.95; the
+stage has not changed since, and the table measures it again. What is
 left of it is mostly building that index, which still numbers every node and
 dummy by id, and its warm-start cohorts and sweeping the leaf's layer, not
 sweeping the held layers.
-A cold run of the same graph, measured in the same session, takes 687ms, and an
-added leaf takes 13 frames at 60 Hz, against M3.9b's budget of one; a removed
-leaf takes 7. The order stage is 34% of an added leaf. Skipping stages alone
-cannot meet that budget: "everything else", the work outside them, is about 6
+A cold run of the same graph, measured in the same session, takes 648ms, and an
+added leaf takes 12 frames at 60 Hz, against M3.9b's budget of one; a removed
+leaf takes 6. The order stage is 38% of an added leaf. Skipping stages alone
+cannot meet that budget: "everything else", the work outside them, is about 5
 frames on its own for an added leaf, and about 3 even for a resize, which skips
 the rank and order contract checks. It
 includes measuring nodes, the influence region, merging the dummy sizes, the
@@ -228,7 +229,9 @@ beside its roster set. On that Ryzen machine, two runs each before and after
 on 2026-11-20 UTC, the work outside the stages went from 166ms to 167ms down
 to 126ms to 128ms for an added leaf, from 113ms down to 99ms to 100ms for a
 removed leaf and from 95ms to 97ms down to 82ms to 83ms for a resize. The table above
-predates that change and was not re-measured on the Apple M4.
+was measured after that change too, on 2026-11-20 UTC; on the Apple M4 the work
+outside the stages for an added leaf was 96.8ms before it, at a load average of
+2.95.
 
 Like the pipeline page's [What a run costs](layout.md#what-a-run-costs), which
 was measured on a different machine, this is a measurement and not a baseline:
@@ -264,7 +267,7 @@ has a reason, and none of them is that the corpus cannot see:
 What is still missing is most of the work the third bullet does not do. A
 resize and a removed leaf now run only position and route, and an added leaf
 skips the rank stage (see the table above), and no session in this corpus does
-any of those on its own. An added leaf still takes 13 frames, and bringing it
+any of those on its own. An added leaf still takes 12 frames, and bringing it
 inside one is what would make a small structural edit cheap in time rather
 than only stable in space.
 

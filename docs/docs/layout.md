@@ -2214,8 +2214,8 @@ cycles and parallel edges. A leaf under the last rank opens a new layer, which
 the order stage builds. A patch that also carries inert ops or a size for the
 leaf takes it too; one that adds another node or edge, or a node whose edge
 leaves it, does not, and neither does an engine in the cases a resize runs all
-four. On the 10k-node corpus an added leaf drops from about 400ms to about
-270ms; see
+four. On the 10k-node corpus this took an added leaf from about 400ms to about
+270ms on 2026-11-19 UTC; for what one costs now, see
 [What a relayout costs](./incremental-layout.md#what-a-relayout-costs).
 
 ### The tolerance, on the engine
