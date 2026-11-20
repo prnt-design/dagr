@@ -234,6 +234,19 @@ was measured after that change too, on 2026-11-20 UTC; on the Apple M4 the work
 outside the stages for an added leaf was 96.8ms before it, at a load average of
 2.95, against 77.4ms after it at 1.72.
 
+After that, a relayout that skips the rank stage stopped copying every roster
+member's size into a new map. It now reads the sizes off the map the last full
+run built, with only the nodes resized, added or removed since kept beside it,
+and hands over that map itself when there are none. Reading through it costs
+the position stage up to about 5ms, but the copy cost more. On the Apple M4, two runs
+each before and after on 2026-11-20 UTC at load averages of 1.4 to 2.1, the
+work outside the stages went from 75.8ms to 79.7ms down to 61.7ms to 63.7ms for
+an added leaf, from 58.5ms to 62.8ms down to 44.0ms to 46.1ms for a removed
+leaf and from 48.9ms to 50.8ms down to 35.0ms for a resize. Whole relayouts
+went from 194ms to 207ms down to 188ms to 191ms (12 frames), from 99ms
+to 106ms down to 87ms to 88ms and from 90ms to 94ms down to 83ms to 84ms. The
+table above predates that change.
+
 Like the pipeline page's [What a run costs](layout.md#what-a-run-costs), which
 was measured on a different machine, this is a measurement and not a baseline:
 nothing gates on it. The test that holds this table to the committed file also
