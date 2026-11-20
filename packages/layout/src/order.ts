@@ -735,12 +735,10 @@ function seedWalk(index: OrderIndex): number[][] {
  * permuted within its own slots" already says it. A node the hint never named
  * at all is free in exactly the same way.
  *
- * Within a cohort the ties fall through to whatever order the layer was already
- * in, with no tiebreaking term to make it: members are collected in slot order
- * and `Array.prototype.sort` has been stable since ES2019, so equal keys come
- * out in the order they went in. Equal keys are impossible for two distinct
- * members of one cohort, since a hint layer numbers its ids 0 upward, so this
- * is a property of the sort rather than a rule anything relies on.
+ * Within a cohort there are no ties to break: a hint layer numbers its ids 0
+ * upward and a repeat consumes no index, so two distinct members of one cohort
+ * never share a key. The placement relies on that, since it puts each member in
+ * the bucket its key names.
  *
  * An id the roster does not hold has no node to be a position for and is
  * ignored, a repeat consumes no index, and an id the hint puts in the wrong
@@ -801,6 +799,34 @@ function cohortsOf(
   // layer: a cohort's slots are slots of one layer, so it holds at most that
   // layer's worth of entries at a time.
   const cohorts = new Map<number, { readonly members: number[]; readonly slots: number[] }>();
+  let bucket = new Int32Array(0);
+  // Keys within a cohort are distinct, so when they span little more than the
+  // cohort itself, dropping each member into the bucket its key names and
+  // reading the buckets back in order is the sort, in linear time.
+  const byKey = (members: number[]): void => {
+    let low = Infinity;
+    let high = -Infinity;
+    for (const node of members) {
+      const key = at(keyOf, node);
+      if (key < low) low = key;
+      if (key > high) high = key;
+    }
+    const span = high - low + 1;
+    if (span > 2 * members.length) {
+      members.sort((left, right) => at(keyOf, left) - at(keyOf, right));
+      return;
+    }
+    if (bucket.length < span) bucket = new Int32Array(span);
+    bucket.fill(-1, 0, span);
+    for (const node of members) bucket[at(keyOf, node) - low] = node;
+    let next = 0;
+    for (let key = 0; key < span; key += 1) {
+      const node = at(bucket, key);
+      if (node === -1) continue;
+      members[next] = node;
+      next += 1;
+    }
+  };
   const impose = (layer: number[], position: Int32Array): void => {
     if (!any) return;
     cohorts.clear();
@@ -816,7 +842,7 @@ function cohortsOf(
     }
     for (const { members, slots } of cohorts.values()) {
       if (members.length < 2) continue;
-      members.sort((left, right) => at(keyOf, left) - at(keyOf, right));
+      byKey(members);
       for (const [rank, node] of members.entries()) {
         const slot = at(slots, rank);
         layer[slot] = node;
