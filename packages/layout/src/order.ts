@@ -369,8 +369,8 @@ interface OrderIndex {
 
 /** A CSR adjacency from a list of (owner, neighbour) pairs, order preserved. */
 function compress(
-  owner: readonly number[],
-  neighbour: readonly number[],
+  owner: Int32Array,
+  neighbour: Int32Array,
   count: number,
 ): { start: Int32Array; next: Int32Array } {
   const start = new Int32Array(count + 1);
@@ -380,7 +380,8 @@ function compress(
   }
   const cursor = start.slice(0, count);
   const next = new Int32Array(owner.length);
-  for (const [index, node] of owner.entries()) {
+  for (let index = 0; index < owner.length; index += 1) {
+    const node = at(owner, index);
     next[at(cursor, node)] = at(neighbour, index);
     cursor[node] = at(cursor, node) + 1;
   }
@@ -434,11 +435,17 @@ function buildIndex(input: RankedState): OrderIndex {
   // is the limit `countCrossings` still documents for a graph nobody split.
   // `segments.ts` holds the rule, because this file, that counter and
   // `position.ts` all need the same answer.
-  const from: number[] = [];
-  const to: number[] = [];
-  const segUpper: number[] = [];
-  const segLower: number[] = [];
-  const segGap: number[] = [];
+  //
+  // An edge visits one segment plus one per node of its chain, so this bounds
+  // the count from above. A typed array drops a write past its end silently.
+  let capacity = input.graph.edgeCount;
+  for (const chain of input.virtualChains.values()) capacity += chain.length;
+  const fromAll = new Int32Array(capacity);
+  const toAll = new Int32Array(capacity);
+  const upperAll = new Int32Array(capacity);
+  const lowerAll = new Int32Array(capacity);
+  const gapAll = new Int32Array(capacity);
+  let kept = 0;
   forEachSegment(input.graph, input.virtualChains, (fromId, toId) => {
     const source = numberOf.get(fromId);
     const target = numberOf.get(toId);
@@ -446,13 +453,19 @@ function buildIndex(input: RankedState): OrderIndex {
     const sourceLayer = at(layerOf, source);
     const targetLayer = at(layerOf, target);
     if (Math.abs(sourceLayer - targetLayer) !== 1) return;
-    from.push(source);
-    to.push(target);
+    fromAll[kept] = source;
+    toAll[kept] = target;
     const down = sourceLayer < targetLayer;
-    segUpper.push(down ? source : target);
-    segLower.push(down ? target : source);
-    segGap.push(Math.min(sourceLayer, targetLayer));
+    upperAll[kept] = down ? source : target;
+    lowerAll[kept] = down ? target : source;
+    gapAll[kept] = Math.min(sourceLayer, targetLayer);
+    kept += 1;
   });
+  const from = fromAll.subarray(0, kept);
+  const to = toAll.subarray(0, kept);
+  const segUpper = upperAll.subarray(0, kept);
+  const segLower = lowerAll.subarray(0, kept);
+  const segGap = gapAll.subarray(0, kept);
 
   const out = compress(from, to, count);
   const incoming = compress(to, from, count);
@@ -471,7 +484,8 @@ function buildIndex(input: RankedState): OrderIndex {
   const cursor = gapStart.slice(0, Math.max(layerCount - 1, 0));
   const upperByGap = new Int32Array(segGap.length);
   const lowerByGap = new Int32Array(segGap.length);
-  for (const [index, gap] of segGap.entries()) {
+  for (let index = 0; index < segGap.length; index += 1) {
+    const gap = at(segGap, index);
     const slot = at(cursor, gap);
     upperByGap[slot] = at(segUpper, index);
     lowerByGap[slot] = at(segLower, index);
