@@ -212,8 +212,8 @@ within the spread between runs. What is
 left of it is mostly building that index, which still numbers every node and
 dummy by id, and its warm-start cohorts and sweeping the leaf's layer, not
 sweeping the held layers.
-A cold run of the same graph, measured in the same session, takes 648ms, and an
-added leaf takes 12 frames at 60 Hz, against M3.9b's budget of one; a removed
+In the table, a cold run of the same graph, measured in the same session, takes
+648ms, and an added leaf takes 12 frames at 60 Hz, against M3.9b's budget of one; a removed
 leaf takes 6. The order stage is 38% of an added leaf. Skipping stages alone
 cannot meet that budget: "everything else", the work outside them, is about 5
 frames on its own for an added leaf, and about 3 even for a resize, which skips
@@ -238,13 +238,17 @@ After that, a relayout that skips the rank stage stopped copying every roster
 member's size into a new map. It now reads the sizes off the map the last full
 run built, with only the nodes resized, added or removed since kept beside it,
 and hands over that map itself when there are none. Reading through it costs
-the position stage up to about 5ms, but the copy cost more. On the Apple M4, two runs
-each before and after on 2026-11-20 UTC at load averages of 1.4 to 2.1, the
-work outside the stages went from 75.8ms to 79.7ms down to 61.7ms to 63.7ms for
-an added leaf, from 58.5ms to 62.8ms down to 44.0ms to 46.1ms for a removed
-leaf and from 48.9ms to 50.8ms down to 35.0ms for a resize. Whole relayouts
-went from 194ms to 207ms down to 188ms to 191ms (12 frames), from 99ms
-to 106ms down to 87ms to 88ms and from 90ms to 94ms down to 83ms to 84ms. The
+the position stage about 4ms to 6ms when there are some, but the copy cost
+more. On the Apple M4, two runs each before and after on 2026-11-20 UTC at load
+averages of 1.4 to 2.1, the work outside the stages went from 75.8ms to 79.7ms
+down to 61.7ms to 63.7ms for an added leaf, from 58.5ms to 62.8ms down to
+44.0ms to 46.1ms for a removed leaf and from 48.9ms to 50.8ms down to 35.0ms
+for a resize. Whole relayouts went from 194ms to 207ms down to 188ms to 191ms
+(11 frames), from 99ms to 106ms down to 87ms to 88ms (5 frames) and from 90ms
+to 94ms down to 83ms to 84ms. The leaf the cycle removes is the one it added
+on a fast path, so that relayout is handed the full run's map itself and its
+position stage did not slow down; removing a node the full run drew pays the
+view's reads too, and one walk of the full run's map to find what left. The
 table above predates that change.
 
 Like the pipeline page's [What a run costs](layout.md#what-a-run-costs), which

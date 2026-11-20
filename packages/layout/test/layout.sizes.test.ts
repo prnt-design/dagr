@@ -179,4 +179,14 @@ describe('the sizes a fast path hands its stages', () => {
     expect(sizes.get('b')).toBe(big);
     expect(sizes.size).toBe(3);
   });
+
+  it("hands over the full run's map again once a leaf a fast path added is removed", () => {
+    const nodes = new Map<string, Size>([
+      ['a', one],
+      ['b', one],
+    ]);
+    const added = heldSizes(new Map([...nodes, ['leaf', one]]), dummies, full);
+    expect(added).not.toBe(full);
+    expect(heldSizes(nodes, dummies, added)).toBe(full);
+  });
 });
