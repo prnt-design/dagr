@@ -326,7 +326,7 @@ branches never enter public docs, source, npm artifacts, or job fixtures.
   went from 166ms to 167ms down to 126ms to 128ms, and the leaf from 334ms to
   345ms down to 299ms to 309ms. Re-measured on the Apple M4 the same day, the
   work outside the stages for an added leaf is 77.4ms and the leaf 202ms (12
-  frames).
+  frames), at a load average of 1.72 against 2.95 for the 96.8ms and 219ms.
 - [x] **M3.10a** The session corpus: six scripted mutation sessions with
   stability metrics committed as golden files, and the docs page publishing
   the numbers.

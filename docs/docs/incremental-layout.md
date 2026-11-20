@@ -207,7 +207,8 @@ than by a comparison sort, then took that step from about 20ms to about 4ms and
 the stage to 86.8ms at a load average of 1.61. Building its index with each
 segment written into a typed array sized up front, rather than pushed onto
 growing arrays, then took the stage to 75.0ms at a load average of 2.95; the
-stage has not changed since, and the table measures it again. What is
+stage has not changed since, and the 76.6ms the table measures it at now is
+within the spread between runs. What is
 left of it is mostly building that index, which still numbers every node and
 dummy by id, and its warm-start cohorts and sweeping the leaf's layer, not
 sweeping the held layers.
@@ -231,7 +232,7 @@ to 126ms to 128ms for an added leaf, from 113ms down to 99ms to 100ms for a
 removed leaf and from 95ms to 97ms down to 82ms to 83ms for a resize. The table above
 was measured after that change too, on 2026-11-20 UTC; on the Apple M4 the work
 outside the stages for an added leaf was 96.8ms before it, at a load average of
-2.95.
+2.95, against 77.4ms after it at 1.72.
 
 Like the pipeline page's [What a run costs](layout.md#what-a-run-costs), which
 was measured on a different machine, this is a measurement and not a baseline:
