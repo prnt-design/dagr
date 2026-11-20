@@ -483,7 +483,7 @@ function checkOrdered(stage: string, graph: Graph, ordered: OrderedState): void 
   // Every placed id is a distinct roster member, and the roster holds at most
   // this many, so reaching the count means none is missing. Only a shortfall
   // pays for the walk that names one: on the 10k corpus the roster is some
-  // 180,000 ids, nearly all of them dummies.
+  // 184,000 ids, nearly all of them dummies.
   if (placed.size < graph.nodeCount + virtualNodes.size) {
     for (const id of rosterOf(graph, virtualNodes)) {
       if (!placed.has(id)) throw new StageContractError(stage, id, 'missing from the layers');

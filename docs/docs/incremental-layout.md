@@ -206,7 +206,9 @@ layer in its cohort's order by dropping members into buckets by key, rather
 than by a comparison sort, then took that step from about 20ms to about 4ms and
 the stage to 86.8ms at a load average of 1.61. Building its index with each
 segment written into a typed array sized up front, rather than pushed onto
-growing arrays, then took the stage to 75.0ms at a load average of 2.95. What is
+growing arrays, then took the stage to 75.0ms at a load average of 2.95; the
+72.8ms in the table is the same stage measured again after a change outside
+it. What is
 left of it is mostly building that index, which still numbers every node and
 dummy by id, and its warm-start cohorts and sweeping the leaf's layer, not
 sweeping the held layers.
@@ -221,11 +223,14 @@ stage contract checks, assembling the result, the delta and retaining the warm
 start. Measured separately on a different machine, the influence region is 7ms
 to 9ms for each patch kind (Ryzen 9 9900X, Node 22.22.1, 2026-11-19 UTC), down from 13ms
 to 17ms before it stopped reading its band from rows full of dummies. The
-checks on the order and position stages' output no longer build a set of the
-roster, some 184,000 ids, nearly all of them dummies, or walk it through a
-generator, which took the work outside the stages for an added leaf from 96.8ms
-at a load average of 2.95 to the 86.0ms above. The table was measured after both
-changes.
+check on the order stage's output no longer builds a set of the roster, some
+184,000 ids, nearly all of them dummies, and neither it nor the position check
+walks the roster through a generator. That took the work outside the stages for
+an added leaf from 96.8ms at a load average of 2.95 to the 86.0ms above, part of
+which may be the lower load: run alternately in one session, the builds before
+and after it differ by 10ms to 15ms for an added leaf. The table was measured after both
+changes. Much of what is left there is copying the ranks and sizes the engine
+holds, an entry for every node and dummy, before the stages run.
 
 Like the pipeline page's [What a run costs](layout.md#what-a-run-costs), which
 was measured on a different machine, this is a measurement and not a baseline:
@@ -261,7 +266,7 @@ has a reason, and none of them is that the corpus cannot see:
 What is still missing is most of the work the third bullet does not do. A
 resize and a removed leaf now run only position and route, and an added leaf
 skips the rank stage (see the table above), and no session in this corpus does
-any of those on its own. An added leaf still takes 13 frames, and bringing it
+any of those on its own. An added leaf still takes 12 frames, and bringing it
 inside one is what would make a small structural edit cheap in time rather
 than only stable in space.
 
