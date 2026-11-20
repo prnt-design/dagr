@@ -435,6 +435,7 @@ function buildIndex(input: RankedState): OrderIndex {
   // is the limit `countCrossings` still documents for a graph nobody split.
   // `segments.ts` holds the rule, because this file, that counter and
   // `position.ts` all need the same answer.
+  //
   // An edge visits one segment plus one per node of its chain, so this bounds
   // the count from above. A typed array drops a write past its end silently.
   let capacity = input.graph.edgeCount;
