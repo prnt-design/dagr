@@ -993,13 +993,15 @@ function heldRanked(
  * The sizes a fast path hands its stages: each of this run's nodes as `prepare`
  * measured it, and each held dummy as the run that minted it did.
  *
- * Read off the map the last full run built rather than copied out of it,
- * because the 10k corpus's roster is 184,222 members and the copy took 20ms to
- * 23ms of every fast path on a Ryzen 9 9900X. Only the nodes whose size that
- * map no longer gives are kept beside it: the ones resized or added since, and
- * the ones removed. When there are none the map itself is the answer, and each
- * view is built over the full run's map rather than over the last view, so a
- * run of fast paths holds one full run's sizes and no chain of views.
+ * Read off the map the last full run built because the 10k corpus's roster is
+ * 184,222 members, and copying them took 20ms to 23ms of every fast path on a
+ * Ryzen 9 9900X. Only the nodes whose size that map no longer gives are kept
+ * beside it, the ones resized or added since and the ones removed, because
+ * asking this run's sizes first for every id made the position stage about
+ * 12ms slower on the Apple M4. When there are none the map itself is the
+ * answer, and each view is built over the full run's map rather than over the
+ * last view, so a run of fast paths holds one full run's sizes and no chain of
+ * views.
  *
  * Every held dummy has a size in that map because the rank check required one
  * on the full run, and every fast path since kept the same dummies. Correct
