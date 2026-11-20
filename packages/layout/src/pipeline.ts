@@ -43,8 +43,8 @@ import type {
  * walk and the order stage alike, and the reason it matters is there.
  *
  * A callback rather than a generator, for the reason `forEachSegment` gives:
- * the 10k bench corpus has 184,222 roster members, three checks walk them on
- * every run, and the position check alone took 27ms resuming a generator once
+ * the 10k bench corpus has 184,222 roster members, up to three checks walk
+ * them on each run, and the position check alone took 27ms resuming a generator once
  * per member against about 12ms through this callback, on a Ryzen 9 9900X.
  */
 function forEachRosterMember(
