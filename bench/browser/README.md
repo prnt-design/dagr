@@ -611,9 +611,9 @@ group, `halfWidthPixels` 2 with a 12 px dash period at duty 0.5 and no flow,
 draws two straight ribbons clear of the shapes and their glow: one horizontal,
 one diagonal. Each is a single segment, because near a join the arc the
 fragment stage interpolates is not the arc of the nearest centreline point, so
-the page could not place a dash end there. The page computes `dashDistance`
-from `ribbon.ts` itself, and a pixel within one device pixel of a dash end is
-in the band. Two more conditions and a third control come with it:
+the page could not place a dash end there. The page keeps its own copy of
+`ribbon.ts`'s `dashDistance`, and a pixel within one device pixel of a dash
+end is in the band. Two more conditions and a third control come with it:
 
 - Every pixel inside a dash, clear of the band and the caps, must hold the edge
   colour on WebGPU, as a solid ribbon's must, and every pixel inside a gap must

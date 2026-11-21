@@ -67,8 +67,9 @@ import type {
  * the first task to take entries OFF it:
  *
  * - Everything above on WebGPU beyond that one machine, browser and scene:
- *   other GPUs, other zooms and device pixel ratios, and dashed and smooth
- *   edge ribbons (the parity scene draws two solid straight ones).
+ *   other GPUs, other zooms and device pixel ratios, dashes across a join or
+ *   flowing, and smooth edge ribbons (the parity scene draws two solid and
+ *   two dashed straight ones, the dashes at rest).
  * - That `dispose` actually frees GPU memory, only that every resource in the
  *   list is disposed exactly once.
  * - The abort check AFTER `init()`, which is the branch that gives a device back

@@ -284,10 +284,11 @@
        * Two dashed ribbons in a group of their own, clear of the shapes and
        * their glow: one horizontal, one diagonal.
        *
-       * Each is one straight segment. A join's vertices carry the corner's arc
-       * on a vertex set off along the segment, so the arc the fragment stage
-       * interpolates near a join is not the arc of the nearest centreline point
-       * and the page could not place the dash ends there. Along a single
+       * Each is one straight segment. A mitred join's outer vertex sits off the
+       * corner along the bisector yet carries the corner's arc, so the arc the
+       * fragment stage interpolates near a join is not the arc of the nearest
+       * centreline point and the page could not place the dash ends there.
+       * Along a single
        * segment both ends' vertices carry one arc each and the interpolation
        * is exact.
        *
@@ -420,6 +421,7 @@
         // the dashed group was drawn solid or out of phase with the page.
         const gap = { pixels: 0, clear: 0 };
         const hw = EDGE_STYLE.halfWidthPixels;
+        const dashedHw = DASHED_STYLE.halfWidthPixels;
         const near = (data, i, color) =>
           [16, 8, 0].every((shift, c) => Math.abs(data[i + c] - ((color >> shift) & 0xff)) <= ROUNDING);
         for (let row = 0; row < gpu.height; row += 1) {
@@ -446,10 +448,10 @@
             for (const edge of DASHED) {
               const { centreline, point, arc } = ribbonDistances(edge, x, y);
               const along = dashDistance(arc, 0);
-              if (point < hw + 2) nearest = 0;
-              nearest = Math.min(nearest, Math.abs(centreline - hw));
-              if (centreline < hw + EDGE_BAND_DEVICE_PX) nearest = Math.min(nearest, Math.abs(along));
-              if (centreline < hw - EDGE_BAND_DEVICE_PX && point >= hw + 2) {
+              if (point < dashedHw + 2) nearest = 0;
+              nearest = Math.min(nearest, Math.abs(centreline - dashedHw));
+              if (centreline < dashedHw + EDGE_BAND_DEVICE_PX) nearest = Math.min(nearest, Math.abs(along));
+              if (centreline < dashedHw - EDGE_BAND_DEVICE_PX && point >= dashedHw + 2) {
                 if (along < -EDGE_BAND_DEVICE_PX) onRibbon = true;
                 if (along > EDGE_BAND_DEVICE_PX) inGap = true;
               }
