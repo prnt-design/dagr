@@ -619,10 +619,10 @@ checks:
 - That the two backends agree beyond what the parity check has compared:
   one machine (an Apple M4 in Chrome 155), the two-shape probe scene, zoom 1,
   device pixel ratio 1, with two solid straight edge ribbons added to that
-  scene on 2026-11-17, and two dashed straight ones and a smooth one on
-  2026-11-21 (Chrome 157). Other GPUs, zooms, dashes across a join or
-  flowing, smooth dashed ribbons, the above-nodes layer, group outlines,
-  rich-node tiers and DPR 2 are unchecked.
+  scene on 2026-11-17, and two dashed straight ones, a dashed one through two
+  joins and a smooth one on 2026-11-21 (Chrome 157). Other GPUs, zooms,
+  flowing dashes, smooth dashed ribbons, the above-nodes layer, group
+  outlines, rich-node tiers and DPR 2 are unchecked.
   See
   [What is verified, and on which backend](#what-is-verified-and-on-which-backend).
 - That a browser composes the overlay's two transforms the way the algebra says.
@@ -937,7 +937,11 @@ that flows the dashes 3 pixels on one side and must fail. Later that day it
 gained a smooth ribbon, against a fourth control that draws it as a polyline
 and must fail. The check still passes, but the frames are no longer
 byte-identical: 37 band pixels on the curve differ, by up to 35 at its butt
-caps and up to 7 along its sides, and no other pixel does.
+caps and up to 7 along its sides, and no other pixel does. A third dashed
+ribbon, through a mitred right angle and a fanned 130 degree turn, followed;
+the page places its dash ends from the renderer's own triangles. The check
+still passes, with 12 more band pixels differing on that ribbon, by up to 35,
+and no interior pixel.
 
 ## Usage
 
@@ -2052,7 +2056,7 @@ complete, and `<DagrCanvas animate>` drives them from a graph a user is editing
   `DagrCanvas` picks through
   `pickNode` only behind its opt-in `hitTesting="gpu"`. See [Picking](#picking).
 - Backend parity beyond the probe scene and the one machine M4.9b compared on:
-  other GPUs, zooms, dashes across a join or flowing, smooth dashed ribbons,
-  the above-nodes layer, group outlines, rich-node tiers and DPR 2.
+  other GPUs, zooms, flowing dashes, smooth dashed ribbons, the above-nodes
+  layer, group outlines, rich-node tiers and DPR 2.
 - Ten thousand nodes at sixty frames a second, measured rather than hoped for
   (M4.10).

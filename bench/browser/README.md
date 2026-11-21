@@ -511,7 +511,7 @@ DAGR_CHROMIUM="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" \
   node bench/browser/backend-probe.mjs --parity
 ```
 
-`--parity` draws the probe's two shapes, two solid edge ribbons, two dashed
+`--parity` draws the probe's two shapes, two solid edge ribbons, three dashed
 ones and a smooth one, through `'webgpu'` and through `'webgl2'` and compares
 the two frames pixel by pixel. It exits non-zero unless both backends came up
 as named, the comparison passes with the ribbons, dashes and curve drawn where
@@ -670,16 +670,48 @@ band pixels and 385 interior pixels, and the curve control with 692 band
 pixels and 692 interior pixels, each by up to 158. `--pick`, added to one
 headed run, still passed on both backends at DPR 1 and 2, 9,532 picks each.
 
+**Dashes across a join joined the compared scene on 2026-11-21 UTC.** The
+dashed group gains a third route, from (105, -45) right to (165, -45), down to
+(165, -110) through a mitred right angle, and up to (225, -60) through a 130
+degree turn, which the tessellator fans because it is past the 120 degree
+mitre limit. The dash phase runs on through both joins. Near a join the
+centreline cannot place a dash end, so the page no longer tries: it
+tessellates the dashed group with the renderer's own `tessellateRibbons`,
+interpolates `arc` and `across` over each triangle at every pixel centre as
+the fragment stage does, and classes the pixel as dash, gap, outside or band
+with the same one-pixel margins as before. A triangle within half a pixel
+diagonal of the centre counts, since multisampling can let it reach the pixel,
+and where two triangles disagree, as where the segments overlap inside the
+fanned turn, the pixel goes in the band. Only the butt caps still go in the
+band whole. The straight dashed routes are classed the same way, and there it
+is the same answer as before. With the page's dash phase moved half a period
+the run fails: 0 of 486 gap pixels hold the clear colour.
+
+**What it found on 2026-11-21 UTC**, on the same Apple M4 Mac mini in Google
+Chrome 157.0.8103.79, headless once and headed twice, no flags, adapter `apple`
+`metal-3`, not a fallback: the check passes. Of 153,600 pixels, 8,206 are in
+the band and 145,394 are not, and no interior pixel differs. 49 band pixels
+do: the smooth ribbon's 37 as before, and 12 on the joined dashed route by 1
+to 35, at dash ends along its first two segments and at its fanned turn. The
+cause of those 12 is not established either. All 1,203 ribbon and dash pixels
+and all 436 curve pixels hold the edge colour, and all 482 gap pixels the
+clear colour. The shape control fails with 357 band pixels by up to 137 and
+1,036 interior pixels by up to 13. The edge control fails with 3,258 band
+pixels and 2,479 interior pixels, the dash control with 1,313 band pixels and
+549 interior pixels, and the curve control with 704 band pixels and 692
+interior pixels, each by up to 158. `--pick`, added to one headed run, still
+passed on both backends at DPR 1 and 2, 9,532 picks each.
+
 **Not a gate.** `bench/README.md`'s argument against a browser measurement in
 `bench:ci` is about timings, and a parity check is not a timing, so that
 argument does not carry. What does is the runner: the check needs a full Chrome
 with a WebGPU adapter, and CI runs on a GitHub `ubuntu-latest` runner with no
 GPU and no browser step. It is run by hand like the probe, and its scope is what it compared:
 one machine, the probe's two shapes with two solid straight ribbons since
-2026-11-17, two dashed straight ones and a smooth one since 2026-11-21, zoom 1,
-DPR 1. Dashes across a join, flowing dashes, smooth dashed ribbons, the
-above-nodes layer, group outlines, rich-node tiers, other zooms and DPR 2 are
-not compared.
+2026-11-17, two dashed straight ones, a dashed one through two joins and a
+smooth one since 2026-11-21, zoom 1, DPR 1. Flowing dashes, smooth dashed
+ribbons, the above-nodes layer, group outlines, rich-node tiers, other zooms
+and DPR 2 are not compared.
 
 ## Node picking (M4.8b)
 

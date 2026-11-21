@@ -35,7 +35,12 @@
     </script>
     <script type="module">
       import { createRenderer } from '/packages/render/dist/index.js';
-      import { DEFAULT_FLATTEN_TOLERANCE_FRACTION, smoothCentreline } from '/packages/render/dist/ribbon.js';
+      import {
+        DEFAULT_FLATTEN_TOLERANCE_FRACTION,
+        RIBBON_AA_PADDING_PIXELS,
+        smoothCentreline,
+        tessellateRibbons,
+      } from '/packages/render/dist/ribbon.js';
 
       /**
        * The M4.2 shape ladder reduced to two shapes, one from each family.
@@ -286,15 +291,16 @@
       ];
 
       /**
-       * Two dashed ribbons in a group of their own, clear of the shapes and
-       * their glow: one horizontal, one diagonal.
+       * Three dashed ribbons in a group of their own, clear of the shapes and
+       * their glow: one horizontal, one diagonal, and one through a mitred
+       * right angle and then a fanned 130 degree turn.
        *
-       * Each is one straight segment. A mitred join's outer vertex sits off the
-       * corner along the bisector yet carries the corner's arc, so the arc the
-       * fragment stage interpolates near a join is not the arc of the nearest
-       * centreline point and the page could not place the dash ends there.
-       * Along a single segment both ends' vertices carry one arc each and the
-       * interpolation is exact.
+       * A join's outer vertices sit off the corner yet carry the corner's arc,
+       * so near a join the arc the fragment stage interpolates is not the arc
+       * of the nearest centreline point. The page therefore does not place the
+       * dash ends from the centreline. It tessellates the group with the
+       * renderer's own `tessellateRibbons` and interpolates `arc` and `across`
+       * over each triangle, as the fragment stage does; see `dashedClasses`.
        *
        * `dashDistance` in `ribbon.ts` is a signed distance in device pixels
        * along the ribbon, put through the same one-pixel ramp as the width, so
@@ -318,6 +324,16 @@
           points: [
             { x: 90, y: 140 },
             { x: 200, y: 40 },
+          ],
+          color: EDGE_COLOR,
+        },
+        {
+          id: 'dashed-joins',
+          points: [
+            { x: 105, y: -45 },
+            { x: 165, y: -45 },
+            { x: 165, y: -110 },
+            { x: 225, y: -60 },
           ],
           color: EDGE_COLOR,
         },
@@ -363,26 +379,17 @@
         const dx = b.x - a.x;
         const dy = b.y - a.y;
         const t = Math.max(0, Math.min(1, ((x - a.x) * dx + (y - a.y) * dy) / (dx * dx + dy * dy)));
-        return { distance: Math.hypot(x - (a.x + t * dx), y - (a.y + t * dy)), along: t * Math.hypot(dx, dy) };
+        return { distance: Math.hypot(x - (a.x + t * dx), y - (a.y + t * dy)) };
       };
 
       const ribbonDistances = (edge, x, y) => {
         let centreline = Infinity;
-        let arc = 0;
-        let walked = 0;
         for (let i = 1; i < edge.points.length; i += 1) {
-          const a = edge.points[i - 1];
-          const b = edge.points[i];
-          const { distance, along } = segmentDistance(a, b, x, y);
-          if (distance < centreline) {
-            centreline = distance;
-            arc = walked + along;
-          }
-          walked += Math.hypot(b.x - a.x, b.y - a.y);
+          centreline = Math.min(centreline, segmentDistance(edge.points[i - 1], edge.points[i], x, y).distance);
         }
         let point = Infinity;
         for (const p of edge.points) point = Math.min(point, Math.hypot(x - p.x, y - p.y));
-        return { centreline, point, arc };
+        return { centreline, point };
       };
 
       // The page's copy of `dashDistance`, at zoom 1 and DPR 1 where an arc in
@@ -392,6 +399,80 @@
         const phase = (arc - flowPixels) / periodPixels;
         const fract = phase - Math.floor(phase);
         return (Math.abs(fract - 0.5) - duty * 0.5) * periodPixels;
+      };
+
+      const SOLID = 1;
+      const GAP = 2;
+      const OUTSIDE = 3;
+      const BAND = 4;
+      /**
+       * What the dashed group draws at each device pixel of a `width` by
+       * `height` frame: SOLID, GAP (inside the width, between dashes),
+       * OUTSIDE (beyond the width) or BAND, from the group's own triangles.
+       *
+       * Each triangle's `arc` and `across` are interpolated at the pixel
+       * centre and put through the page's copy of the coverage, so a mitred or
+       * fanned join is placed exactly as drawn. A triangle within half a pixel
+       * diagonal of the centre counts even when the centre is outside it,
+       * since multisampling can let it reach the pixel, and its values are
+       * extended there. Where the triangles reaching a pixel disagree, as
+       * where two segments overlap on the inside of a fanned turn, the pixel
+       * goes in the band; a gap and the outside are both clear, so they agree.
+       * The renderer draws front faces only, so a clockwise triangle, which a
+       * segment shorter than its two joins' mitre shifts folds into, is skipped.
+       *
+       * This holds only while the varyings are evaluated at the pixel centre.
+       * Under centroid or per-sample interpolation the arc along a mitred
+       * segment's quad moves by about 1.5 px across one pixel, more than the
+       * one-pixel margin.
+       */
+      const dashedClasses = (width, height) => {
+        const { position, offset, across, arc, index } = tessellateRibbons(DASHED);
+        const hw = DASHED_STYLE.halfWidthPixels;
+        const expand = hw + RIBBON_AA_PADDING_PIXELS;
+        const reach = Math.SQRT1_2;
+        const classes = new Uint8Array(width * height);
+        for (let t = 0; t < index.length; t += 3) {
+          const v = [index[t], index[t + 1], index[t + 2]];
+          const vx = v.map((k) => position[2 * k] + offset[2 * k] * expand);
+          const vy = v.map((k) => position[2 * k + 1] + offset[2 * k + 1] * expand);
+          const det = (vx[1] - vx[0]) * (vy[2] - vy[0]) - (vx[2] - vx[0]) * (vy[1] - vy[0]);
+          if (det <= 0) continue;
+          const colFrom = Math.max(0, Math.floor(Math.min(...vx) - reach + width / 2));
+          const colTo = Math.min(width - 1, Math.ceil(Math.max(...vx) + reach + width / 2));
+          const rowFrom = Math.max(0, Math.floor(height / 2 - Math.max(...vy) - reach));
+          const rowTo = Math.min(height - 1, Math.ceil(height / 2 - Math.min(...vy) + reach));
+          for (let row = rowFrom; row <= rowTo; row += 1) {
+            for (let col = colFrom; col <= colTo; col += 1) {
+              const x = col + 0.5 - width / 2;
+              const y = height / 2 - (row + 0.5);
+              const w1 = ((x - vx[0]) * (vy[2] - vy[0]) - (vx[2] - vx[0]) * (y - vy[0])) / det;
+              const w2 = ((vx[1] - vx[0]) * (y - vy[0]) - (x - vx[0]) * (vy[1] - vy[0])) / det;
+              const w0 = 1 - w1 - w2;
+              if (w0 < 0 || w1 < 0 || w2 < 0) {
+                let outside = Infinity;
+                for (let e = 0; e < 3; e += 1) {
+                  const a = { x: vx[e], y: vy[e] };
+                  const b = { x: vx[(e + 1) % 3], y: vy[(e + 1) % 3] };
+                  outside = Math.min(outside, segmentDistance(a, b, x, y).distance);
+                }
+                if (outside > reach) continue;
+              }
+              const side = Math.abs(w0 * across[v[0]] + w1 * across[v[1]] + w2 * across[v[2]]) * expand - hw;
+              const along = dashDistance(w0 * arc[v[0]] + w1 * arc[v[1]] + w2 * arc[v[2]], 0);
+              let cls = BAND;
+              if (Math.max(side, along) < -EDGE_BAND_DEVICE_PX) cls = SOLID;
+              else if (side < -EDGE_BAND_DEVICE_PX && along > EDGE_BAND_DEVICE_PX) cls = GAP;
+              else if (side > EDGE_BAND_DEVICE_PX) cls = OUTSIDE;
+              const at = row * width + col;
+              const before = classes[at];
+              if (before === 0 || before === cls) classes[at] = cls;
+              else if ((before === GAP || before === OUTSIDE) && (cls === GAP || cls === OUTSIDE)) classes[at] = OUTSIDE;
+              else classes[at] = BAND;
+            }
+          }
+        }
+        return classes;
       };
 
       const signedDistance = (node, x, y) => {
@@ -474,6 +555,7 @@
         const curve = { pixels: 0, edgeColored: 0 };
         const hw = EDGE_STYLE.halfWidthPixels;
         const dashedHw = DASHED_STYLE.halfWidthPixels;
+        const dashedAt = dashedClasses(gpu.width, gpu.height);
         const near = (data, i, color) =>
           [16, 8, 0].every((shift, c) => Math.abs(data[i + c] - ((color >> shift) & 0xff)) <= ROUNDING);
         for (let row = 0; row < gpu.height; row += 1) {
@@ -497,17 +579,17 @@
               if (centreline < hw - EDGE_BAND_DEVICE_PX && point >= hw + 2) onRibbon = true;
             }
             let inGap = false;
+            let capped = false;
             for (const edge of DASHED) {
-              const { centreline, point, arc } = ribbonDistances(edge, x, y);
-              const along = dashDistance(arc, 0);
-              if (point < dashedHw + 2) nearest = 0;
-              nearest = Math.min(nearest, Math.abs(centreline - dashedHw));
-              if (centreline < dashedHw + EDGE_BAND_DEVICE_PX) nearest = Math.min(nearest, Math.abs(along));
-              if (centreline < dashedHw - EDGE_BAND_DEVICE_PX && point >= dashedHw + 2) {
-                if (along < -EDGE_BAND_DEVICE_PX) onRibbon = true;
-                if (along > EDGE_BAND_DEVICE_PX) inGap = true;
-              }
+              const first = edge.points[0];
+              const last = edge.points[edge.points.length - 1];
+              const cap = Math.min(Math.hypot(x - first.x, y - first.y), Math.hypot(x - last.x, y - last.y));
+              if (cap < dashedHw + 2) capped = true;
             }
+            const dashed = dashedAt[row * gpu.width + col];
+            if (capped || dashed === BAND) nearest = 0;
+            else if (dashed === SOLID) onRibbon = true;
+            else if (dashed === GAP) inGap = true;
             let onCurve = false;
             for (const edge of SMOOTH_DRAWN) {
               const { centreline } = ribbonDistances(edge, x, y);
