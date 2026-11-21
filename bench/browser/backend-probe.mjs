@@ -30,8 +30,8 @@
  * Chrome instead of launching one. The output
  * records the browser, mode and flags, because a backend result without them
  * cannot be reproduced. `--parity` adds M4.9b's backend comparison and exits
- * non-zero unless it passes and both its controls fail on their shifts. It
- * also exits non-zero when the adapter reports `isFallbackAdapter`: a software
+ * non-zero unless it passes and all three of its controls fail on their
+ * shifts. It also exits non-zero when the adapter reports `isFallbackAdapter`: a software
  * adapter such as
  * SwiftShader still comes up on `webgpu`, so its side of the comparison would
  * not be a GPU's. The compared scene has two solid edge ribbons under the
@@ -119,7 +119,7 @@ function parityFailure(check) {
  * Why the control did not fail the way it must, or undefined when it did. A
  * control that threw, drew on the wrong backend or compared frames of different
  * sizes also reports `pass: false`, but says nothing about whether the check
- * can see a shifted shape or ribbon.
+ * can see a shifted shape, ribbon or dash pattern.
  */
 function controlFailure(control, moved) {
   if (control.pass) return `passed, so the check cannot see a misplaced ${moved}`;

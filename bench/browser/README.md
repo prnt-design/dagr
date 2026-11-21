@@ -629,7 +629,8 @@ Chrome 157.0.8103.79, headless once and headed twice, no flags, adapter `apple`
 `metal-3`, not a fallback: the two frames are byte-identical, dashes included.
 Of 153,600 pixels, 6,221 are in the band and 147,379 are not, and none of
 either differ. All 1,075 ribbon and dash pixels hold the edge colour and all
-356 gap pixels the clear colour. The shape control fails as before. The edge
+356 gap pixels the clear colour. The shape control fails as before, with 308
+band pixels by up to 137 and 1,036 interior pixels by up to 13. The edge
 control fails with 2,111 band pixels by up to 158 and 1,829 interior pixels by
 up to 158, and the dash control with 879 band pixels and 385 interior pixels,
 each by up to 158. `--pick`, added to one headed run, still passed on both
