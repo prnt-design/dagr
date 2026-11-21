@@ -511,11 +511,12 @@ DAGR_CHROMIUM="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" \
   node bench/browser/backend-probe.mjs --parity
 ```
 
-`--parity` draws the probe's two shapes, and two solid edge ribbons, through
-`'webgpu'` and through `'webgl2'` and compares the two frames pixel by pixel.
-It exits non-zero unless both backends came up as named, the comparison passes
-with the ribbons drawn where the page expects them, and both controls (one
-moves a shape, the other the ribbons) fail on their shifts, and says on
+`--parity` draws the probe's two shapes, two solid edge ribbons and two dashed
+ones, through `'webgpu'` and through `'webgl2'` and compares the two frames
+pixel by pixel. It exits non-zero unless both backends came up as named, the
+comparison passes with the ribbons and dashes drawn where the page expects
+them, and all three controls (one moves a shape, one the ribbons, one the dash
+pattern) fail on their shifts, and says on
 stderr which of these did not hold. It also exits non-zero, saying why on
 stderr before it compares, when the adapter reports `isFallbackAdapter`,
 because a software adapter such as SwiftShader comes up on `'webgpu'` too and
@@ -605,13 +606,44 @@ pixels differing by up to 158 and 1,148 interior pixels by up to 158. `--pick`,
 added to two of the headed runs, still passed on both backends at DPR 1 and 2,
 9,532 picks each.
 
+**Dashed ribbons joined the compared scene on 2026-11-21 UTC.** A second edge
+group, `halfWidthPixels` 2 with a 12 px dash period at duty 0.5 and no flow,
+draws two straight ribbons clear of the shapes and their glow: one horizontal,
+one diagonal. Each is a single segment, because near a join the arc the
+fragment stage interpolates is not the arc of the nearest centreline point, so
+the page could not place a dash end there. The page keeps its own copy of
+`ribbon.ts`'s `dashDistance`, and a pixel within one device pixel of a dash
+end is in the band. Two more conditions and a third control come with it:
+
+- Every pixel inside a dash, clear of the band and the caps, must hold the edge
+  colour on WebGPU, as a solid ribbon's must, and every pixel inside a gap must
+  hold the clear colour. With the page's dash phase moved half a period, so the
+  page expects dashes where the renderer draws gaps, the run fails: 0 of 358
+  gap pixels hold the clear colour.
+- The dash control flows the dashed group's pattern 3 device pixels, a quarter
+  period, on the WebGL2 side only. That moves dash ends out of the band and
+  nothing else, and the run fails if this control passes.
+
+**What it found on 2026-11-21 UTC**, on the same Apple M4 Mac mini in Google
+Chrome 157.0.8103.79, headless once and headed twice, no flags, adapter `apple`
+`metal-3`, not a fallback: the two frames are byte-identical, dashes included.
+Of 153,600 pixels, 6,221 are in the band and 147,379 are not, and none of
+either differ. All 1,075 ribbon and dash pixels hold the edge colour and all
+356 gap pixels the clear colour. The shape control fails as before, with 308
+band pixels by up to 137 and 1,036 interior pixels by up to 13. The edge
+control fails with 2,111 band pixels by up to 158 and 1,829 interior pixels by
+up to 158, and the dash control with 879 band pixels and 385 interior pixels,
+each by up to 158. `--pick`, added to one headed run, still passed on both
+backends at DPR 1 and 2, 9,532 picks each.
+
 **Not a gate.** `bench/README.md`'s argument against a browser measurement in
 `bench:ci` is about timings, and a parity check is not a timing, so that
 argument does not carry. What does is the runner: the check needs a full Chrome
 with a WebGPU adapter, and CI runs on a GitHub `ubuntu-latest` runner with no
 GPU and no browser step. It is run by hand like the probe, and its scope is what it compared:
 one machine, the probe's two shapes with two solid straight ribbons since
-2026-11-17, zoom 1, DPR 1. Dashed and smooth ribbons, the above-nodes layer,
+2026-11-17 and two dashed straight ones since 2026-11-21, zoom 1, DPR 1.
+Dashes across a join, flowing dashes, smooth ribbons, the above-nodes layer,
 group outlines, rich-node tiers, other zooms and DPR 2 are not compared.
 
 ## Node picking (M4.8b)
