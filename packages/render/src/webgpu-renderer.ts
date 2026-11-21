@@ -61,17 +61,19 @@ import type {
  * **M4.9b extended it to WebGPU** on an Apple M4 in Chrome 155: on 2026-10-17
  * the same two-shape frame through both backends was byte-identical, every one
  * of 153,600 pixels (`bench/browser/backend-probe.mjs --parity`). The scene has
- * grown since, and its smooth ribbon now leaves 37 band pixels differing.
+ * grown since, and its smooth ribbon and joined dashed ribbon now leave 49
+ * band pixels differing.
  *
  * What is therefore still UNVERIFIED, stated plainly rather than left to be
  * discovered. M4.2 amended M4.1's list rather than replacing it, and M4.9a is
  * the first task to take entries OFF it:
  *
  * - Everything above on WebGPU beyond that one machine, browser and scene:
- *   other GPUs, other zooms and device pixel ratios, dashes across a join or
- *   flowing, and smooth dashed ribbons (the parity scene draws two solid and
- *   two dashed straight ones, the dashes at rest, and one solid smooth one),
- *   and why that smooth ribbon's caps and sides differ within the band.
+ *   other GPUs, other zooms and device pixel ratios, flowing dashes, and
+ *   smooth dashed ribbons (the parity scene draws two solid and two dashed
+ *   straight ones, a dashed one through two joins, the dashes at rest, and
+ *   one solid smooth one), and why the smooth ribbon's caps and sides and the
+ *   joined dashed ribbon's dash ends differ within the band.
  * - That `dispose` actually frees GPU memory, only that every resource in the
  *   list is disposed exactly once.
  * - The abort check AFTER `init()`, which is the branch that gives a device back
