@@ -401,6 +401,10 @@
         return (Math.abs(fract - 0.5) - duty * 0.5) * periodPixels;
       };
 
+      const SOLID = 1;
+      const GAP = 2;
+      const OUTSIDE = 3;
+      const BAND = 4;
       /**
        * What the dashed group draws at each device pixel of a `width` by
        * `height` frame: SOLID, GAP (inside the width, between dashes),
@@ -414,23 +418,26 @@
        * extended there. Where the triangles reaching a pixel disagree, as
        * where two segments overlap on the inside of a fanned turn, the pixel
        * goes in the band; a gap and the outside are both clear, so they agree.
+       * The renderer draws front faces only, so a clockwise triangle, which a
+       * segment shorter than its two joins' mitre shifts folds into, is skipped.
+       *
+       * This holds only while the varyings are evaluated at the pixel centre.
+       * Under centroid or per-sample interpolation the arc along a mitred
+       * segment's quad moves by about 1.5 px across one pixel, more than the
+       * one-pixel margin.
        */
-      const SOLID = 1;
-      const GAP = 2;
-      const OUTSIDE = 3;
-      const BAND = 4;
       const dashedClasses = (width, height) => {
         const { position, offset, across, arc, index } = tessellateRibbons(DASHED);
         const hw = DASHED_STYLE.halfWidthPixels;
         const expand = hw + RIBBON_AA_PADDING_PIXELS;
+        const reach = Math.SQRT1_2;
         const classes = new Uint8Array(width * height);
         for (let t = 0; t < index.length; t += 3) {
           const v = [index[t], index[t + 1], index[t + 2]];
           const vx = v.map((k) => position[2 * k] + offset[2 * k] * expand);
           const vy = v.map((k) => position[2 * k + 1] + offset[2 * k + 1] * expand);
           const det = (vx[1] - vx[0]) * (vy[2] - vy[0]) - (vx[2] - vx[0]) * (vy[1] - vy[0]);
-          if (det === 0) continue;
-          const reach = Math.SQRT1_2;
+          if (det <= 0) continue;
           const colFrom = Math.max(0, Math.floor(Math.min(...vx) - reach + width / 2));
           const colTo = Math.min(width - 1, Math.ceil(Math.max(...vx) + reach + width / 2));
           const rowFrom = Math.max(0, Math.floor(height / 2 - Math.max(...vy) - reach));
