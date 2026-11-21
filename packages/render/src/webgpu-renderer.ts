@@ -58,9 +58,10 @@ import type {
  * right size and in the intended colour; the shader computes; the derivatives
  * antialias; and the buffer size computed here reaches a real canvas. That box
  * had no WebGPU adapter, so every claim in this paragraph was scoped to WebGL2.
- * **M4.9b extended it to WebGPU** on an Apple M4 in Chrome 155: the same frame
- * through both backends is byte-identical, every one of 153,600 pixels
- * (`bench/browser/backend-probe.mjs --parity`).
+ * **M4.9b extended it to WebGPU** on an Apple M4 in Chrome 155: on 2026-10-17
+ * the same two-shape frame through both backends was byte-identical, every one
+ * of 153,600 pixels (`bench/browser/backend-probe.mjs --parity`). The scene has
+ * grown since, and its smooth ribbon now leaves 37 band pixels differing.
  *
  * What is therefore still UNVERIFIED, stated plainly rather than left to be
  * discovered. M4.2 amended M4.1's list rather than replacing it, and M4.9a is
@@ -69,7 +70,8 @@ import type {
  * - Everything above on WebGPU beyond that one machine, browser and scene:
  *   other GPUs, other zooms and device pixel ratios, dashes across a join or
  *   flowing, and smooth dashed ribbons (the parity scene draws two solid and
- *   two dashed straight ones, the dashes at rest, and one solid smooth one).
+ *   two dashed straight ones, the dashes at rest, and one solid smooth one),
+ *   and why that smooth ribbon's caps and sides differ within the band.
  * - That `dispose` actually frees GPU memory, only that every resource in the
  *   list is disposed exactly once.
  * - The abort check AFTER `init()`, which is the branch that gives a device back

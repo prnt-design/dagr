@@ -517,9 +517,8 @@ the two frames pixel by pixel. It exits non-zero unless both backends came up
 as named, the comparison passes with the ribbons, dashes and curve drawn where
 the page expects them, and all four controls (one moves a shape, one every
 ribbon, the curve included, one the dash pattern, one draws the curve as a
-polyline) fail on
-their shifts, and says on
-stderr which of these did not hold. It also exits non-zero, saying why on
+polyline) fail on what they change, and says on stderr which of these did not
+hold. It also exits non-zero, saying why on
 stderr before it compares, when the adapter reports `isFallbackAdapter`,
 because a software adapter such as SwiftShader comes up on `'webgpu'` too and
 its frame is not a GPU's.
