@@ -30,13 +30,14 @@
  * Chrome instead of launching one. The output
  * records the browser, mode and flags, because a backend result without them
  * cannot be reproduced. `--parity` adds M4.9b's backend comparison and exits
- * non-zero unless it passes and all three of its controls fail on their
- * shifts. It also exits non-zero when the adapter reports `isFallbackAdapter`: a software
+ * non-zero unless it passes and all four of its controls fail on what they
+ * change. It also exits non-zero when the adapter reports `isFallbackAdapter`: a software
  * adapter such as
  * SwiftShader still comes up on `webgpu`, so its side of the comparison would
  * not be a GPU's. The compared scene has two solid edge ribbons under the
- * shapes and two dashed ones beside them; the second control shifts the
- * ribbons and the third flows the dashes. `--pick`
+ * shapes, two dashed ones beside them and a smooth one above; the second
+ * control shifts every ribbon, the third flows the dashes and the fourth draws
+ * the smooth one as a polyline. `--pick`
  * adds M4.8b's check of `pickNode` on both backends at
  * device pixel ratios 1 and 2, and exits non-zero on the same adapter terms or
  * on any pick that disagrees with the shapes' distance functions.
@@ -105,6 +106,7 @@ function parityFailure(check) {
     reasons.push(
       `${check.ribbon.edgeColored} of ${check.ribbon.pixels} pixels inside the ribbons hold the edge colour on webgpu`,
       `${check.gap.clear} of ${check.gap.pixels} pixels inside the dash gaps hold the clear colour on webgpu`,
+      `${check.curve.edgeColored} of ${check.curve.pixels} pixels inside the smooth ribbon hold the edge colour on webgpu`,
     );
   }
   if (check.interior.maxDelta > check.tolerance.interiorMaxDelta) {
@@ -119,7 +121,7 @@ function parityFailure(check) {
  * Why the control did not fail the way it must, or undefined when it did. A
  * control that threw, drew on the wrong backend or compared frames of different
  * sizes also reports `pass: false`, but says nothing about whether the check
- * can see a shifted shape, ribbon or dash pattern.
+ * can see a shifted shape, ribbon, dash pattern or curve.
  */
 function controlFailure(control, moved) {
   if (control.pass) return `passed, so the check cannot see a misplaced ${moved}`;
@@ -198,6 +200,7 @@ if (cliArgs.includes('--parity')) {
     control: await page.evaluate((shift) => window.parity(shift), CONTROL_SHIFT_PX),
     edgeControl: await page.evaluate((shift) => window.parity(0, shift), EDGE_CONTROL_SHIFT_PX),
     dashControl: await page.evaluate((shift) => window.parity(0, 0, shift), DASH_CONTROL_SHIFT_PX),
+    curveControl: await page.evaluate(() => window.parity(0, 0, 0, true)),
   };
   if (!parity.check.pass) {
     console.error(`the parity check failed: ${parityFailure(parity.check)}`);
@@ -218,6 +221,11 @@ if (cliArgs.includes('--parity')) {
   const dashControl = controlFailure(parity.dashControl, 'dash');
   if (dashControl !== undefined) {
     console.error(`the dash control, with the dashes flowed by ${DASH_CONTROL_SHIFT_PX} px, ${dashControl}`);
+    process.exitCode = 1;
+  }
+  const curveControl = controlFailure(parity.curveControl, 'curve');
+  if (curveControl !== undefined) {
+    console.error(`the curve control, with the smooth ribbon drawn as a polyline, ${curveControl}`);
     process.exitCode = 1;
   }
 }

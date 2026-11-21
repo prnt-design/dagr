@@ -1232,7 +1232,8 @@ function smoothInto(points: Polyline, toleranceWorld: number | undefined, out: P
  * {@link smoothInto} over points. Exported for the tests, which assert the
  * curve's properties (through every point, no kink at a join, within tolerance
  * of the curve) on the polyline rather than through the vertices it later
- * becomes.
+ * becomes, and for `bench/browser/backend-probe.html`, which derives its
+ * parity band from the curve the renderer draws.
  */
 export function smoothCentreline(points: readonly Vec2[], toleranceWorld: number): Vec2[] {
   const smoothed = new Polyline();

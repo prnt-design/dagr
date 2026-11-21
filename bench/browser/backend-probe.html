@@ -35,6 +35,7 @@
     </script>
     <script type="module">
       import { createRenderer } from '/packages/render/dist/index.js';
+      import { DEFAULT_FLATTEN_TOLERANCE_FRACTION, smoothCentreline } from '/packages/render/dist/ribbon.js';
 
       /**
        * The M4.2 shape ladder reduced to two shapes, one from each family.
@@ -237,6 +238,10 @@
        * side, the dashes' control. It moves dash ends along the ribbon and
        * nothing else, so it fails only if the comparison can see where a dash
        * ends.
+       *
+       * `curveControl` draws the smooth group as a polyline through the same
+       * points on the WebGL2 side, the curve's control. It fails only if the
+       * comparison can see that the curve was smoothed.
        */
       const EDGE_BAND_DEVICE_PX = 1;
       const ROUNDING = 1;
@@ -319,6 +324,41 @@
       ];
       const CLEAR_COLOR = 0x0b0d10;
 
+      /**
+       * One solid smooth ribbon in a group of its own, an S through four
+       * points above the shapes, clear of them, their glow and the other
+       * ribbons.
+       *
+       * The renderer draws the flattened curve, not the true one, and its
+       * default chord tolerance is 1% of the mean span, here 0.74 world
+       * units: wider than the band, so the page could not derive the band from
+       * the true curve. It flattens with the renderer's own `smoothCentreline`
+       * at that tolerance instead, whose curve the unit tests check. The
+       * flattened joins turn by 43 degrees at most, where a mitre sits 0.15
+       * device pixels outside the distance to the centreline, inside the band,
+       * so only the butt caps go in the band whole.
+       */
+      const SMOOTH = [
+        {
+          id: 'smooth',
+          points: [
+            { x: -50, y: 60 },
+            { x: -20, y: 130 },
+            { x: 20, y: 65 },
+            { x: 55, y: 125 },
+          ],
+          color: EDGE_COLOR,
+        },
+      ];
+      const flattened = (points) => {
+        let total = 0;
+        for (let i = 1; i < points.length; i += 1) {
+          total += Math.hypot(points[i].x - points[i - 1].x, points[i].y - points[i - 1].y);
+        }
+        return smoothCentreline(points, (DEFAULT_FLATTEN_TOLERANCE_FRACTION * total) / (points.length - 1));
+      };
+      const SMOOTH_DRAWN = SMOOTH.map((edge) => ({ ...edge, points: flattened(edge.points) }));
+
       const segmentDistance = (a, b, x, y) => {
         const dx = b.x - a.x;
         const dy = b.y - a.y;
@@ -364,8 +404,8 @@
         return Math.hypot(Math.max(qx, 0), Math.max(qy, 0)) + Math.min(Math.max(qx, qy), 0) - r;
       };
 
-      window.parity = async (shiftX = 0, edgeShift = 0, dashShift = 0) => {
-        const draw = async (backend, nodes, edges, dashed, dashFlowPixels) => {
+      window.parity = async (shiftX = 0, edgeShift = 0, dashShift = 0, curveControl = false) => {
+        const draw = async (backend, nodes, edges, dashed, dashFlowPixels, smooth, curve) => {
           const previous = document.getElementById('stage');
           const canvas = document.createElement('canvas');
           canvas.id = 'stage';
@@ -377,10 +417,12 @@
             edgeGroups: [
               { id: 'edges', style: EDGE_STYLE },
               { id: 'dashed', style: DASHED_STYLE },
+              { id: 'smooth', style: EDGE_STYLE, curve },
             ],
           });
           renderer.setEdges('edges', edges);
           renderer.setEdges('dashed', dashed);
+          renderer.setEdges('smooth', smooth);
           if (dashFlowPixels !== 0) {
             renderer.setEdgeStyle('dashed', {
               halfWidthPixels: DASHED_STYLE.halfWidthPixels,
@@ -406,8 +448,16 @@
         let gpu;
         let gl;
         try {
-          gpu = await draw('webgpu', NODES, EDGES, DASHED, 0);
-          gl = await draw('webgl2', shifted, shiftEdges(EDGES), shiftEdges(DASHED), dashShift);
+          gpu = await draw('webgpu', NODES, EDGES, DASHED, 0, SMOOTH, 'smooth');
+          gl = await draw(
+            'webgl2',
+            shifted,
+            shiftEdges(EDGES),
+            shiftEdges(DASHED),
+            dashShift,
+            shiftEdges(SMOOTH),
+            curveControl ? 'polyline' : 'smooth',
+          );
         } catch (error) {
           return { pass: false, error: String(error), code: error && error.code };
         }
@@ -419,6 +469,9 @@
         // And these, the gaps between dashes, must hold the clear colour, or
         // the dashed group was drawn solid or out of phase with the page.
         const gap = { pixels: 0, clear: 0 };
+        // Inside the smooth ribbon, counted apart so a curve drawn somewhere
+        // else cannot hide among the straight ribbons' pixels.
+        const curve = { pixels: 0, edgeColored: 0 };
         const hw = EDGE_STYLE.halfWidthPixels;
         const dashedHw = DASHED_STYLE.halfWidthPixels;
         const near = (data, i, color) =>
@@ -455,7 +508,21 @@
                 if (along > EDGE_BAND_DEVICE_PX) inGap = true;
               }
             }
+            let onCurve = false;
+            for (const edge of SMOOTH_DRAWN) {
+              const { centreline } = ribbonDistances(edge, x, y);
+              const first = edge.points[0];
+              const last = edge.points[edge.points.length - 1];
+              const cap = Math.min(Math.hypot(x - first.x, y - first.y), Math.hypot(x - last.x, y - last.y));
+              if (cap < hw + 2) nearest = 0;
+              nearest = Math.min(nearest, Math.abs(centreline - hw));
+              if (centreline < hw - EDGE_BAND_DEVICE_PX && cap >= hw + 2) onCurve = true;
+            }
             const i = (row * gpu.width + col) * 4;
+            if (onCurve && !glowed) {
+              curve.pixels += 1;
+              if (near(gpu.data, i, EDGE_COLOR)) curve.edgeColored += 1;
+            }
             if (onRibbon && !glowed) {
               ribbon.pixels += 1;
               if (near(gpu.data, i, EDGE_COLOR)) ribbon.edgeColored += 1;
@@ -479,7 +546,12 @@
         const backends = { webgpu: gpu.reported, webgl2: gl.reported };
         const sameSize = gl.width === gpu.width && gl.height === gpu.height;
         const ribbonDrawn =
-          ribbon.pixels > 0 && ribbon.edgeColored === ribbon.pixels && gap.pixels > 0 && gap.clear === gap.pixels;
+          ribbon.pixels > 0 &&
+          ribbon.edgeColored === ribbon.pixels &&
+          gap.pixels > 0 &&
+          gap.clear === gap.pixels &&
+          curve.pixels > 0 &&
+          curve.edgeColored === curve.pixels;
         return {
           pass:
             gpu.reported === 'webgpu' &&
@@ -493,10 +565,12 @@
           shiftX,
           edgeShift,
           dashShift,
+          curveControl,
           band,
           interior,
           ribbon,
           gap,
+          curve,
           ribbonDrawn,
         };
       };
