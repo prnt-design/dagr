@@ -36,7 +36,7 @@
  * SwiftShader still comes up on `webgpu`, so its side of the comparison would
  * not be a GPU's. The compared scene has two solid edge ribbons under the
  * shapes, two dashed ones beside them and a smooth one above; the second
- * control shifts the ribbons, the third flows the dashes and the fourth draws
+ * control shifts every ribbon, the third flows the dashes and the fourth draws
  * the smooth one as a polyline. `--pick`
  * adds M4.8b's check of `pickNode` on both backends at
  * device pixel ratios 1 and 2, and exits non-zero on the same adapter terms or

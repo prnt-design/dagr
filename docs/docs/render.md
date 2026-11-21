@@ -936,9 +936,8 @@ dashed straight ribbons, still byte-identical there, against a third control
 that flows the dashes 3 pixels on one side and must fail. Later that day it
 gained a smooth ribbon, against a fourth control that draws it as a polyline
 and must fail. The check still passes, but the frames are no longer
-byte-identical: 37 pixels within one device pixel of the curve's edge differ,
-by up to 35 at its butt caps and up to 7 along its sides, and no other pixel
-does.
+byte-identical: 37 band pixels on the curve differ, by up to 35 at its butt
+caps and up to 7 along its sides, and no other pixel does.
 
 ## Usage
 

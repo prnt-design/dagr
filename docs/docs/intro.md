@@ -106,8 +106,8 @@ renderer. The same scene drawn through WebGPU and WebGL2 was byte-identical in
 a hand-run check (Apple M4, Chrome 155, two-shape probe scene, zoom 1, DPR 1),
 and still was with two solid and two dashed straight edge ribbons added
 (Chrome 157). A smooth ribbon added after them passes the check, with 37
-pixels at its antialiased edge differing; the original probe also passed on
-AMD RDNA 2 in Chrome 156, with four edge-band pixels differing by one. Dashes
+edge-band pixels on it differing. The original probe also passed on AMD RDNA 2
+in Chrome 156, with four edge-band pixels differing by one. Dashes
 across a join or flowing, smooth dashed ribbons, other zooms and DPRs, and
 other GPUs remain uncovered. A
 performance profile is published, and GPU node picking ships behind an opt-in
