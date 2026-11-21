@@ -232,6 +232,11 @@
        * `edgeShift` moves every ribbon on the WebGL2 side by that much in x and
        * y, the edges' control. A ribbon has no glow, so only a shift wider than
        * the band can show: at 2 px, pixels the band leaves outside it change.
+       *
+       * `dashShift` flows the dashed group's pattern by that much on the WebGL2
+       * side, the dashes' control. It moves dash ends along the ribbon and
+       * nothing else, so it fails only if the comparison can see where a dash
+       * ends.
        */
       const EDGE_BAND_DEVICE_PX = 1;
       const ROUNDING = 1;
@@ -275,21 +280,78 @@
         },
       ];
 
+      /**
+       * Two dashed ribbons in a group of their own, clear of the shapes and
+       * their glow: one horizontal, one diagonal.
+       *
+       * Each is one straight segment. A join's vertices carry the corner's arc
+       * on a vertex set off along the segment, so the arc the fragment stage
+       * interpolates near a join is not the arc of the nearest centreline point
+       * and the page could not place the dash ends there. Along a single
+       * segment both ends' vertices carry one arc each and the interpolation
+       * is exact.
+       *
+       * `dashDistance` in `ribbon.ts` is a signed distance in device pixels
+       * along the ribbon, put through the same one-pixel ramp as the width, so
+       * a pixel within one device pixel of a dash end goes in the band.
+       */
+      const DASHED_STYLE = {
+        halfWidthPixels: 2,
+        dash: { periodPixels: 12, duty: 0.5, speedPixelsPerSecond: 0 },
+      };
+      const DASHED = [
+        {
+          id: 'dashed-horizontal',
+          points: [
+            { x: -200, y: -130 },
+            { x: 200, y: -130 },
+          ],
+          color: EDGE_COLOR,
+        },
+        {
+          id: 'dashed-diagonal',
+          points: [
+            { x: 90, y: 140 },
+            { x: 200, y: 40 },
+          ],
+          color: EDGE_COLOR,
+        },
+      ];
+      const CLEAR_COLOR = 0x0b0d10;
+
       const segmentDistance = (a, b, x, y) => {
         const dx = b.x - a.x;
         const dy = b.y - a.y;
         const t = Math.max(0, Math.min(1, ((x - a.x) * dx + (y - a.y) * dy) / (dx * dx + dy * dy)));
-        return Math.hypot(x - (a.x + t * dx), y - (a.y + t * dy));
+        return { distance: Math.hypot(x - (a.x + t * dx), y - (a.y + t * dy)), along: t * Math.hypot(dx, dy) };
       };
 
       const ribbonDistances = (edge, x, y) => {
         let centreline = Infinity;
+        let arc = 0;
+        let walked = 0;
         for (let i = 1; i < edge.points.length; i += 1) {
-          centreline = Math.min(centreline, segmentDistance(edge.points[i - 1], edge.points[i], x, y));
+          const a = edge.points[i - 1];
+          const b = edge.points[i];
+          const { distance, along } = segmentDistance(a, b, x, y);
+          if (distance < centreline) {
+            centreline = distance;
+            arc = walked + along;
+          }
+          walked += Math.hypot(b.x - a.x, b.y - a.y);
         }
         let point = Infinity;
         for (const p of edge.points) point = Math.min(point, Math.hypot(x - p.x, y - p.y));
-        return { centreline, point };
+        return { centreline, point, arc };
+      };
+
+      // The page's copy of `dashDistance`, at zoom 1 and DPR 1 where an arc in
+      // world units is an arc in device pixels.
+      const dashDistance = (arc, flowPixels) => {
+        const { periodPixels, duty } = DASHED_STYLE.dash;
+        const phase = (arc - flowPixels) / periodPixels;
+        const fract = phase - Math.floor(phase);
+        return (Math.abs(fract - 0.5) - duty * 0.5) * periodPixels;
       };
 
       const signedDistance = (node, x, y) => {
@@ -302,8 +364,8 @@
         return Math.hypot(Math.max(qx, 0), Math.max(qy, 0)) + Math.min(Math.max(qx, qy), 0) - r;
       };
 
-      window.parity = async (shiftX = 0, edgeShift = 0) => {
-        const draw = async (backend, nodes, edges) => {
+      window.parity = async (shiftX = 0, edgeShift = 0, dashShift = 0) => {
+        const draw = async (backend, nodes, edges, dashed, dashFlowPixels) => {
           const previous = document.getElementById('stage');
           const canvas = document.createElement('canvas');
           canvas.id = 'stage';
@@ -312,9 +374,20 @@
             canvas,
             backend,
             nodes,
-            edgeGroups: [{ id: 'edges', style: EDGE_STYLE }],
+            edgeGroups: [
+              { id: 'edges', style: EDGE_STYLE },
+              { id: 'dashed', style: DASHED_STYLE },
+            ],
           });
           renderer.setEdges('edges', edges);
+          renderer.setEdges('dashed', dashed);
+          if (dashFlowPixels !== 0) {
+            renderer.setEdgeStyle('dashed', {
+              halfWidthPixels: DASHED_STYLE.halfWidthPixels,
+              alpha: 1,
+              dashFlowPixels,
+            });
+          }
           renderer.camera.setViewport({ width: 480, height: 320, devicePixelRatio: 1 });
           renderer.render();
           const data = readPixels(canvas);
@@ -325,24 +398,30 @@
         const shifted = NODES.map((node, i) =>
           i === 0 ? { ...node, center: { x: node.center.x + shiftX, y: node.center.y } } : node,
         );
-        const shiftedEdges = EDGES.map((edge) => ({
-          ...edge,
-          points: edge.points.map((p) => ({ x: p.x + edgeShift, y: p.y + edgeShift })),
-        }));
+        const shiftEdges = (edges) =>
+          edges.map((edge) => ({
+            ...edge,
+            points: edge.points.map((p) => ({ x: p.x + edgeShift, y: p.y + edgeShift })),
+          }));
         let gpu;
         let gl;
         try {
-          gpu = await draw('webgpu', NODES, EDGES);
-          gl = await draw('webgl2', shifted, shiftedEdges);
+          gpu = await draw('webgpu', NODES, EDGES, DASHED, 0);
+          gl = await draw('webgl2', shifted, shiftEdges(EDGES), shiftEdges(DASHED), dashShift);
         } catch (error) {
           return { pass: false, error: String(error), code: error && error.code };
         }
         const band = { pixels: 0, differing: 0, maxDelta: 0 };
         const interior = { pixels: 0, differing: 0, maxDelta: 0 };
         // All of these must hold the edge colour, or the band above was
-        // derived for a ribbon somewhere else.
+        // derived for a ribbon somewhere else. A dash counts here too.
         const ribbon = { pixels: 0, edgeColored: 0 };
+        // And these, the gaps between dashes, must hold the clear colour, or
+        // the dashed group was drawn solid or out of phase with the page.
+        const gap = { pixels: 0, clear: 0 };
         const hw = EDGE_STYLE.halfWidthPixels;
+        const near = (data, i, color) =>
+          [16, 8, 0].every((shift, c) => Math.abs(data[i + c] - ((color >> shift) & 0xff)) <= ROUNDING);
         for (let row = 0; row < gpu.height; row += 1) {
           for (let col = 0; col < gpu.width; col += 1) {
             // Device pixel centres in world units, y up: zoom 1, DPR 1, the
@@ -363,13 +442,26 @@
               nearest = Math.min(nearest, Math.abs(centreline - hw));
               if (centreline < hw - EDGE_BAND_DEVICE_PX && point >= hw + 2) onRibbon = true;
             }
+            let inGap = false;
+            for (const edge of DASHED) {
+              const { centreline, point, arc } = ribbonDistances(edge, x, y);
+              const along = dashDistance(arc, 0);
+              if (point < hw + 2) nearest = 0;
+              nearest = Math.min(nearest, Math.abs(centreline - hw));
+              if (centreline < hw + EDGE_BAND_DEVICE_PX) nearest = Math.min(nearest, Math.abs(along));
+              if (centreline < hw - EDGE_BAND_DEVICE_PX && point >= hw + 2) {
+                if (along < -EDGE_BAND_DEVICE_PX) onRibbon = true;
+                if (along > EDGE_BAND_DEVICE_PX) inGap = true;
+              }
+            }
             const i = (row * gpu.width + col) * 4;
             if (onRibbon && !glowed) {
               ribbon.pixels += 1;
-              const near = (value, channel) => Math.abs(value - ((EDGE_COLOR >> channel) & 0xff)) <= ROUNDING;
-              if (near(gpu.data[i], 16) && near(gpu.data[i + 1], 8) && near(gpu.data[i + 2], 0)) {
-                ribbon.edgeColored += 1;
-              }
+              if (near(gpu.data, i, EDGE_COLOR)) ribbon.edgeColored += 1;
+            }
+            if (inGap && !onRibbon && !glowed) {
+              gap.pixels += 1;
+              if (near(gpu.data, i, CLEAR_COLOR)) gap.clear += 1;
             }
             const delta = Math.max(
               Math.abs(gpu.data[i] - gl.data[i]),
@@ -385,7 +477,8 @@
         }
         const backends = { webgpu: gpu.reported, webgl2: gl.reported };
         const sameSize = gl.width === gpu.width && gl.height === gpu.height;
-        const ribbonDrawn = ribbon.pixels > 0 && ribbon.edgeColored === ribbon.pixels;
+        const ribbonDrawn =
+          ribbon.pixels > 0 && ribbon.edgeColored === ribbon.pixels && gap.pixels > 0 && gap.clear === gap.pixels;
         return {
           pass:
             gpu.reported === 'webgpu' &&
@@ -398,9 +491,11 @@
           tolerance: { edgeBandDevicePx: EDGE_BAND_DEVICE_PX, interiorMaxDelta: ROUNDING },
           shiftX,
           edgeShift,
+          dashShift,
           band,
           interior,
           ribbon,
+          gap,
           ribbonDrawn,
         };
       };
