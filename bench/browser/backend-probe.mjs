@@ -36,10 +36,10 @@
  * SwiftShader still comes up on `webgpu`, so its side of the comparison would
  * not be a GPU's. The compared scene has two solid edge ribbons under the
  * shapes, three dashed ones beside them (one through two joins) and a smooth
- * one above; the second control shifts every ribbon, the third flows the
- * dashes and the fourth draws the smooth one as a polyline. `--pick`
- * adds M4.8b's check of `pickNode` on both backends at
- * device pixel ratios 1 and 2, and exits non-zero on the same adapter terms or
+ * one above, the dashes flowed; the second control shifts every ribbon, the
+ * third flows the dashes further on one side and the fourth draws the smooth
+ * one as a polyline. `--pick` adds M4.8b's check of `pickNode` on both
+ * backends at device pixel ratios 1 and 2, and exits non-zero on the same adapter terms or
  * on any pick that disagrees with the shapes' distance functions.
  */
 import { createRequire } from 'node:module';
@@ -220,7 +220,7 @@ if (cliArgs.includes('--parity')) {
   }
   const dashControl = controlFailure(parity.dashControl, 'dash');
   if (dashControl !== undefined) {
-    console.error(`the dash control, with the dashes flowed by ${DASH_CONTROL_SHIFT_PX} px, ${dashControl}`);
+    console.error(`the dash control, with the dashes flowed ${DASH_CONTROL_SHIFT_PX} px further, ${dashControl}`);
     process.exitCode = 1;
   }
   const curveControl = controlFailure(parity.curveControl, 'curve');
