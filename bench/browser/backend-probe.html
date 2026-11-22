@@ -239,9 +239,9 @@
        * y, the edges' control. A ribbon has no glow, so only a shift wider than
        * the band can show: at 2 px, pixels the band leaves outside it change.
        *
-       * `dashShift` flows the dashed group's pattern by that much further on
+       * `dashShift` flows both dashed groups' patterns by that much further on
        * the WebGL2 side, the dashes' control. It moves dash ends along the
-       * ribbon and nothing else, so it fails only if the comparison can see
+       * ribbons and nothing else, so it fails only if the comparison can see
        * where a dash ends.
        *
        * `curveControl` draws both smooth groups as polylines through the same
@@ -588,7 +588,6 @@
         // Inside the smooth ribbon, counted apart so a curve drawn somewhere
         // else cannot hide among the straight ribbons' pixels.
         const curve = { pixels: 0, edgeColored: 0 };
-        // The smooth dashed ribbon's dashes and gaps, counted apart likewise.
         const curvedDash = { pixels: 0, edgeColored: 0, gapPixels: 0, clear: 0 };
         const hw = EDGE_STYLE.halfWidthPixels;
         const dashedHw = DASHED_STYLE.halfWidthPixels;

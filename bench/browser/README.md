@@ -515,7 +515,7 @@ DAGR_CHROMIUM="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" \
 ones, a smooth one and a smooth dashed one, the dashes flowed by 4.5 pixels,
 through `'webgpu'` and through `'webgl2'` and compares
 the two frames pixel by pixel. It exits non-zero unless both backends came up
-as named, the comparison passes with the ribbons, dashes and curve drawn where
+as named, the comparison passes with the ribbons, dashes and curves drawn where
 the page expects them, and all four controls (one moves a shape, one every
 ribbon, the curves included, one the dash pattern, one draws the curves as
 polylines) fail on what they change, and says on stderr which of these did not
@@ -739,7 +739,8 @@ dashed group, from the renderer's own `tessellateRibbons`, here with `curve:
 'smooth'` as the group is given it, so the flattened curve's short joins place
 their dash ends as drawn, and its two butt caps go in the band whole. One more
 condition comes with it, and the curve control now draws both smooth groups as
-polylines:
+polylines and the dash control flows its pattern 3 pixels further on the
+WebGL2 side too:
 
 - Every pixel inside one of its dashes, clear of the band and the caps, must
   hold the edge colour on WebGPU, and every pixel inside one of its gaps the

@@ -951,7 +951,7 @@ day a smooth dashed ribbon joined the scene, flowed the same way and classed
 from the renderer's own smooth triangles. The check still passes, with 32
 more band pixels differing on it, by up to 77 at its first butt cap, and no
 interior pixel. The curve control now draws both smooth ribbons as
-polylines.
+polylines, and the dash control flows its dashes too.
 
 ## Usage
 
