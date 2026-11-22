@@ -745,7 +745,8 @@ polylines:
   hold the edge colour on WebGPU, and every pixel inside one of its gaps the
   clear colour, counted apart from the straight dashes. With the page's phase
   for it moved half a period, the run fails: 0 of 125 dash pixels hold the
-  edge colour and 0 of 119 gap pixels the clear colour.
+  edge colour and 0 of 119 gap pixels the clear colour (the shift swaps which
+  pixels the page calls dashes and gaps, hence 125 and 119).
 - With only this group drawn as a polyline on the WebGL2 side, the curve
   control still fails, with 577 band pixels and 315 interior pixels differing
   by up to 158, so the control can see this curve on its own.
