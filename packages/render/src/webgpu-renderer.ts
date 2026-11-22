@@ -69,11 +69,10 @@ import type {
  * the first task to take entries OFF it:
  *
  * - Everything above on WebGPU beyond that one machine, browser and scene:
- *   other GPUs, other zooms and device pixel ratios, and a dash flow
- *   advancing between frames (the parity scene draws two solid and two
- *   dashed straight ones, a dashed one through two joins, one solid smooth
- *   one and one smooth dashed one, the dashes flowed by one fixed amount),
- *   and why the smooth ribbons' caps and sides and the joined dashed
+ *   other GPUs, other zooms and device pixel ratios (the parity scene draws
+ *   two solid and two dashed straight ones, a dashed one through two joins,
+ *   one solid smooth one and one smooth dashed one, over three frames with
+ *   the dashes' flow advancing), and why the smooth ribbons' caps and sides and the joined dashed
  *   ribbon's dash ends, end cap and, at rest, turn differ within the band.
  * - That `dispose` actually frees GPU memory, only that every resource in the
  *   list is disposed exactly once.
