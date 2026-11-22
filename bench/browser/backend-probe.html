@@ -34,7 +34,7 @@
       { "imports": { "three/webgpu": "__THREE_WEBGPU__", "three/tsl": "__THREE_TSL__" } }
     </script>
     <script type="module">
-      import { createRenderer } from '/packages/render/dist/index.js';
+      import { advanceDashFlow, createRenderer } from '/packages/render/dist/index.js';
       import {
         DEFAULT_FLATTEN_TOLERANCE_FRACTION,
         RIBBON_AA_PADDING_PIXELS,
@@ -215,8 +215,9 @@
       };
 
       /**
-       * M4.9b: the same scene through WebGPU and WebGL2, compared pixel by
-       * pixel, with the tolerance taken from the antialiasing ramp.
+       * M4.9b: the same scene through WebGPU and WebGL2 over `FLOW_FRAMES`
+       * frames, each compared pixel by pixel with the other backend's at the
+       * same flow, with the tolerance taken from the antialiasing ramp.
        *
        * `fillCoverage` and `outlineCoverage` in `sdf.ts` are smoothsteps one
        * `aaWidth` wide, centred on the shape's boundary and on the outline's
@@ -243,6 +244,10 @@
        * the WebGL2 side, the dashes' control. It moves dash ends along the
        * ribbons and nothing else, so it fails only if the comparison can see
        * where a dash ends.
+       *
+       * `holdFlow` keeps the WebGL2 side's flow at its first frame's value, the
+       * flow's control. It fails only if the comparison can see the frames
+       * after the first move their dashes.
        *
        * `curveControl` draws both smooth groups as polylines through the same
        * points on the WebGL2 side, the curve's control. It fails only if the
@@ -306,16 +311,26 @@
        * along the ribbon, put through the same one-pixel ramp as the width, so
        * a pixel within one device pixel of a dash end goes in the band.
        *
-       * Both sides draw the pattern flowed by `DASH_FLOW_PIXELS`, a value
-       * `advanceDashFlow` can return. It moves every dash end by more than the
-       * band and less than a dash, so a backend that dropped the flow would
-       * draw edge colour where the page expects a gap.
+       * Both sides draw `FLOW_FRAMES` frames, a frame apart, the first with
+       * the pattern flowed by `DASH_FLOW_PIXELS` and each later one advanced
+       * by `advanceDashFlow` at the style's speed over one 60 Hz frame. Each
+       * step moves every dash end by more than the band and less than a dash,
+       * so a backend that dropped the flow, or kept a frame's flow into the
+       * next, would draw edge colour where the page expects a gap. The third
+       * frame's flow wraps past the period, to 1.5 pixels.
        */
       const DASHED_STYLE = {
         halfWidthPixels: 2,
-        dash: { periodPixels: 12, duty: 0.5, speedPixelsPerSecond: 0 },
+        dash: { periodPixels: 12, duty: 0.5, speedPixelsPerSecond: 270 },
       };
       const DASH_FLOW_PIXELS = 4.5;
+      const FRAME_SECONDS = 1 / 60;
+      const FLOW_FRAMES = 3;
+      const FLOWS = [DASH_FLOW_PIXELS];
+      while (FLOWS.length < FLOW_FRAMES) {
+        const { periodPixels, speedPixelsPerSecond } = DASHED_STYLE.dash;
+        FLOWS.push(advanceDashFlow(FLOWS[FLOWS.length - 1], speedPixelsPerSecond, FRAME_SECONDS, periodPixels));
+      }
       const DASHED = [
         {
           id: 'dashed-horizontal',
@@ -384,8 +399,8 @@
       /**
        * One smooth dashed ribbon in a group of its own, `DASHED_STYLE` with
        * `curve: 'smooth'`, an S through four points below and left of the
-       * shapes, clear of them, their glow and the other ribbons. It is flowed
-       * by `DASH_FLOW_PIXELS` as the straight dashes are.
+       * shapes, clear of them, their glow and the other ribbons. Its flow
+       * advances frame by frame with the straight dashes'.
        *
        * The page classes it as it classes the dashed group, from the group's
        * own triangles, here tessellated with `curve: 'smooth'` as the renderer
@@ -438,7 +453,7 @@
       const BAND = 4;
       /**
        * What a group of `DASHED_STYLE` routes, tessellated with `options` and
-       * flowed by `DASH_FLOW_PIXELS`, draws at each device pixel of a `width` by
+       * flowed by `flowPixels`, draws at each device pixel of a `width` by
        * `height` frame: SOLID, GAP (inside the width, between dashes),
        * OUTSIDE (beyond the width) or BAND, from the group's own triangles.
        *
@@ -458,7 +473,7 @@
        * segment's quad moves by about 1.5 px across one pixel, more than the
        * one-pixel margin.
        */
-      const dashedClasses = (routes, options, width, height) => {
+      const dashedClasses = (routes, options, flowPixels, width, height) => {
         const { position, offset, across, arc, index } = tessellateRibbons(routes, options);
         const hw = DASHED_STYLE.halfWidthPixels;
         const expand = hw + RIBBON_AA_PADDING_PIXELS;
@@ -491,7 +506,7 @@
                 if (outside > reach) continue;
               }
               const side = Math.abs(w0 * across[v[0]] + w1 * across[v[1]] + w2 * across[v[2]]) * expand - hw;
-              const along = dashDistance(w0 * arc[v[0]] + w1 * arc[v[1]] + w2 * arc[v[2]], DASH_FLOW_PIXELS);
+              const along = dashDistance(w0 * arc[v[0]] + w1 * arc[v[1]] + w2 * arc[v[2]], flowPixels);
               let cls = BAND;
               if (Math.max(side, along) < -EDGE_BAND_DEVICE_PX) cls = SOLID;
               else if (side < -EDGE_BAND_DEVICE_PX && along > EDGE_BAND_DEVICE_PX) cls = GAP;
@@ -517,8 +532,8 @@
         return Math.hypot(Math.max(qx, 0), Math.max(qy, 0)) + Math.min(Math.max(qx, qy), 0) - r;
       };
 
-      window.parity = async (shiftX = 0, edgeShift = 0, dashShift = 0, curveControl = false) => {
-        const draw = async (backend, nodes, edges, dashed, dashFlowPixels, smooth, smoothDashed, curve) => {
+      window.parity = async (shiftX = 0, edgeShift = 0, dashShift = 0, curveControl = false, holdFlow = false) => {
+        const draw = async (backend, nodes, edges, dashed, flows, smooth, smoothDashed, curve) => {
           const previous = document.getElementById('stage');
           const canvas = document.createElement('canvas');
           canvas.id = 'stage';
@@ -538,19 +553,23 @@
           renderer.setEdges('dashed', dashed);
           renderer.setEdges('smooth', smooth);
           renderer.setEdges('smooth-dashed', smoothDashed);
-          for (const group of ['dashed', 'smooth-dashed']) {
-            renderer.setEdgeStyle(group, {
-              halfWidthPixels: DASHED_STYLE.halfWidthPixels,
-              alpha: 1,
-              dashFlowPixels,
-            });
-          }
           renderer.camera.setViewport({ width: 480, height: 320, devicePixelRatio: 1 });
-          renderer.render();
-          const data = readPixels(canvas);
+          const frames = [];
+          for (const dashFlowPixels of flows) {
+            if (frames.length > 0) await new Promise((resolve) => requestAnimationFrame(resolve));
+            for (const group of ['dashed', 'smooth-dashed']) {
+              renderer.setEdgeStyle(group, {
+                halfWidthPixels: DASHED_STYLE.halfWidthPixels,
+                alpha: 1,
+                dashFlowPixels,
+              });
+            }
+            renderer.render();
+            frames.push(readPixels(canvas));
+          }
           const reported = renderer.backend;
           renderer.dispose();
-          return { data, reported, width: canvas.width, height: canvas.height };
+          return { frames, reported, width: canvas.width, height: canvas.height };
         };
         const shifted = NODES.map((node, i) =>
           i === 0 ? { ...node, center: { x: node.center.x + shiftX, y: node.center.y } } : node,
@@ -563,13 +582,13 @@
         let gpu;
         let gl;
         try {
-          gpu = await draw('webgpu', NODES, EDGES, DASHED, DASH_FLOW_PIXELS, SMOOTH, SMOOTH_DASHED, 'smooth');
+          gpu = await draw('webgpu', NODES, EDGES, DASHED, FLOWS, SMOOTH, SMOOTH_DASHED, 'smooth');
           gl = await draw(
             'webgl2',
             shifted,
             shiftEdges(EDGES),
             shiftEdges(DASHED),
-            DASH_FLOW_PIXELS + dashShift,
+            FLOWS.map((flow) => (holdFlow ? FLOWS[0] : flow) + dashShift),
             shiftEdges(SMOOTH),
             shiftEdges(SMOOTH_DASHED),
             curveControl ? 'polyline' : 'smooth',
@@ -577,6 +596,8 @@
         } catch (error) {
           return { pass: false, error: String(error), code: error && error.code };
         }
+        // Every count below is summed over the frames, and `frames` keeps
+        // each frame's comparison.
         const band = { pixels: 0, differing: 0, maxDelta: 0 };
         const interior = { pixels: 0, differing: 0, maxDelta: 0 };
         // All of these must hold the edge colour, or the band above was
@@ -591,86 +612,100 @@
         const curvedDash = { pixels: 0, edgeColored: 0, gapPixels: 0, clear: 0 };
         const hw = EDGE_STYLE.halfWidthPixels;
         const dashedHw = DASHED_STYLE.halfWidthPixels;
-        const dashedAt = dashedClasses(DASHED, undefined, gpu.width, gpu.height);
-        const curvedDashAt = dashedClasses(SMOOTH_DASHED, { curve: 'smooth' }, gpu.width, gpu.height);
         const near = (data, i, color) =>
           [16, 8, 0].every((shift, c) => Math.abs(data[i + c] - ((color >> shift) & 0xff)) <= ROUNDING);
-        for (let row = 0; row < gpu.height; row += 1) {
-          for (let col = 0; col < gpu.width; col += 1) {
-            // Device pixel centres in world units, y up: zoom 1, DPR 1, the
-            // origin at the canvas centre.
-            const x = col + 0.5 - gpu.width / 2;
-            const y = gpu.height / 2 - (row + 0.5);
-            let nearest = Infinity;
-            let glowed = false;
-            for (const node of NODES) {
-              const d = signedDistance(node, x, y);
-              nearest = Math.min(nearest, Math.abs(d), Math.abs(d + OUTLINE_DEVICE_PX));
-              if (d < node.glowWorld + EDGE_BAND_DEVICE_PX) glowed = true;
+        const frames = [];
+        for (let f = 0; f < FLOWS.length; f += 1) {
+          const gpuData = gpu.frames[f];
+          const glData = gl.frames[f];
+          const frameBand = { differing: 0, maxDelta: 0 };
+          const frameInterior = { differing: 0, maxDelta: 0 };
+          const dashedAt = dashedClasses(DASHED, undefined, FLOWS[f], gpu.width, gpu.height);
+          const curvedDashAt = dashedClasses(SMOOTH_DASHED, { curve: 'smooth' }, FLOWS[f], gpu.width, gpu.height);
+          for (let row = 0; row < gpu.height; row += 1) {
+            for (let col = 0; col < gpu.width; col += 1) {
+              // Device pixel centres in world units, y up: zoom 1, DPR 1, the
+              // origin at the canvas centre.
+              const x = col + 0.5 - gpu.width / 2;
+              const y = gpu.height / 2 - (row + 0.5);
+              let nearest = Infinity;
+              let glowed = false;
+              for (const node of NODES) {
+                const d = signedDistance(node, x, y);
+                nearest = Math.min(nearest, Math.abs(d), Math.abs(d + OUTLINE_DEVICE_PX));
+                if (d < node.glowWorld + EDGE_BAND_DEVICE_PX) glowed = true;
+              }
+              let onRibbon = false;
+              for (const edge of EDGES) {
+                const { centreline, point } = ribbonDistances(edge, x, y);
+                if (point < hw + 2) nearest = 0;
+                nearest = Math.min(nearest, Math.abs(centreline - hw));
+                if (centreline < hw - EDGE_BAND_DEVICE_PX && point >= hw + 2) onRibbon = true;
+              }
+              let inGap = false;
+              let capped = false;
+              for (const edge of [...DASHED, ...SMOOTH_DASHED]) {
+                const first = edge.points[0];
+                const last = edge.points[edge.points.length - 1];
+                const cap = Math.min(Math.hypot(x - first.x, y - first.y), Math.hypot(x - last.x, y - last.y));
+                if (cap < dashedHw + 2) capped = true;
+              }
+              const dashed = dashedAt[row * gpu.width + col];
+              if (capped || dashed === BAND) nearest = 0;
+              else if (dashed === SOLID) onRibbon = true;
+              else if (dashed === GAP) inGap = true;
+              const curvedDashed = curvedDashAt[row * gpu.width + col];
+              if (curvedDashed === BAND) nearest = 0;
+              let onCurve = false;
+              for (const edge of SMOOTH_DRAWN) {
+                const { centreline } = ribbonDistances(edge, x, y);
+                const first = edge.points[0];
+                const last = edge.points[edge.points.length - 1];
+                const cap = Math.min(Math.hypot(x - first.x, y - first.y), Math.hypot(x - last.x, y - last.y));
+                if (cap < hw + 2) nearest = 0;
+                nearest = Math.min(nearest, Math.abs(centreline - hw));
+                if (centreline < hw - EDGE_BAND_DEVICE_PX && cap >= hw + 2) onCurve = true;
+              }
+              const i = (row * gpu.width + col) * 4;
+              if (onCurve && !glowed) {
+                curve.pixels += 1;
+                if (near(gpuData, i, EDGE_COLOR)) curve.edgeColored += 1;
+              }
+              if (onRibbon && !glowed) {
+                ribbon.pixels += 1;
+                if (near(gpuData, i, EDGE_COLOR)) ribbon.edgeColored += 1;
+              }
+              if (!capped && !glowed && curvedDashed === SOLID) {
+                curvedDash.pixels += 1;
+                if (near(gpuData, i, EDGE_COLOR)) curvedDash.edgeColored += 1;
+              }
+              if (!capped && !glowed && curvedDashed === GAP) {
+                curvedDash.gapPixels += 1;
+                if (near(gpuData, i, CLEAR_COLOR)) curvedDash.clear += 1;
+              }
+              if (inGap && !onRibbon && !glowed) {
+                gap.pixels += 1;
+                if (near(gpuData, i, CLEAR_COLOR)) gap.clear += 1;
+              }
+              const delta = Math.max(
+                Math.abs(gpuData[i] - glData[i]),
+                Math.abs(gpuData[i + 1] - glData[i + 1]),
+                Math.abs(gpuData[i + 2] - glData[i + 2]),
+                Math.abs(gpuData[i + 3] - glData[i + 3]),
+              );
+              const inBand = nearest < EDGE_BAND_DEVICE_PX;
+              const bucket = inBand ? band : interior;
+              const frameBucket = inBand ? frameBand : frameInterior;
+              bucket.pixels += 1;
+              if (delta > 0) {
+                bucket.differing += 1;
+                frameBucket.differing += 1;
+              }
+              bucket.maxDelta = Math.max(bucket.maxDelta, delta);
+              frameBucket.maxDelta = Math.max(frameBucket.maxDelta, delta);
             }
-            let onRibbon = false;
-            for (const edge of EDGES) {
-              const { centreline, point } = ribbonDistances(edge, x, y);
-              if (point < hw + 2) nearest = 0;
-              nearest = Math.min(nearest, Math.abs(centreline - hw));
-              if (centreline < hw - EDGE_BAND_DEVICE_PX && point >= hw + 2) onRibbon = true;
-            }
-            let inGap = false;
-            let capped = false;
-            for (const edge of [...DASHED, ...SMOOTH_DASHED]) {
-              const first = edge.points[0];
-              const last = edge.points[edge.points.length - 1];
-              const cap = Math.min(Math.hypot(x - first.x, y - first.y), Math.hypot(x - last.x, y - last.y));
-              if (cap < dashedHw + 2) capped = true;
-            }
-            const dashed = dashedAt[row * gpu.width + col];
-            if (capped || dashed === BAND) nearest = 0;
-            else if (dashed === SOLID) onRibbon = true;
-            else if (dashed === GAP) inGap = true;
-            const curvedDashed = curvedDashAt[row * gpu.width + col];
-            if (curvedDashed === BAND) nearest = 0;
-            let onCurve = false;
-            for (const edge of SMOOTH_DRAWN) {
-              const { centreline } = ribbonDistances(edge, x, y);
-              const first = edge.points[0];
-              const last = edge.points[edge.points.length - 1];
-              const cap = Math.min(Math.hypot(x - first.x, y - first.y), Math.hypot(x - last.x, y - last.y));
-              if (cap < hw + 2) nearest = 0;
-              nearest = Math.min(nearest, Math.abs(centreline - hw));
-              if (centreline < hw - EDGE_BAND_DEVICE_PX && cap >= hw + 2) onCurve = true;
-            }
-            const i = (row * gpu.width + col) * 4;
-            if (onCurve && !glowed) {
-              curve.pixels += 1;
-              if (near(gpu.data, i, EDGE_COLOR)) curve.edgeColored += 1;
-            }
-            if (onRibbon && !glowed) {
-              ribbon.pixels += 1;
-              if (near(gpu.data, i, EDGE_COLOR)) ribbon.edgeColored += 1;
-            }
-            if (!capped && !glowed && curvedDashed === SOLID) {
-              curvedDash.pixels += 1;
-              if (near(gpu.data, i, EDGE_COLOR)) curvedDash.edgeColored += 1;
-            }
-            if (!capped && !glowed && curvedDashed === GAP) {
-              curvedDash.gapPixels += 1;
-              if (near(gpu.data, i, CLEAR_COLOR)) curvedDash.clear += 1;
-            }
-            if (inGap && !onRibbon && !glowed) {
-              gap.pixels += 1;
-              if (near(gpu.data, i, CLEAR_COLOR)) gap.clear += 1;
-            }
-            const delta = Math.max(
-              Math.abs(gpu.data[i] - gl.data[i]),
-              Math.abs(gpu.data[i + 1] - gl.data[i + 1]),
-              Math.abs(gpu.data[i + 2] - gl.data[i + 2]),
-              Math.abs(gpu.data[i + 3] - gl.data[i + 3]),
-            );
-            const bucket = nearest < EDGE_BAND_DEVICE_PX ? band : interior;
-            bucket.pixels += 1;
-            if (delta > 0) bucket.differing += 1;
-            bucket.maxDelta = Math.max(bucket.maxDelta, delta);
           }
+          frames.push({ flowPixels: FLOWS[f], band: frameBand, interior: frameInterior });
         }
         const backends = { webgpu: gpu.reported, webgl2: gl.reported };
         const sameSize = gl.width === gpu.width && gl.height === gpu.height;
@@ -699,6 +734,8 @@
           edgeShift,
           dashShift,
           curveControl,
+          holdFlow,
+          frames,
           band,
           interior,
           ribbon,

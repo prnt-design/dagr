@@ -30,15 +30,16 @@
  * Chrome instead of launching one. The output
  * records the browser, mode and flags, because a backend result without them
  * cannot be reproduced. `--parity` adds M4.9b's backend comparison and exits
- * non-zero unless it passes and all four of its controls fail on what they
+ * non-zero unless it passes and all five of its controls fail on what they
  * change. It also exits non-zero when the adapter reports `isFallbackAdapter`: a software
  * adapter such as
  * SwiftShader still comes up on `webgpu`, so its side of the comparison would
  * not be a GPU's. The compared scene has two solid edge ribbons under the
  * shapes, three dashed ones beside them (one through two joins), a smooth
- * one above and a smooth dashed one below and left, the dashes flowed; the
- * second control shifts every ribbon, the third flows the dashes further on
- * one side and the fourth draws the smooth ones as polylines.
+ * one above and a smooth dashed one below and left, drawn over three frames
+ * with the dashes' flow advancing; the second control shifts every ribbon,
+ * the third flows the dashes further on one side, the fourth draws the smooth
+ * ones as polylines and the fifth holds one side's flow at its first frame's.
  * `--pick` adds M4.8b's check of `pickNode` on both backends at device pixel
  * ratios 1 and 2, and exits non-zero on the same adapter terms or on any pick
  * that disagrees with the shapes' distance functions.
@@ -102,7 +103,7 @@ function parityFailure(check) {
   if (check.backends.webgpu !== 'webgpu' || check.backends.webgl2 !== 'webgl2') {
     reasons.push(`the frames drew on ${check.backends.webgpu} and ${check.backends.webgl2}, not webgpu and webgl2`);
   }
-  if (!check.sameSize) reasons.push('the two frames are different sizes');
+  if (!check.sameSize) reasons.push("the two backends' frames are different sizes");
   if (!check.ribbonDrawn) {
     reasons.push(
       `${check.ribbon.edgeColored} of ${check.ribbon.pixels} pixels inside the ribbons hold the edge colour on webgpu`,
@@ -117,14 +118,14 @@ function parityFailure(check) {
       `${check.interior.differing} interior pixels differ, by up to ${check.interior.maxDelta} against a tolerance of ${check.tolerance.interiorMaxDelta}`,
     );
   }
-  return reasons.join('; ');
+  return `${reasons.join('; ')} (counts summed over ${check.frames.length} frames)`;
 }
 
 /**
  * Why the control did not fail the way it must, or undefined when it did. A
  * control that threw, drew on the wrong backend or compared frames of different
  * sizes also reports `pass: false`, but says nothing about whether the check
- * can see a shifted shape, ribbon, dash pattern or curve.
+ * can see a shifted shape, ribbon, dash pattern, curve or flow.
  */
 function controlFailure(control, moved) {
   if (control.pass) return `passed, so the check cannot see a misplaced ${moved}`;
@@ -135,7 +136,7 @@ function controlFailure(control, moved) {
     control.sameSize &&
     control.ribbonDrawn &&
     control.interior.maxDelta > control.tolerance.interiorMaxDelta;
-  return failedOnShift ? undefined : `failed, but not on the shift: ${parityFailure(control)}`;
+  return failedOnShift ? undefined : `failed, but not on what it changes: ${parityFailure(control)}`;
 }
 
 function pickFailure(run) {
@@ -198,12 +199,16 @@ if (cliArgs.includes('--parity')) {
     );
     process.exitCode = 1;
   }
+  // The check waits on animation frames, which a hidden or occluded tab does
+  // not run, so the evaluate would hang rather than fail.
+  await page.bringToFront();
   parity = {
     check: await page.evaluate(() => window.parity()),
     control: await page.evaluate((shift) => window.parity(shift), CONTROL_SHIFT_PX),
     edgeControl: await page.evaluate((shift) => window.parity(0, shift), EDGE_CONTROL_SHIFT_PX),
     dashControl: await page.evaluate((shift) => window.parity(0, 0, shift), DASH_CONTROL_SHIFT_PX),
     curveControl: await page.evaluate(() => window.parity(0, 0, 0, true)),
+    flowControl: await page.evaluate(() => window.parity(0, 0, 0, false, true)),
   };
   if (!parity.check.pass) {
     console.error(`the parity check failed: ${parityFailure(parity.check)}`);
@@ -229,6 +234,11 @@ if (cliArgs.includes('--parity')) {
   const curveControl = controlFailure(parity.curveControl, 'curve');
   if (curveControl !== undefined) {
     console.error(`the curve control, with the smooth ribbons drawn as polylines, ${curveControl}`);
+    process.exitCode = 1;
+  }
+  const flowControl = controlFailure(parity.flowControl, 'dash flow');
+  if (flowControl !== undefined) {
+    console.error(`the flow control, with one side's flow held at its first frame's, ${flowControl}`);
     process.exitCode = 1;
   }
 }

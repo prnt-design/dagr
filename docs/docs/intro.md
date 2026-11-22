@@ -108,10 +108,11 @@ and still was with two solid and two dashed straight edge ribbons added
 (Chrome 157). A smooth ribbon and a dashed one through two joins, added on
 2026-11-21, pass the check, with 49 edge-band pixels on them differing, and
 still do with the dashes flowed (2026-11-22). A smooth dashed ribbon added
-that day also passes, with 81 edge-band pixels differing in all. The original probe also
+that day also passes, with 81 edge-band pixels differing in all, and so does
+the flow advancing over three frames, with 87 and 77 edge-band pixels
+differing on the later two. The original probe also
 passed on AMD RDNA 2 in Chrome 156, with four edge-band pixels differing by
-one. A flow advancing between frames, other zooms and DPRs, and other GPUs
-remain uncovered. A
+one. Other GPUs, zooms and DPRs remain uncovered. A
 performance profile is published, and GPU node picking ships behind an opt-in
 `hitTesting="gpu"` on `DagrCanvas`, with edge hits on the CPU. The large-graph
 target, 10,000 nodes animating at 60 fps, is still open: it held with a tenth
