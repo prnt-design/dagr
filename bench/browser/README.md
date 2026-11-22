@@ -729,8 +729,7 @@ interior pixels, the dash control with 1,566 band pixels and 577 interior
 pixels, and the curve control with 704 band pixels and 692 interior pixels,
 each by up to 158. `--pick`, added to the third headed run, still passed on
 both backends at DPR 1 and 2, 9,532 picks each. The comparison is of one flow value
-in one frame; a flow advancing between frames was not compared (it was later
-that day; see below).
+in one frame; a flow advancing between frames was not compared.
 
 **A smooth dashed ribbon joined the compared scene on 2026-11-22 UTC.** A
 fourth edge group, the dashed style with `curve: 'smooth'`, draws one S

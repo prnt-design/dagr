@@ -215,8 +215,9 @@
       };
 
       /**
-       * M4.9b: the same scene through WebGPU and WebGL2, compared pixel by
-       * pixel, with the tolerance taken from the antialiasing ramp.
+       * M4.9b: the same scene through WebGPU and WebGL2 over `FLOW_FRAMES`
+       * frames, each compared pixel by pixel with the other backend's at the
+       * same flow, with the tolerance taken from the antialiasing ramp.
        *
        * `fillCoverage` and `outlineCoverage` in `sdf.ts` are smoothsteps one
        * `aaWidth` wide, centred on the shape's boundary and on the outline's

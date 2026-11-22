@@ -103,7 +103,7 @@ function parityFailure(check) {
   if (check.backends.webgpu !== 'webgpu' || check.backends.webgl2 !== 'webgl2') {
     reasons.push(`the frames drew on ${check.backends.webgpu} and ${check.backends.webgl2}, not webgpu and webgl2`);
   }
-  if (!check.sameSize) reasons.push('the two frames are different sizes');
+  if (!check.sameSize) reasons.push("the two backends' frames are different sizes");
   if (!check.ribbonDrawn) {
     reasons.push(
       `${check.ribbon.edgeColored} of ${check.ribbon.pixels} pixels inside the ribbons hold the edge colour on webgpu`,
@@ -118,7 +118,7 @@ function parityFailure(check) {
       `${check.interior.differing} interior pixels differ, by up to ${check.interior.maxDelta} against a tolerance of ${check.tolerance.interiorMaxDelta}`,
     );
   }
-  return reasons.join('; ');
+  return `${reasons.join('; ')} (counts summed over ${check.frames.length} frames)`;
 }
 
 /**
