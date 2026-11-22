@@ -136,7 +136,7 @@ function controlFailure(control, moved) {
     control.sameSize &&
     control.ribbonDrawn &&
     control.interior.maxDelta > control.tolerance.interiorMaxDelta;
-  return failedOnShift ? undefined : `failed, but not on the shift: ${parityFailure(control)}`;
+  return failedOnShift ? undefined : `failed, but not on what it changes: ${parityFailure(control)}`;
 }
 
 function pickFailure(run) {
@@ -199,6 +199,9 @@ if (cliArgs.includes('--parity')) {
     );
     process.exitCode = 1;
   }
+  // The check waits on animation frames, which a hidden or occluded tab does
+  // not run, so the evaluate would hang rather than fail.
+  await page.bringToFront();
   parity = {
     check: await page.evaluate(() => window.parity()),
     control: await page.evaluate((shift) => window.parity(shift), CONTROL_SHIFT_PX),

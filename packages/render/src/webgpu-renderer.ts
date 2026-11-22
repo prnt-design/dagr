@@ -62,7 +62,8 @@ import type {
  * the same two-shape frame through both backends was byte-identical, every one
  * of 153,600 pixels (`bench/browser/backend-probe.mjs --parity`). The scene has
  * grown since, and its two smooth ribbons and joined dashed ribbon now leave
- * 81 band pixels differing.
+ * 81 band pixels differing on the first of its three frames and 87 and 77 on
+ * the two after it.
  *
  * What is therefore still UNVERIFIED, stated plainly rather than left to be
  * discovered. M4.2 amended M4.1's list rather than replacing it, and M4.9a is
@@ -72,8 +73,9 @@ import type {
  *   other GPUs, other zooms and device pixel ratios (the parity scene draws
  *   two solid and two dashed straight ones, a dashed one through two joins,
  *   one solid smooth one and one smooth dashed one, over three frames with
- *   the dashes' flow advancing), and why the smooth ribbons' caps and sides and the joined dashed
- *   ribbon's dash ends, end cap and, at rest, turn differ within the band.
+ *   the dashes' flow advancing), and why the smooth ribbons' caps and sides
+ *   and the joined dashed ribbon's dash ends, end cap and, at rest, turn
+ *   differ within the band.
  * - That `dispose` actually frees GPU memory, only that every resource in the
  *   list is disposed exactly once.
  * - The abort check AFTER `init()`, which is the branch that gives a device back
