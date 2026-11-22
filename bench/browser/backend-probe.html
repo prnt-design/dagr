@@ -244,7 +244,7 @@
        * ribbon and nothing else, so it fails only if the comparison can see
        * where a dash ends.
        *
-       * `curveControl` draws the smooth group as a polyline through the same
+       * `curveControl` draws both smooth groups as polylines through the same
        * points on the WebGL2 side, the curve's control. It fails only if the
        * comparison can see that the curve was smoothed.
        */
@@ -381,6 +381,31 @@
       };
       const SMOOTH_DRAWN = SMOOTH.map((edge) => ({ ...edge, points: flattened(edge.points) }));
 
+      /**
+       * One smooth dashed ribbon in a group of its own, `DASHED_STYLE` with
+       * `curve: 'smooth'`, an S through four points below and left of the
+       * shapes, clear of them, their glow and the other ribbons. It is flowed
+       * by `DASH_FLOW_PIXELS` as the straight dashes are.
+       *
+       * The page classes it as it classes the dashed group, from the group's
+       * own triangles, here tessellated with `curve: 'smooth'` as the renderer
+       * is given it, so the flattened curve's many short joins place their
+       * dash ends as drawn. Counted apart from the straight dashes, so a
+       * curved dash drawn somewhere else cannot hide among their pixels.
+       */
+      const SMOOTH_DASHED = [
+        {
+          id: 'smooth-dashed',
+          points: [
+            { x: -220, y: -55 },
+            { x: -185, y: -105 },
+            { x: -145, y: -55 },
+            { x: -105, y: -100 },
+          ],
+          color: EDGE_COLOR,
+        },
+      ];
+
       const segmentDistance = (a, b, x, y) => {
         const dx = b.x - a.x;
         const dy = b.y - a.y;
@@ -432,8 +457,8 @@
        * segment's quad moves by about 1.5 px across one pixel, more than the
        * one-pixel margin.
        */
-      const dashedClasses = (width, height) => {
-        const { position, offset, across, arc, index } = tessellateRibbons(DASHED);
+      const dashedClasses = (routes, options, width, height) => {
+        const { position, offset, across, arc, index } = tessellateRibbons(routes, options);
         const hw = DASHED_STYLE.halfWidthPixels;
         const expand = hw + RIBBON_AA_PADDING_PIXELS;
         const reach = Math.SQRT1_2;
@@ -492,7 +517,7 @@
       };
 
       window.parity = async (shiftX = 0, edgeShift = 0, dashShift = 0, curveControl = false) => {
-        const draw = async (backend, nodes, edges, dashed, dashFlowPixels, smooth, curve) => {
+        const draw = async (backend, nodes, edges, dashed, dashFlowPixels, smooth, smoothDashed, curve) => {
           const previous = document.getElementById('stage');
           const canvas = document.createElement('canvas');
           canvas.id = 'stage';
@@ -505,16 +530,20 @@
               { id: 'edges', style: EDGE_STYLE },
               { id: 'dashed', style: DASHED_STYLE },
               { id: 'smooth', style: EDGE_STYLE, curve },
+              { id: 'smooth-dashed', style: DASHED_STYLE, curve },
             ],
           });
           renderer.setEdges('edges', edges);
           renderer.setEdges('dashed', dashed);
           renderer.setEdges('smooth', smooth);
-          renderer.setEdgeStyle('dashed', {
-            halfWidthPixels: DASHED_STYLE.halfWidthPixels,
-            alpha: 1,
-            dashFlowPixels,
-          });
+          renderer.setEdges('smooth-dashed', smoothDashed);
+          for (const group of ['dashed', 'smooth-dashed']) {
+            renderer.setEdgeStyle(group, {
+              halfWidthPixels: DASHED_STYLE.halfWidthPixels,
+              alpha: 1,
+              dashFlowPixels,
+            });
+          }
           renderer.camera.setViewport({ width: 480, height: 320, devicePixelRatio: 1 });
           renderer.render();
           const data = readPixels(canvas);
@@ -533,7 +562,7 @@
         let gpu;
         let gl;
         try {
-          gpu = await draw('webgpu', NODES, EDGES, DASHED, DASH_FLOW_PIXELS, SMOOTH, 'smooth');
+          gpu = await draw('webgpu', NODES, EDGES, DASHED, DASH_FLOW_PIXELS, SMOOTH, SMOOTH_DASHED, 'smooth');
           gl = await draw(
             'webgl2',
             shifted,
@@ -541,6 +570,7 @@
             shiftEdges(DASHED),
             DASH_FLOW_PIXELS + dashShift,
             shiftEdges(SMOOTH),
+            shiftEdges(SMOOTH_DASHED),
             curveControl ? 'polyline' : 'smooth',
           );
         } catch (error) {
@@ -557,9 +587,12 @@
         // Inside the smooth ribbon, counted apart so a curve drawn somewhere
         // else cannot hide among the straight ribbons' pixels.
         const curve = { pixels: 0, edgeColored: 0 };
+        // The smooth dashed ribbon's dashes and gaps, counted apart likewise.
+        const curvedDash = { pixels: 0, edgeColored: 0, gapPixels: 0, clear: 0 };
         const hw = EDGE_STYLE.halfWidthPixels;
         const dashedHw = DASHED_STYLE.halfWidthPixels;
-        const dashedAt = dashedClasses(gpu.width, gpu.height);
+        const dashedAt = dashedClasses(DASHED, undefined, gpu.width, gpu.height);
+        const curvedDashAt = dashedClasses(SMOOTH_DASHED, { curve: 'smooth' }, gpu.width, gpu.height);
         const near = (data, i, color) =>
           [16, 8, 0].every((shift, c) => Math.abs(data[i + c] - ((color >> shift) & 0xff)) <= ROUNDING);
         for (let row = 0; row < gpu.height; row += 1) {
@@ -584,7 +617,7 @@
             }
             let inGap = false;
             let capped = false;
-            for (const edge of DASHED) {
+            for (const edge of [...DASHED, ...SMOOTH_DASHED]) {
               const first = edge.points[0];
               const last = edge.points[edge.points.length - 1];
               const cap = Math.min(Math.hypot(x - first.x, y - first.y), Math.hypot(x - last.x, y - last.y));
@@ -594,6 +627,8 @@
             if (capped || dashed === BAND) nearest = 0;
             else if (dashed === SOLID) onRibbon = true;
             else if (dashed === GAP) inGap = true;
+            const curvedDashed = curvedDashAt[row * gpu.width + col];
+            if (curvedDashed === BAND) nearest = 0;
             let onCurve = false;
             for (const edge of SMOOTH_DRAWN) {
               const { centreline } = ribbonDistances(edge, x, y);
@@ -612,6 +647,14 @@
             if (onRibbon && !glowed) {
               ribbon.pixels += 1;
               if (near(gpu.data, i, EDGE_COLOR)) ribbon.edgeColored += 1;
+            }
+            if (!capped && !glowed && curvedDashed === SOLID) {
+              curvedDash.pixels += 1;
+              if (near(gpu.data, i, EDGE_COLOR)) curvedDash.edgeColored += 1;
+            }
+            if (!capped && !glowed && curvedDashed === GAP) {
+              curvedDash.gapPixels += 1;
+              if (near(gpu.data, i, CLEAR_COLOR)) curvedDash.clear += 1;
             }
             if (inGap && !onRibbon && !glowed) {
               gap.pixels += 1;
@@ -637,7 +680,11 @@
           gap.pixels > 0 &&
           gap.clear === gap.pixels &&
           curve.pixels > 0 &&
-          curve.edgeColored === curve.pixels;
+          curve.edgeColored === curve.pixels &&
+          curvedDash.pixels > 0 &&
+          curvedDash.edgeColored === curvedDash.pixels &&
+          curvedDash.gapPixels > 0 &&
+          curvedDash.clear === curvedDash.gapPixels;
         return {
           pass:
             gpu.reported === 'webgpu' &&
@@ -657,6 +704,7 @@
           ribbon,
           gap,
           curve,
+          curvedDash,
           ribbonDrawn,
         };
       };

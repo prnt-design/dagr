@@ -35,10 +35,10 @@
  * adapter such as
  * SwiftShader still comes up on `webgpu`, so its side of the comparison would
  * not be a GPU's. The compared scene has two solid edge ribbons under the
- * shapes, three dashed ones beside them (one through two joins) and a smooth
- * one above, the dashes flowed; the second control shifts every ribbon, the
- * third flows the dashes further on one side and the fourth draws the smooth
- * one as a polyline. `--pick` adds M4.8b's check of `pickNode` on both
+ * shapes, three dashed ones beside them (one through two joins), a smooth
+ * one above and a smooth dashed one below, the dashes flowed; the second
+ * control shifts every ribbon, the third flows the dashes further on one side
+ * and the fourth draws the smooth ones as polylines. `--pick` adds M4.8b's check of `pickNode` on both
  * backends at device pixel ratios 1 and 2, and exits non-zero on the same
  * adapter terms or on any pick that disagrees with the shapes' distance functions.
  */
@@ -107,6 +107,8 @@ function parityFailure(check) {
       `${check.ribbon.edgeColored} of ${check.ribbon.pixels} pixels inside the ribbons hold the edge colour on webgpu`,
       `${check.gap.clear} of ${check.gap.pixels} pixels inside the dash gaps hold the clear colour on webgpu`,
       `${check.curve.edgeColored} of ${check.curve.pixels} pixels inside the smooth ribbon hold the edge colour on webgpu`,
+      `${check.curvedDash.edgeColored} of ${check.curvedDash.pixels} pixels inside the smooth dashes hold the edge colour on webgpu`,
+      `${check.curvedDash.clear} of ${check.curvedDash.gapPixels} pixels inside the smooth dash gaps hold the clear colour on webgpu`,
     );
   }
   if (check.interior.maxDelta > check.tolerance.interiorMaxDelta) {
@@ -225,7 +227,7 @@ if (cliArgs.includes('--parity')) {
   }
   const curveControl = controlFailure(parity.curveControl, 'curve');
   if (curveControl !== undefined) {
-    console.error(`the curve control, with the smooth ribbon drawn as a polyline, ${curveControl}`);
+    console.error(`the curve control, with the smooth ribbons drawn as polylines, ${curveControl}`);
     process.exitCode = 1;
   }
 }
