@@ -512,7 +512,7 @@ DAGR_CHROMIUM="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" \
 ```
 
 `--parity` draws the probe's two shapes, two solid edge ribbons, three dashed
-ones and a smooth one, through `'webgpu'` and through `'webgl2'` and compares
+ones flowed by 4.5 pixels and a smooth one, through `'webgpu'` and through `'webgl2'` and compares
 the two frames pixel by pixel. It exits non-zero unless both backends came up
 as named, the comparison passes with the ribbons, dashes and curve drawn where
 the page expects them, and all four controls (one moves a shape, one every
@@ -713,20 +713,20 @@ page at 4.5, the run fails, 22 of 449 gap pixels holding the clear colour and
 flows the WebGL2 side 3 pixels further than the WebGPU side.
 
 **What it found on 2026-11-22 UTC**, on the same Apple M4 Mac mini in Google
-Chrome 157.0.8103.79, headless once and headed twice, no flags, adapter `apple`
-`metal-3`, not a fallback: the check passes. Of 153,600 pixels, 8,263 are in
+Chrome 157.0.8103.79, headless once and headed three times, no flags, adapter
+`apple` `metal-3`, not a fallback: the check passes. Of 153,600 pixels, 8,263 are in
 the band and 145,337 are not, and no interior pixel differs. 49 band pixels
 do: the smooth ribbon's 37 as before, and 12 on the joined dashed route by 2
 to 40, at dash ends along its first two segments and at its end cap, the
-largest at a dash end on its vertical segment, none at its fanned turn. The two straight dashed routes differ
-nowhere at this flow either. All 1,181 ribbon and dash pixels and all 436
+largest at a dash end on its vertical segment, none at its fanned turn. The
+two straight dashed routes differ nowhere. All 1,181 ribbon and dash pixels and all 436
 curve pixels hold the edge colour, and all 449 gap pixels the clear colour.
 The shape control fails with 357 band pixels by up to 137 and 1,036 interior
 pixels by up to 13. The edge control fails with 3,492 band pixels and 2,530
 interior pixels, the dash control with 1,566 band pixels and 577 interior
 pixels, and the curve control with 704 band pixels and 692 interior pixels,
-each by up to 158. `--pick`, added to one headed run, still passed on both
-backends at DPR 1 and 2, 9,532 picks each. The comparison is of one flow value
+each by up to 158. `--pick`, added to the third headed run, still passed on
+both backends at DPR 1 and 2, 9,532 picks each. The comparison is of one flow value
 in one frame; a flow advancing between frames was not compared.
 
 **Not a gate.** `bench/README.md`'s argument against a browser measurement in
@@ -737,8 +737,9 @@ GPU and no browser step. It is run by hand like the probe, and its scope is what
 one machine, the probe's two shapes with two solid straight ribbons since
 2026-11-17, two dashed straight ones, a dashed one through two joins and a
 smooth one since 2026-11-21, the dashes flowed by 4.5 pixels since
-2026-11-22, zoom 1, DPR 1. Smooth dashed ribbons, the above-nodes layer, group
-outlines, rich-node tiers, other zooms and DPR 2 are not compared.
+2026-11-22 (so the dashes at rest are no longer compared), zoom 1, DPR 1. A
+flow advancing between frames, smooth dashed ribbons, the above-nodes layer,
+group outlines, rich-node tiers, other zooms and DPR 2 are not compared.
 
 ## Node picking (M4.8b)
 

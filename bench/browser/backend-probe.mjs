@@ -39,8 +39,8 @@
  * one above, the dashes flowed; the second control shifts every ribbon, the
  * third flows the dashes further on one side and the fourth draws the smooth
  * one as a polyline. `--pick` adds M4.8b's check of `pickNode` on both
- * backends at device pixel ratios 1 and 2, and exits non-zero on the same adapter terms or
- * on any pick that disagrees with the shapes' distance functions.
+ * backends at device pixel ratios 1 and 2, and exits non-zero on the same
+ * adapter terms or on any pick that disagrees with the shapes' distance functions.
  */
 import { createRequire } from 'node:module';
 import { readFileSync } from 'node:fs';

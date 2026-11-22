@@ -74,7 +74,7 @@ import type {
  *   solid and two dashed straight ones, a dashed one through two joins, the
  *   dashes flowed by one fixed amount, and one solid smooth one), and why
  *   the smooth ribbon's caps and sides and the joined dashed ribbon's dash
- *   ends, turn and end cap differ within the band.
+ *   ends, end cap and, at rest, turn differ within the band.
  * - That `dispose` actually frees GPU memory, only that every resource in the
  *   list is disposed exactly once.
  * - The abort check AFTER `init()`, which is the branch that gives a device back
