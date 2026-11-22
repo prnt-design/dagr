@@ -512,12 +512,13 @@ DAGR_CHROMIUM="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" \
 ```
 
 `--parity` draws the probe's two shapes, two solid edge ribbons, three dashed
-ones flowed by 4.5 pixels and a smooth one, through `'webgpu'` and through `'webgl2'` and compares
+ones, a smooth one and a smooth dashed one, the dashes flowed by 4.5 pixels,
+through `'webgpu'` and through `'webgl2'` and compares
 the two frames pixel by pixel. It exits non-zero unless both backends came up
-as named, the comparison passes with the ribbons, dashes and curve drawn where
+as named, the comparison passes with the ribbons, dashes and curves drawn where
 the page expects them, and all four controls (one moves a shape, one every
-ribbon, the curve included, one the dash pattern, one draws the curve as a
-polyline) fail on what they change, and says on stderr which of these did not
+ribbon, the curves included, one the dash pattern, one draws the curves as
+polylines) fail on what they change, and says on stderr which of these did not
 hold. It also exits non-zero, saying why on
 stderr before it compares, when the adapter reports `isFallbackAdapter`,
 because a software adapter such as SwiftShader comes up on `'webgpu'` too and
@@ -729,6 +730,45 @@ each by up to 158. `--pick`, added to the third headed run, still passed on
 both backends at DPR 1 and 2, 9,532 picks each. The comparison is of one flow value
 in one frame; a flow advancing between frames was not compared.
 
+**A smooth dashed ribbon joined the compared scene on 2026-11-22 UTC.** A
+fourth edge group, the dashed style with `curve: 'smooth'`, draws one S
+through (-220, -55), (-185, -105), (-145, -55) and (-105, -100), below and
+left of the shapes, clear of them, their glow and the other ribbons, flowed by
+4.5 pixels as the straight dashes are. The page classes it as it classes the
+dashed group, from the renderer's own `tessellateRibbons`, here with `curve:
+'smooth'` as the group is given it, so the flattened curve's short joins place
+their dash ends as drawn, and its two butt caps go in the band whole. One more
+condition comes with it, and the curve control now draws both smooth groups as
+polylines and the dash control flows its pattern 3 pixels further on the
+WebGL2 side too:
+
+- Every pixel inside one of its dashes, clear of the band and the caps, must
+  hold the edge colour on WebGPU, and every pixel inside one of its gaps the
+  clear colour, counted apart from the straight dashes. With the page's phase
+  for it moved half a period, the run fails: 0 of 125 dash pixels hold the
+  edge colour and 0 of 119 gap pixels the clear colour (the shift swaps which
+  pixels the page calls dashes and gaps, hence 125 and 119).
+- With only this group drawn as a polyline on the WebGL2 side, the curve
+  control still fails, with 577 band pixels and 315 interior pixels differing
+  by up to 158, so the control can see this curve on its own.
+
+**What it found on 2026-11-22 UTC**, on the same Apple M4 Mac mini in Google
+Chrome 157.0.8103.79, headless once and headed twice, no flags, adapter
+`apple` `metal-3`, not a fallback: the check passes, the same numbers on all
+three runs. Of 153,600 pixels, 9,216 are in the band and 144,384 are not, and
+no interior pixel differs. 81 band pixels do: the 49 above, and 32 on the
+smooth dashed ribbon, 4 at its first butt cap by 20 to 77 and 28 along the
+rest of the curve by 1 to 16. The cause is not established, as for the solid
+smooth ribbon. All 1,181 ribbon and dash pixels and all 436 curve pixels hold
+the edge colour, and all 449 gap pixels the clear colour; on the smooth dashed
+ribbon all 119 dash pixels hold the edge colour and all 125 gap pixels the
+clear colour. The shape control fails with 389 band pixels by up to 137 and
+1,036 interior pixels by up to 13. The edge control fails with 3,994 band
+pixels and 2,823 interior pixels, the dash control with 2,011 band pixels and
+728 interior pixels, and the curve control with 1,232 band pixels and 1,007
+interior pixels, each by up to 158. `--pick`, added to the second headed run,
+still passed on both backends at DPR 1 and 2, 9,532 picks each.
+
 **Not a gate.** `bench/README.md`'s argument against a browser measurement in
 `bench:ci` is about timings, and a parity check is not a timing, so that
 argument does not carry. What does is the runner: the check needs a full Chrome
@@ -737,9 +777,10 @@ GPU and no browser step. It is run by hand like the probe, and its scope is what
 one machine, the probe's two shapes with two solid straight ribbons since
 2026-11-17, two dashed straight ones, a dashed one through two joins and a
 smooth one since 2026-11-21, the dashes flowed by 4.5 pixels since
-2026-11-22 (so the dashes at rest are no longer compared), zoom 1, DPR 1. A
-flow advancing between frames, smooth dashed ribbons, the above-nodes layer,
-group outlines, rich-node tiers, other zooms and DPR 2 are not compared.
+2026-11-22 (so the dashes at rest are no longer compared) and a smooth dashed
+one since that day, zoom 1, DPR 1. A flow advancing between frames, the
+above-nodes layer, group outlines, rich-node tiers, other zooms and DPR 2 are
+not compared.
 
 ## Node picking (M4.8b)
 
