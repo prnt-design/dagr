@@ -239,10 +239,10 @@
        * y, the edges' control. A ribbon has no glow, so only a shift wider than
        * the band can show: at 2 px, pixels the band leaves outside it change.
        *
-       * `dashShift` flows the dashed group's pattern by that much on the WebGL2
-       * side, the dashes' control. It moves dash ends along the ribbon and
-       * nothing else, so it fails only if the comparison can see where a dash
-       * ends.
+       * `dashShift` flows the dashed group's pattern by that much further on
+       * the WebGL2 side, the dashes' control. It moves dash ends along the
+       * ribbon and nothing else, so it fails only if the comparison can see
+       * where a dash ends.
        *
        * `curveControl` draws the smooth group as a polyline through the same
        * points on the WebGL2 side, the curve's control. It fails only if the
@@ -305,11 +305,17 @@
        * `dashDistance` in `ribbon.ts` is a signed distance in device pixels
        * along the ribbon, put through the same one-pixel ramp as the width, so
        * a pixel within one device pixel of a dash end goes in the band.
+       *
+       * Both sides draw the pattern flowed by `DASH_FLOW_PIXELS`, a value
+       * `advanceDashFlow` can return. It moves every dash end by more than the
+       * band and less than a dash, so a backend that dropped the flow would
+       * draw edge colour where the page expects a gap.
        */
       const DASHED_STYLE = {
         halfWidthPixels: 2,
         dash: { periodPixels: 12, duty: 0.5, speedPixelsPerSecond: 0 },
       };
+      const DASH_FLOW_PIXELS = 4.5;
       const DASHED = [
         {
           id: 'dashed-horizontal',
@@ -459,7 +465,7 @@
                 if (outside > reach) continue;
               }
               const side = Math.abs(w0 * across[v[0]] + w1 * across[v[1]] + w2 * across[v[2]]) * expand - hw;
-              const along = dashDistance(w0 * arc[v[0]] + w1 * arc[v[1]] + w2 * arc[v[2]], 0);
+              const along = dashDistance(w0 * arc[v[0]] + w1 * arc[v[1]] + w2 * arc[v[2]], DASH_FLOW_PIXELS);
               let cls = BAND;
               if (Math.max(side, along) < -EDGE_BAND_DEVICE_PX) cls = SOLID;
               else if (side < -EDGE_BAND_DEVICE_PX && along > EDGE_BAND_DEVICE_PX) cls = GAP;
@@ -504,13 +510,11 @@
           renderer.setEdges('edges', edges);
           renderer.setEdges('dashed', dashed);
           renderer.setEdges('smooth', smooth);
-          if (dashFlowPixels !== 0) {
-            renderer.setEdgeStyle('dashed', {
-              halfWidthPixels: DASHED_STYLE.halfWidthPixels,
-              alpha: 1,
-              dashFlowPixels,
-            });
-          }
+          renderer.setEdgeStyle('dashed', {
+            halfWidthPixels: DASHED_STYLE.halfWidthPixels,
+            alpha: 1,
+            dashFlowPixels,
+          });
           renderer.camera.setViewport({ width: 480, height: 320, devicePixelRatio: 1 });
           renderer.render();
           const data = readPixels(canvas);
@@ -529,13 +533,13 @@
         let gpu;
         let gl;
         try {
-          gpu = await draw('webgpu', NODES, EDGES, DASHED, 0, SMOOTH, 'smooth');
+          gpu = await draw('webgpu', NODES, EDGES, DASHED, DASH_FLOW_PIXELS, SMOOTH, 'smooth');
           gl = await draw(
             'webgl2',
             shifted,
             shiftEdges(EDGES),
             shiftEdges(DASHED),
-            dashShift,
+            DASH_FLOW_PIXELS + dashShift,
             shiftEdges(SMOOTH),
             curveControl ? 'polyline' : 'smooth',
           );
