@@ -421,6 +421,31 @@
         },
       ];
 
+      /**
+       * One solid ribbon in a group of its own on `layer: 'above-nodes'`,
+       * straight across the circle, so it is drawn over the circle's fill,
+       * outline and glow rather than under them.
+       *
+       * Its band is the straight ribbons' band. Inside it, where the circle's
+       * fill lies under the ribbon, the pixel must hold the edge colour on
+       * WebGPU, or the layer is not drawn above the nodes whatever the two
+       * backends agree on.
+       *
+       * `layerControl` declares this group on the default layer on the WebGL2
+       * side, the layer's control. There the circle covers the ribbon, so the
+       * pixels counted above hold the fill instead.
+       */
+      const ABOVE = [
+        {
+          id: 'above',
+          points: [
+            { x: 20, y: 8 },
+            { x: 110, y: 8 },
+          ],
+          color: EDGE_COLOR,
+        },
+      ];
+
       const segmentDistance = (a, b, x, y) => {
         const dx = b.x - a.x;
         const dy = b.y - a.y;
@@ -532,8 +557,15 @@
         return Math.hypot(Math.max(qx, 0), Math.max(qy, 0)) + Math.min(Math.max(qx, qy), 0) - r;
       };
 
-      window.parity = async (shiftX = 0, edgeShift = 0, dashShift = 0, curveControl = false, holdFlow = false) => {
-        const draw = async (backend, nodes, edges, dashed, flows, smooth, smoothDashed, curve) => {
+      window.parity = async (
+        shiftX = 0,
+        edgeShift = 0,
+        dashShift = 0,
+        curveControl = false,
+        holdFlow = false,
+        layerControl = false,
+      ) => {
+        const draw = async (backend, nodes, edges, dashed, flows, smooth, smoothDashed, curve, above, layer) => {
           const previous = document.getElementById('stage');
           const canvas = document.createElement('canvas');
           canvas.id = 'stage';
@@ -547,8 +579,10 @@
               { id: 'dashed', style: DASHED_STYLE },
               { id: 'smooth', style: EDGE_STYLE, curve },
               { id: 'smooth-dashed', style: DASHED_STYLE, curve },
+              { id: 'above', style: EDGE_STYLE, layer },
             ],
           });
+          renderer.setEdges('above', above);
           renderer.setEdges('edges', edges);
           renderer.setEdges('dashed', dashed);
           renderer.setEdges('smooth', smooth);
@@ -582,7 +616,7 @@
         let gpu;
         let gl;
         try {
-          gpu = await draw('webgpu', NODES, EDGES, DASHED, FLOWS, SMOOTH, SMOOTH_DASHED, 'smooth');
+          gpu = await draw('webgpu', NODES, EDGES, DASHED, FLOWS, SMOOTH, SMOOTH_DASHED, 'smooth', ABOVE, 'above-nodes');
           gl = await draw(
             'webgl2',
             shifted,
@@ -592,6 +626,8 @@
             shiftEdges(SMOOTH),
             shiftEdges(SMOOTH_DASHED),
             curveControl ? 'polyline' : 'smooth',
+            shiftEdges(ABOVE),
+            layerControl ? 'below-nodes' : 'above-nodes',
           );
         } catch (error) {
           return { pass: false, error: String(error), code: error && error.code };
@@ -610,6 +646,8 @@
         // else cannot hide among the straight ribbons' pixels.
         const curve = { pixels: 0, edgeColored: 0 };
         const curvedDash = { pixels: 0, edgeColored: 0, gapPixels: 0, clear: 0 };
+        // Inside the above-nodes ribbon and over the circle's fill.
+        const over = { pixels: 0, edgeColored: 0 };
         const hw = EDGE_STYLE.halfWidthPixels;
         const dashedHw = DASHED_STYLE.halfWidthPixels;
         const near = (data, i, color) =>
@@ -636,6 +674,15 @@
                 if (d < node.glowWorld + EDGE_BAND_DEVICE_PX) glowed = true;
               }
               let onRibbon = false;
+              let onAbove = false;
+              for (const edge of ABOVE) {
+                const { centreline, point } = ribbonDistances(edge, x, y);
+                if (point < hw + 2) nearest = 0;
+                nearest = Math.min(nearest, Math.abs(centreline - hw));
+                if (centreline < hw - EDGE_BAND_DEVICE_PX && point >= hw + 2) onAbove = true;
+              }
+              const overFill =
+                onAbove && signedDistance(NODES[1], x, y) < -(OUTLINE_DEVICE_PX + EDGE_BAND_DEVICE_PX);
               for (const edge of EDGES) {
                 const { centreline, point } = ribbonDistances(edge, x, y);
                 if (point < hw + 2) nearest = 0;
@@ -670,6 +717,10 @@
               if (onCurve && !glowed) {
                 curve.pixels += 1;
                 if (near(gpuData, i, EDGE_COLOR)) curve.edgeColored += 1;
+              }
+              if (overFill) {
+                over.pixels += 1;
+                if (near(gpuData, i, EDGE_COLOR)) over.edgeColored += 1;
               }
               if (onRibbon && !glowed) {
                 ribbon.pixels += 1;
@@ -719,7 +770,9 @@
           curvedDash.pixels > 0 &&
           curvedDash.edgeColored === curvedDash.pixels &&
           curvedDash.gapPixels > 0 &&
-          curvedDash.clear === curvedDash.gapPixels;
+          curvedDash.clear === curvedDash.gapPixels &&
+          over.pixels > 0 &&
+          over.edgeColored === over.pixels;
         return {
           pass:
             gpu.reported === 'webgpu' &&
@@ -735,6 +788,7 @@
           dashShift,
           curveControl,
           holdFlow,
+          layerControl,
           frames,
           band,
           interior,
@@ -742,6 +796,7 @@
           gap,
           curve,
           curvedDash,
+          over,
           ribbonDrawn,
         };
       };

@@ -30,16 +30,18 @@
  * Chrome instead of launching one. The output
  * records the browser, mode and flags, because a backend result without them
  * cannot be reproduced. `--parity` adds M4.9b's backend comparison and exits
- * non-zero unless it passes and all five of its controls fail on what they
+ * non-zero unless it passes and all six of its controls fail on what they
  * change. It also exits non-zero when the adapter reports `isFallbackAdapter`: a software
  * adapter such as
  * SwiftShader still comes up on `webgpu`, so its side of the comparison would
  * not be a GPU's. The compared scene has two solid edge ribbons under the
  * shapes, three dashed ones beside them (one through two joins), a smooth
- * one above and a smooth dashed one below and left, drawn over three frames
- * with the dashes' flow advancing; the second control shifts every ribbon,
- * the third flows the dashes further on one side, the fourth draws the smooth
- * ones as polylines and the fifth holds one side's flow at its first frame's.
+ * one above and a smooth dashed one below and left, and one above the nodes
+ * across the circle, drawn over three frames with the dashes' flow advancing;
+ * the second control shifts every ribbon, the third flows the dashes further
+ * on one side, the fourth draws the smooth ones as polylines, the fifth holds
+ * one side's flow at its first frame's and the sixth draws one side's
+ * above-nodes ribbon below the nodes.
  * `--pick` adds M4.8b's check of `pickNode` on both backends at device pixel
  * ratios 1 and 2, and exits non-zero on the same adapter terms or on any pick
  * that disagrees with the shapes' distance functions.
@@ -111,6 +113,7 @@ function parityFailure(check) {
       `${check.curve.edgeColored} of ${check.curve.pixels} pixels inside the solid smooth ribbon hold the edge colour on webgpu`,
       `${check.curvedDash.edgeColored} of ${check.curvedDash.pixels} pixels inside the smooth dashed ribbon's dashes hold the edge colour on webgpu`,
       `${check.curvedDash.clear} of ${check.curvedDash.gapPixels} pixels inside the smooth dashed ribbon's gaps hold the clear colour on webgpu`,
+      `${check.over.edgeColored} of ${check.over.pixels} pixels inside the above-nodes ribbon over the circle's fill hold the edge colour on webgpu`,
     );
   }
   if (check.interior.maxDelta > check.tolerance.interiorMaxDelta) {
@@ -125,7 +128,7 @@ function parityFailure(check) {
  * Why the control did not fail the way it must, or undefined when it did. A
  * control that threw, drew on the wrong backend or compared frames of different
  * sizes also reports `pass: false`, but says nothing about whether the check
- * can see a shifted shape, ribbon, dash pattern, curve or flow.
+ * can see a shifted shape, ribbon, dash pattern, curve, flow or layer.
  */
 function controlFailure(control, moved) {
   if (control.pass) return `passed, so the check cannot see a misplaced ${moved}`;
@@ -209,6 +212,7 @@ if (cliArgs.includes('--parity')) {
     dashControl: await page.evaluate((shift) => window.parity(0, 0, shift), DASH_CONTROL_SHIFT_PX),
     curveControl: await page.evaluate(() => window.parity(0, 0, 0, true)),
     flowControl: await page.evaluate(() => window.parity(0, 0, 0, false, true)),
+    layerControl: await page.evaluate(() => window.parity(0, 0, 0, false, false, true)),
   };
   if (!parity.check.pass) {
     console.error(`the parity check failed: ${parityFailure(parity.check)}`);
@@ -239,6 +243,11 @@ if (cliArgs.includes('--parity')) {
   const flowControl = controlFailure(parity.flowControl, 'dash flow');
   if (flowControl !== undefined) {
     console.error(`the flow control, with one side's flow held at its first frame's, ${flowControl}`);
+    process.exitCode = 1;
+  }
+  const layerControl = controlFailure(parity.layerControl, 'layer');
+  if (layerControl !== undefined) {
+    console.error(`the layer control, with one side's above-nodes ribbon drawn below the nodes, ${layerControl}`);
     process.exitCode = 1;
   }
 }

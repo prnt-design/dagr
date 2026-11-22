@@ -512,14 +512,14 @@ DAGR_CHROMIUM="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" \
 ```
 
 `--parity` draws the probe's two shapes, two solid edge ribbons, three dashed
-ones, a smooth one and a smooth dashed one, over three frames with the dashes'
+ones, a smooth one, a smooth dashed one and one above the nodes, over three frames with the dashes'
 flow advancing from 4.5 pixels, through `'webgpu'` and through `'webgl2'` and
 compares each frame pixel by pixel with the other backend's. It exits non-zero
 unless both backends came up as named, the comparison passes on every frame
 with the ribbons, dashes and curves drawn where the page expects them, and all
-five controls (one moves a shape, one every ribbon, the curves included, one
-the dash pattern, one draws the curves as polylines, one holds the flow) fail
-on what they change, and says on stderr which of these did not
+six controls (one moves a shape, one every ribbon, the curves included, one
+the dash pattern, one draws the curves as polylines, one holds the flow, one
+draws the above-nodes ribbon below the nodes) fail on what they change, and says on stderr which of these did not
 hold. It also exits non-zero, saying why on
 stderr before it compares, when the adapter reports `isFallbackAdapter`,
 because a software adapter such as SwiftShader comes up on `'webgpu'` too and
@@ -811,6 +811,33 @@ edge control with 11,800 band and 8,397 interior pixels, the dash control with
 158. `--pick`, added to the second headed run, still passed on both backends
 at DPR 1 and 2, 9,532 picks each.
 
+**The above-nodes layer joined the comparison on 2026-11-22 UTC.** One solid
+ribbon in a group of its own, declared with `layer: 'above-nodes'`, crosses the
+circle 8 pixels above its centre, from x 20 to x 110, so it is drawn over the
+circle's fill, outline and glow. Its band is the straight ribbons' band. Where
+the circle's fill lies under the ribbon's interior, the pixel must hold the
+edge colour on WebGPU, or the ribbon is not above the nodes however closely the
+two backends agree. A sixth control comes with it:
+
+- The layer control declares that group on the default layer on the WebGL2
+  side only, so there the circle covers the ribbon, and the run fails if this
+  control passes.
+
+**What it found on 2026-11-22 UTC**, on the same Apple M4 Mac mini in Google
+Chrome 157.0.8103.79, headless once and headed twice, no flags, adapter
+`apple` `metal-3`, not a fallback: the check passes, the same numbers on all
+three runs. Over the three frames, 28,832 pixel comparisons are in the band
+and 431,968 are not, 1,200 more in the band than without the ribbon, and no
+interior pixel differs. Band pixels differ exactly as before, 81, 87 and 77 on
+the three frames, so none of them is on the new ribbon. All 312 pixels over
+the circle's fill hold the edge colour. The layer control fails on every
+frame, with 734 band pixels by up to 139 and 387 interior pixels by up to 56
+differing: 56 is the largest channel difference between the edge colour
+`0x8d99ae` and the circle's fill `0x8ecae6`. The edge control, which now
+shifts this ribbon too, fails with 12,454 band and 8,847 interior pixels; the
+other controls fail with the numbers above. `--pick`, added to the second
+headed run, still passed on both backends at DPR 1 and 2, 9,532 picks each.
+
 **Not a gate.** `bench/README.md`'s argument against a browser measurement in
 `bench:ci` is about timings, and a parity check is not a timing, so that
 argument does not carry. What does is the runner: the check needs a full Chrome
@@ -820,9 +847,9 @@ one machine, the probe's two shapes with two solid straight ribbons since
 2026-11-17, two dashed straight ones, a dashed one through two joins and a
 smooth one since 2026-11-21, the dashes flowed by 4.5 pixels since
 2026-11-22 (so the dashes at rest are no longer compared), a smooth dashed
-one and the flow advancing over three frames since that day, zoom 1, DPR 1.
-The above-nodes layer, group outlines, rich-node tiers, other zooms and DPR 2
-are not compared.
+one, the flow advancing over three frames and a ribbon on the above-nodes
+layer since that day, zoom 1, DPR 1. Group outlines, rich-node tiers, other
+zooms and DPR 2 are not compared.
 
 ## Node picking (M4.8b)
 
