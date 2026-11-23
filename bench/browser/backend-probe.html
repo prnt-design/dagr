@@ -577,7 +577,7 @@
        * each frame back. `keep` leaves the renderer alive and returns it, for
        * a caller that screenshots its frame afterwards.
        */
-      const draw = async (backend, nodes, edges, dashed, flows, smooth, smoothDashed, curve, above, layer, keep = false) => {
+      const draw = async (backend, nodes, edges, dashed, flows, smooth, smoothDashed, curve, above, layer, keep = false, zoom = 1) => {
         const previous = document.getElementById('stage');
         const canvas = document.createElement('canvas');
         canvas.id = 'stage';
@@ -600,6 +600,7 @@
         renderer.setEdges('smooth-dashed', smoothDashed);
         renderer.setEdges('above', above);
         renderer.camera.setViewport({ width: 480, height: 320, devicePixelRatio: 1 });
+        renderer.camera.setZoom(zoom);
         const frames = [];
         for (const dashFlowPixels of flows) {
           if (frames.length > 0) await new Promise((resolve) => requestAnimationFrame(resolve));
@@ -872,15 +873,15 @@
       };
 
       /**
-       * Draws the first frame on `backend`, keeps the renderer, and mounts a
-       * DOM layer over `#frame` through `mount(camera, hold)`. `mount` passes
-       * the layer to `hold` as soon as it exists, so a release disposes it
-       * even when filling it throws.
+       * Draws the first frame on `backend` at `zoom`, keeps the renderer, and
+       * mounts a DOM layer over `#frame` through `mount(camera, hold)`.
+       * `mount` passes the layer to `hold` as soon as it exists, so a release
+       * disposes it even when filling it throws.
        */
-      const composedFrame = async (backend, mount) => {
+      const composedFrame = async (backend, mount, zoom = 1) => {
         window.composedRelease();
         try {
-          const scene = await draw(backend, NODES, EDGES, DASHED, [FLOWS[0]], SMOOTH, SMOOTH_DASHED, 'smooth', ABOVE, 'above-nodes', true);
+          const scene = await draw(backend, NODES, EDGES, DASHED, [FLOWS[0]], SMOOTH, SMOOTH_DASHED, 'smooth', ABOVE, 'above-nodes', true, zoom);
           held = { renderer: scene.renderer };
           composedCanvas[backend] = scene.frames[0];
           mount(scene.renderer.camera, (layer) => (held.layer = layer));
@@ -1059,6 +1060,16 @@
        * placement, and may fail on the colour with it, since a wider box takes
        * uncovered pixels into the colour test. `swapTiers` expects each node's tier on the other node, so
        * it fails only if the check can see which tier a node shows.
+       *
+       * At zoom 0.5 and 2 the canvas is drawn at that zoom and the overlay's
+       * layer carries `scale(zoom)`, which the browser composes with each
+       * box's own transform. The gates are read on screen, so at 0.5 both
+       * nodes (45 and 30 pixels wide) show the label and at 2 both (180 and
+       * 120) show the card. There `swapTiers` would expect what is already
+       * expected, so `expectedZoom` stands in for it: it expects zoom 1's
+       * tiers, and fails only if the check can see that the tiers follow the
+       * zoom. Shifts and growth are in device pixels at every zoom, so the
+       * runner passes `boundsShift` in world units divided by the zoom.
        */
       const RICH_TIERS = [
         { name: 'label', color: 0xe63946, minScreenWidth: 24, maxScreenWidth: 75 },
@@ -1072,39 +1083,53 @@
         },
         update: () => {},
       }));
-      const RICH_EXPECTED = { rect: 'card', circle: 'label' };
+      const RICH_EXPECTED = {
+        0.5: { rect: 'label', circle: 'label' },
+        1: { rect: 'card', circle: 'label' },
+        2: { rect: 'card', circle: 'card' },
+      };
       // Every box edge lands on, or within half a pixel of, a whole CSS
       // pixel, so one pixel covers where a compositor rounds a shifted box.
       const RICH_EDGE_DEVICE_PX = 1;
 
-      const richBounds = (node, shift, grow = 0) => ({
-        minX: node.center.x - node.size.width / 2 + shift - grow,
-        maxX: node.center.x + node.size.width / 2 + shift + grow,
-        minY: node.center.y - node.size.height / 2 + shift - grow,
-        maxY: node.center.y + node.size.height / 2 + shift + grow,
+      const richBounds = (node, shift) => ({
+        minX: node.center.x - node.size.width / 2 + shift,
+        maxX: node.center.x + node.size.width / 2 + shift,
+        minY: node.center.y - node.size.height / 2 + shift,
+        maxY: node.center.y + node.size.height / 2 + shift,
       });
 
-      window.richFrame = (backend, boundsShift = 0) =>
-        composedFrame(backend, (camera, hold) => {
-          const overlay = hold(createHtmlOverlay({ parent: document.getElementById('frame'), camera }));
-          const rich = createRichNodes({ overlay, tiers: RICH_TIERS });
-          rich.setNodes(NODES.map((node) => ({ id: node.id, bounds: richBounds(node, boundsShift), data: null })));
-          overlay.sync();
-        });
+      window.richFrame = (backend, boundsShift = 0, zoom = 1) =>
+        composedFrame(
+          backend,
+          (camera, hold) => {
+            const overlay = hold(createHtmlOverlay({ parent: document.getElementById('frame'), camera }));
+            const rich = createRichNodes({ overlay, tiers: RICH_TIERS });
+            rich.setNodes(NODES.map((node) => ({ id: node.id, bounds: richBounds(node, boundsShift), data: null })));
+            overlay.sync();
+          },
+          zoom,
+        );
 
       // Where one backend's tiers changed its own frame, and in which colour,
-      // against the boxes and tiers expected.
-      const tiersOf = (shown, hidden, shift, grow, expected) => {
+      // against the boxes and tiers expected. `shift` is in world units and
+      // `grow` in device pixels.
+      const tiersOf = (shown, hidden, shift, grow, expected, zoom) => {
         const { width, height } = shown;
         const margin = RICH_EDGE_DEVICE_PX;
         const nodes = NODES.map((node) => {
-          const bounds = richBounds(node, shift, grow);
+          const bounds = richBounds(node, shift);
           const tier = RICH_TIERS.find((each) => each.name === expected[node.id]);
           return {
             id: node.id,
             tier: tier.name,
             color: tier.color,
-            box: { left: bounds.minX + width / 2, right: bounds.maxX + width / 2, top: height / 2 - bounds.maxY, bottom: height / 2 - bounds.minY },
+            box: {
+              left: bounds.minX * zoom + width / 2 - grow,
+              right: bounds.maxX * zoom + width / 2 + grow,
+              top: height / 2 - bounds.maxY * zoom - grow,
+              bottom: height / 2 - bounds.minY * zoom + grow,
+            },
             span: { left: Infinity, right: -Infinity, top: Infinity, bottom: -Infinity },
             changed: 0,
             inside: 0,
@@ -1148,23 +1173,34 @@
         return { nodes, stray, placed, tiered };
       };
 
-      window.richParity = async ({ gpu, gl, boundsShift = 0, expectedShift = 0, swapTiers = false }) => {
+      window.richParity = async ({
+        gpu,
+        gl,
+        zoom = 1,
+        boundsShift = 0,
+        expectedShift = 0,
+        swapTiers = false,
+        expectedZoom = zoom,
+      }) => {
         const compared = await composedCompare(gpu, gl);
         if (!compared.sameSize) return { pass: false, ...compared };
         const { gpuShown, gpuHidden, glShown, glHidden, ...common } = compared;
-        const expected = swapTiers ? { rect: RICH_EXPECTED.circle, circle: RICH_EXPECTED.rect } : RICH_EXPECTED;
+        const atZoom = RICH_EXPECTED[expectedZoom];
+        const expected = swapTiers ? { rect: atZoom.circle, circle: atZoom.rect } : atZoom;
         const tiers = {
-          webgpu: tiersOf(gpuShown, gpuHidden, 0, expectedShift, expected),
-          webgl2: tiersOf(glShown, glHidden, boundsShift, expectedShift, expected),
+          webgpu: tiersOf(gpuShown, gpuHidden, 0, expectedShift, expected, zoom),
+          webgl2: tiersOf(glShown, glHidden, boundsShift, expectedShift, expected, zoom),
         };
         const placed = tiers.webgpu.placed && tiers.webgl2.placed;
         const tiered = tiers.webgpu.tiered && tiers.webgl2.tiered;
         return {
           pass: common.sound && placed && tiered && common.added.pixels === 0,
           ...common,
+          zoom,
           boundsShift,
           expectedShift,
           swapTiers,
+          expectedZoom,
           placed,
           tiered,
           tiers,

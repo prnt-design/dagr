@@ -520,12 +520,14 @@ comparison passes on every frame with the ribbons, dashes and curves drawn
 where the page expects them, the above-nodes one over the circle's fill, and
 the group outline and the rich-node tiers composed over the first frame land
 where the page expects them and add no difference between the backends, and
-all eleven controls (one moves a shape, one every ribbon, the curves included,
+all seventeen controls (one moves a shape, one every ribbon, the curves included,
 one the dash pattern, one draws the curves as polylines, one holds the flow,
 one draws the above-nodes ribbon below the nodes, one widens one side's
 outline, one the outline the page expects, one moves one side's tier boxes,
-one widens the boxes the page expects, one swaps the tiers the page expects)
-fail on what they change,
+one widens the boxes the page expects, one swaps the tiers the page expects,
+and at zoom 0.5 and at zoom 2 one moves one side's tier boxes, one widens the
+boxes the page expects and one expects zoom 1's tiers) fail on what they
+change,
 and says on stderr which of these did not hold. It also exits non-zero, saying why on
 stderr before it compares, when the adapter reports `isFallbackAdapter`,
 because a software adapter such as SwiftShader comes up on `'webgpu'` too and
@@ -915,6 +917,18 @@ that node should show. Three controls, each 1.5 pixels or a swap:
 - The tier control reuses them too and expects each node's tier on the other
   node. The run fails if it passes or fails on anything but the colours.
 
+The tiers are also checked at zoom 0.5 and 2, the same day. Both backends draw
+the first frame at that zoom, and the overlay's layer carries `scale(zoom)`,
+which the browser composes with each box's own transform, so this is the
+first check that renders that composition. The gates are read on screen: at
+0.5 the rectangle is 45 pixels wide and the circle 30, so both show the label;
+at 2 they are 180 and 120, so both show the card. Each zoom runs the check and
+three controls of its own: the bounds and placement controls above, each still
+1.5 device pixels (the bounds shift is given in world units divided by the
+zoom), and a zoom control that expects zoom 1's tiers, in place of the tier
+control, which would expect the same tier on both nodes. The run fails if the
+zoom control passes or fails on anything but the colours.
+
 **What it found on 2026-11-23 UTC**, on the same Apple M4 Mac mini in Google
 Chrome 157.0.8103.79, headless and headed, no flags, adapter `apple`
 `metal-3`, not a fallback: the check passes, and the canvas comparison's and
@@ -927,6 +941,21 @@ bounds control fails with the tiers adding 1,032 differing pixels by up to
 228, the placement control on both boxes' spans, and the tier control with no
 pixel inside either box in the swapped tier's colour.
 
+At zoom 0.5, on the same machine and browser, headless and headed: the check
+passes. On both backends the label changes 1,196 pixels on the rectangle (its
+45 by 25 box has edges on half pixels, so 46 by 26 are touched) and 900 on the
+circle (30 by 30), spanning each box to the pixel, with none elsewhere, and
+all 1,056 and 784 pixels inside hold the label colour. The composed frames
+differ in the same 53 pixels as the bare ones. The bounds control fails with
+the tiers adding 512 differing pixels by up to 228, the placement control on
+the spans, and the zoom control with no pixel inside the rectangle in the card
+colour. At zoom 2: the check passes, the card changing 18,000 pixels (180 by
+100) and 14,400 (120 by 120) with none elsewhere, all 17,444 and 13,924
+inside in the card colour, the composed frames differing in the same 12 pixels
+as the bare ones. The bounds control fails with 2,072 added pixels by up to
+158, the placement control on the spans, and the zoom control with no pixel
+inside the circle in the label colour.
+
 **Not a gate.** `bench/README.md`'s argument against a browser measurement in
 `bench:ci` is about timings, and a parity check is not a timing, so that
 argument does not carry. What does is the runner: the check needs a full Chrome
@@ -938,8 +967,9 @@ smooth one since 2026-11-21, the dashes flowed by 4.5 pixels since
 2026-11-22 (so the dashes at rest are no longer compared), a smooth dashed
 one, the flow advancing over three frames and a ribbon on the above-nodes
 layer since that day, and a group outline and rich-node tiers composed over
-the first frame since 2026-11-23, zoom 1, DPR 1. Other zooms and DPR 2 are not
-compared.
+the first frame since 2026-11-23, DPR 1. The canvas comparison and the
+outline are at zoom 1; the tiers are at zoom 0.5, 1 and 2. Other zooms for the
+canvas and the outline, and DPR 2, are not compared.
 
 ## Node picking (M4.8b)
 

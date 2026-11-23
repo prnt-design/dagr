@@ -625,14 +625,19 @@ checks:
   over three frames and a ribbon on the above-nodes layer since that day.
   A group outline and rich-node tiers, drawn by the browser rather than by
   either backend, are composed over the first frame since 2026-11-23 and add
-  no difference. Other GPUs, zooms and DPR 2 are unchecked.
+  no difference, the tiers at zoom 0.5, 1 and 2. Other GPUs, the canvas
+  comparison at other zooms, and DPR 2 are unchecked.
   See
   [What is verified, and on which backend](#what-is-verified-and-on-which-backend).
-- That a browser composes the overlay's two transforms the way the algebra says.
-  The layer's `translate() scale()` and an entry's own transform are asserted as
-  strings by a suite that never renders them, so a wrong composition order or a
-  wrong `transform-origin` would be a green suite and a label half its own size
-  away from its shape. The screenshot is what checks it.
+- That a browser composes the overlay's two transforms the way the algebra says,
+  for point entries. The layer's `translate() scale()` and an entry's own
+  transform are asserted as strings by a suite that never renders them, so a
+  wrong composition order or a wrong `transform-origin` would be a green suite
+  and a label half its own size away from its shape. The screenshot is what
+  checks it. For box entries it has, since 2026-11-23: the backend parity
+  check's rich-node tiers at zoom 0.5 and 2 land on their nodes' boxes to the
+  pixel on an Apple M4 in Chrome 157. A point entry's counter-scale is not
+  rendered by any check.
 - That the reason the overlay rebases its layer origin is quantitatively right.
   Compositor transforms being single precision, and 1e7 CSS pixels being where
   that starts to show, is a reading of how browsers work rather than something
@@ -974,7 +979,12 @@ the rectangle shows the card tier and the circle the label tier, each tier's
 box covers its node's bounds and nothing else on both sides, and the tiers add
 no differing pixel, against controls that move one side's boxes, widen the
 boxes the page expects and swap the tiers it expects, all of which must
-fail.
+fail. The same day the tiers were compared at zoom 0.5 and 2 as well, where
+both backends draw the canvas at that zoom and the overlay's layer carries
+`scale(zoom)`: both nodes show the label at 0.5 and the card at 2, each box
+lands where the zoom puts it, and the tiers add no differing pixel, against
+controls at each zoom that move one side's boxes, widen the expected boxes and
+expect zoom 1's tiers, all of which must fail.
 
 ## Usage
 
