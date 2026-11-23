@@ -111,8 +111,8 @@ still do with the dashes flowed (2026-11-22). A smooth dashed ribbon added
 that day also passes, with 81 edge-band pixels differing in all, and so does
 the flow advancing over three frames, with 87 and 77 edge-band pixels
 differing on the later two, and a ribbon on the above-nodes layer, with none
-of its pixels differing. A group outline composed over the first frame
-(2026-11-23) adds no differing pixel. The original probe also
+of its pixels differing. A group outline and rich-node tiers composed over
+the first frame (2026-11-23) add no differing pixel. The original probe also
 passed on AMD RDNA 2 in Chrome 156, with four edge-band pixels differing by
 one. Other GPUs, zooms and DPRs remain uncovered. A
 performance profile is published, and GPU node picking ships behind an opt-in

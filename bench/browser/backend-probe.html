@@ -41,8 +41,10 @@
     <script type="module">
       import {
         advanceDashFlow,
+        createHtmlOverlay,
         createNodeGroupLayer,
         createRenderer,
+        createRichNodes,
         nodeGroupBounds,
       } from '/packages/render/dist/index.js';
       import {
@@ -857,37 +859,50 @@
       // up.
       const GROUP_RING_DEVICE_PX = 2;
       const GROUP_CORNER_RADIUS = 10;
+      // Shared by the group outline and the rich-node tiers below: the held
+      // renderer and layer, and the latest draw's canvas read back.
       let held;
-      const groupCanvas = {};
+      const composedCanvas = {};
 
-      window.groupRelease = () => {
+      window.composedRelease = () => {
         if (held === undefined) return;
         held.layer?.dispose();
         held.renderer.dispose();
         held = undefined;
       };
 
-      window.groupFrame = async (backend, paddingShift = 0) => {
-        window.groupRelease();
+      /**
+       * Draws the first frame on `backend`, keeps the renderer, and mounts a
+       * DOM layer over `#frame` through `mount(camera, hold)`. `mount` passes
+       * the layer to `hold` as soon as it exists, so a release disposes it
+       * even when filling it throws.
+       */
+      const composedFrame = async (backend, mount) => {
+        window.composedRelease();
         try {
           const scene = await draw(backend, NODES, EDGES, DASHED, [FLOWS[0]], SMOOTH, SMOOTH_DASHED, 'smooth', ABOVE, 'above-nodes', true);
           held = { renderer: scene.renderer };
-          groupCanvas[backend] = scene.frames[0];
-          held.layer = createNodeGroupLayer({ parent: document.getElementById('frame'), camera: scene.renderer.camera });
-          held.layer.setGroups([{ ...GROUP, padding: GROUP.padding + paddingShift }]);
-          held.layer.setNodes(NODES);
-          held.layer.sync();
+          composedCanvas[backend] = scene.frames[0];
+          mount(scene.renderer.camera, (layer) => (held.layer = layer));
           return { backend, reported: scene.reported };
         } catch (error) {
-          window.groupRelease();
+          window.composedRelease();
           return { backend, error: String(error), code: error && error.code };
         }
       };
 
-      window.groupHide = () => {
+      window.composedHide = () => {
         held.layer.dispose();
         held.layer = undefined;
       };
+
+      window.groupFrame = (backend, paddingShift = 0) =>
+        composedFrame(backend, (camera, hold) => {
+          const layer = hold(createNodeGroupLayer({ parent: document.getElementById('frame'), camera }));
+          layer.setGroups([{ ...GROUP, padding: GROUP.padding + paddingShift }]);
+          layer.setNodes(NODES);
+          layer.sync();
+        });
 
       const decodePng = async (base64) => {
         const bytes = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0));
@@ -957,25 +972,25 @@
         return { ring, title: titled, stray, box, span, placed: ring > 0 && titled > 0 && stray === 0 && spans };
       };
 
-      window.groupParity = async ({ gpu, gl, paddingShift = 0, expectedShift = 0 }) => {
+      /**
+       * The comparison every composed layer shares: the four screenshots
+       * decoded, each hidden one against its canvas read back, and the pixels
+       * the layer adds between the backends.
+       */
+      const composedCompare = async (gpu, gl) => {
         const [gpuShown, gpuHidden, glShown, glHidden] = await Promise.all(
           [gpu.shown, gpu.hidden, gl.shown, gl.hidden].map(decodePng),
         );
         const frames = [gpuShown, gpuHidden, glShown, glHidden];
         const sameSize = frames.every((f) => f.width === gpuShown.width && f.height === gpuShown.height);
-        if (!sameSize) return { pass: false, sameSize, sizes: frames.map((f) => [f.width, f.height]) };
+        if (!sameSize) return { sameSize, sizes: frames.map((f) => [f.width, f.height]) };
         const canvasMatched = {};
         for (const [backend, hidden] of [['webgpu', gpuHidden], ['webgl2', glHidden]]) {
-          const read = groupCanvas[backend];
+          const read = composedCanvas[backend];
           let differing = 0;
           for (let i = 0; i < hidden.data.length; i += 4) if (pixelDelta(hidden.data, read, i) > 0) differing += 1;
           canvasMatched[backend] = read.length === hidden.data.length && differing === 0;
         }
-        const padding = GROUP.padding + expectedShift;
-        const outline = {
-          webgpu: outlineOf(gpuShown, gpuHidden, padding),
-          webgl2: outlineOf(glShown, glHidden, padding + paddingShift),
-        };
         const composed = { differing: 0, maxDelta: 0 };
         const bare = { differing: 0, maxDelta: 0 };
         const added = { pixels: 0, maxDelta: 0 };
@@ -992,25 +1007,167 @@
           }
         }
         const backends = { webgpu: gpu.reported, webgl2: gl.reported };
+        const sound =
+          backends.webgpu === 'webgpu' && backends.webgl2 === 'webgl2' && canvasMatched.webgpu && canvasMatched.webgl2;
+        return { sameSize, backends, canvasMatched, sound, composed, bare, added, gpuShown, gpuHidden, glShown, glHidden };
+      };
+
+      window.groupParity = async ({ gpu, gl, paddingShift = 0, expectedShift = 0 }) => {
+        const compared = await composedCompare(gpu, gl);
+        if (!compared.sameSize) return { pass: false, ...compared };
+        const { gpuShown, gpuHidden, glShown, glHidden, ...common } = compared;
+        const padding = GROUP.padding + expectedShift;
+        const outline = {
+          webgpu: outlineOf(gpuShown, gpuHidden, padding),
+          webgl2: outlineOf(glShown, glHidden, padding + paddingShift),
+        };
         const placed = outline.webgpu.placed && outline.webgl2.placed;
         return {
-          pass:
-            backends.webgpu === 'webgpu' &&
-            backends.webgl2 === 'webgl2' &&
-            canvasMatched.webgpu &&
-            canvasMatched.webgl2 &&
-            placed &&
-            added.pixels === 0,
-          backends,
-          sameSize,
+          pass: common.sound && placed && common.added.pixels === 0,
+          ...common,
           paddingShift,
           expectedShift,
-          canvasMatched,
           placed,
           outline,
-          composed,
-          bare,
-          added,
+        };
+      };
+
+      /**
+       * Rich-node tiers over the parity scene's first frame, composed with the
+       * canvas on each backend as the group outline is.
+       *
+       * `createRichNodes` registers one `createHtmlOverlay` box entry per node
+       * per tier, sized to the node's bounds and gated by its width on screen,
+       * so the browser draws the tiers and either backend's camera places
+       * them. Each tier here is one opaque colour with no text, so a pixel
+       * names the tier that covers it. At zoom 1 the rectangle is 90 CSS
+       * pixels wide and the circle 60, either side of the 75 pixel gate, so
+       * the rectangle shows the card and the circle the label, and the bottom
+       * tier (the shape alone, below 24) shows on neither.
+       *
+       * The comparison is the outline's: each hidden screenshot matches its
+       * canvas, and between the backends the tiers may add no differing
+       * pixel. On each backend, every pixel the layer changes lies within
+       * `RICH_EDGE_DEVICE_PX` of a node's box, the changed pixels span each
+       * box, and every pixel further inside a box than that holds the colour
+       * of the tier `RICH_EXPECTED` names for its node.
+       *
+       * Three controls. `boundsShift` moves every node's box on the WebGL2
+       * side by that much in x and y, and that side's expected boxes with it,
+       * so it fails only on the difference the tiers add. `expectedShift`
+       * widens the expected boxes on both sides, so it fails on
+       * placement, and may fail on the colour with it, since a wider box takes
+       * uncovered pixels into the colour test. `swapTiers` expects each node's tier on the other node, so
+       * it fails only if the check can see which tier a node shows.
+       */
+      const RICH_TIERS = [
+        { name: 'label', color: 0xe63946, minScreenWidth: 24, maxScreenWidth: 75 },
+        { name: 'card', color: 0x2a9d8f, minScreenWidth: 75 },
+      ].map((tier) => ({
+        ...tier,
+        create: () => {
+          const element = document.createElement('div');
+          element.style.background = `#${tier.color.toString(16).padStart(6, '0')}`;
+          return element;
+        },
+        update: () => {},
+      }));
+      const RICH_EXPECTED = { rect: 'card', circle: 'label' };
+      // Every box edge lands on, or within half a pixel of, a whole CSS
+      // pixel, so one pixel covers where a compositor rounds a shifted box.
+      const RICH_EDGE_DEVICE_PX = 1;
+
+      const richBounds = (node, shift, grow = 0) => ({
+        minX: node.center.x - node.size.width / 2 + shift - grow,
+        maxX: node.center.x + node.size.width / 2 + shift + grow,
+        minY: node.center.y - node.size.height / 2 + shift - grow,
+        maxY: node.center.y + node.size.height / 2 + shift + grow,
+      });
+
+      window.richFrame = (backend, boundsShift = 0) =>
+        composedFrame(backend, (camera, hold) => {
+          const overlay = hold(createHtmlOverlay({ parent: document.getElementById('frame'), camera }));
+          const rich = createRichNodes({ overlay, tiers: RICH_TIERS });
+          rich.setNodes(NODES.map((node) => ({ id: node.id, bounds: richBounds(node, boundsShift), data: null })));
+          overlay.sync();
+        });
+
+      // Where one backend's tiers changed its own frame, and in which colour,
+      // against the boxes and tiers expected.
+      const tiersOf = (shown, hidden, shift, grow, expected) => {
+        const { width, height } = shown;
+        const margin = RICH_EDGE_DEVICE_PX;
+        const nodes = NODES.map((node) => {
+          const bounds = richBounds(node, shift, grow);
+          const tier = RICH_TIERS.find((each) => each.name === expected[node.id]);
+          return {
+            id: node.id,
+            tier: tier.name,
+            color: tier.color,
+            box: { left: bounds.minX + width / 2, right: bounds.maxX + width / 2, top: height / 2 - bounds.maxY, bottom: height / 2 - bounds.minY },
+            span: { left: Infinity, right: -Infinity, top: Infinity, bottom: -Infinity },
+            changed: 0,
+            inside: 0,
+            colored: 0,
+          };
+        });
+        let stray = 0;
+        for (let row = 0; row < height; row += 1) {
+          for (let col = 0; col < width; col += 1) {
+            const i = (row * width + col) * 4;
+            const x = col + 0.5;
+            const y = row + 0.5;
+            const within = (box, by) => x >= box.left - by && x <= box.right + by && y >= box.top - by && y <= box.bottom + by;
+            for (const node of nodes) {
+              if (!within(node.box, -margin)) continue;
+              node.inside += 1;
+              const matches = [16, 8, 0].every((s, c) => Math.abs(shown.data[i + c] - ((node.color >> s) & 0xff)) <= ROUNDING);
+              if (matches) node.colored += 1;
+            }
+            if (pixelDelta(shown.data, hidden.data, i) === 0) continue;
+            const node = nodes.find((each) => within(each.box, margin));
+            if (node === undefined) {
+              stray += 1;
+              continue;
+            }
+            node.changed += 1;
+            node.span.left = Math.min(node.span.left, x);
+            node.span.right = Math.max(node.span.right, x);
+            node.span.top = Math.min(node.span.top, y);
+            node.span.bottom = Math.max(node.span.bottom, y);
+          }
+        }
+        const placed =
+          stray === 0 &&
+          nodes.every(
+            (node) =>
+              node.changed > 0 &&
+              ['left', 'right', 'top', 'bottom'].every((side) => Math.abs(node.span[side] - node.box[side]) <= margin),
+          );
+        const tiered = nodes.every((node) => node.inside > 0 && node.colored === node.inside);
+        return { nodes, stray, placed, tiered };
+      };
+
+      window.richParity = async ({ gpu, gl, boundsShift = 0, expectedShift = 0, swapTiers = false }) => {
+        const compared = await composedCompare(gpu, gl);
+        if (!compared.sameSize) return { pass: false, ...compared };
+        const { gpuShown, gpuHidden, glShown, glHidden, ...common } = compared;
+        const expected = swapTiers ? { rect: RICH_EXPECTED.circle, circle: RICH_EXPECTED.rect } : RICH_EXPECTED;
+        const tiers = {
+          webgpu: tiersOf(gpuShown, gpuHidden, 0, expectedShift, expected),
+          webgl2: tiersOf(glShown, glHidden, boundsShift, expectedShift, expected),
+        };
+        const placed = tiers.webgpu.placed && tiers.webgl2.placed;
+        const tiered = tiers.webgpu.tiered && tiers.webgl2.tiered;
+        return {
+          pass: common.sound && placed && tiered && common.added.pixels === 0,
+          ...common,
+          boundsShift,
+          expectedShift,
+          swapTiers,
+          placed,
+          tiered,
+          tiers,
         };
       };
 

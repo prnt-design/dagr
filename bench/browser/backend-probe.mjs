@@ -30,7 +30,7 @@
  * Chrome instead of launching one. The output
  * records the browser, mode and flags, because a backend result without them
  * cannot be reproduced. `--parity` adds M4.9b's backend comparison and exits
- * non-zero unless it passes and all eight of its controls fail on what they
+ * non-zero unless it passes and all eleven of its controls fail on what they
  * change. It also exits non-zero when the adapter reports `isFallbackAdapter`: a software
  * adapter such as
  * SwiftShader still comes up on `webgpu`, so its side of the comparison would
@@ -44,7 +44,11 @@
  * above-nodes ribbon below the nodes. A group outline, `createNodeGroupLayer`'s
  * SVG, is then composed over the first frame on each backend and screenshotted
  * with the layer shown and hidden; the seventh control widens one side's
- * padding and the eighth the outline the page expects on both.
+ * padding and the eighth the outline the page expects on both. Rich-node
+ * tiers, `createRichNodes` over `createHtmlOverlay`, are composed and
+ * screenshotted the same way; the ninth control moves one side's tier boxes,
+ * the tenth widens the boxes the page expects and the eleventh swaps the tiers
+ * it expects.
  * `--pick` adds M4.8b's check of `pickNode` on both backends at device pixel
  * ratios 1 and 2, and exits non-zero on the same adapter terms or on any pick
  * that disagrees with the shapes' distance functions.
@@ -70,6 +74,8 @@ const EDGE_CONTROL_SHIFT_PX = 2;
 const DASH_CONTROL_SHIFT_PX = 3;
 // Less than the 2 px ring, so only the check named in each control can see it.
 const GROUP_CONTROL_SHIFT_PX = 1.5;
+// More than the 1 px a tier's box edge may sit from where the page expects it.
+const RICH_CONTROL_SHIFT_PX = 1.5;
 
 /**
  * The page's import map, filled in from this process's own module resolution.
@@ -147,9 +153,13 @@ function controlFailure(control, moved) {
   return failedOnShift ? undefined : `failed, but not on what it changes: ${parityFailure(control)}`;
 }
 
-function groupFailure(check) {
-  if (check.error !== undefined) return check.error;
-  if (!check.sameSize) return `the composed frames are different sizes: ${JSON.stringify(check.sizes)}`;
+/**
+ * The reasons every composed layer shares: `{ done }` when the check stopped
+ * before comparing, otherwise `{ reasons }` to add to.
+ */
+function composedReasons(check) {
+  if (check.error !== undefined) return { done: check.error };
+  if (!check.sameSize) return { done: `the composed frames are different sizes: ${JSON.stringify(check.sizes)}` };
   const reasons = [];
   if (check.backends.webgpu !== 'webgpu' || check.backends.webgl2 !== 'webgl2') {
     reasons.push(`the frames drew on ${check.backends.webgpu} and ${check.backends.webgl2}, not webgpu and webgl2`);
@@ -157,6 +167,19 @@ function groupFailure(check) {
   for (const [backend, matched] of Object.entries(check.canvasMatched)) {
     if (!matched) reasons.push(`on ${backend} the screenshot without the layer does not match the canvas read back`);
   }
+  return { reasons };
+}
+
+function addedReason(check, reasons) {
+  if (check.added.pixels > 0) {
+    reasons.push(`the layer adds ${check.added.pixels} differing pixels, by up to ${check.added.maxDelta}`);
+  }
+  return reasons.join('; ');
+}
+
+function groupFailure(check) {
+  const { done, reasons } = composedReasons(check);
+  if (done !== undefined) return done;
   for (const [backend, outline] of Object.entries(check.outline)) {
     if (!outline.placed) {
       reasons.push(
@@ -164,39 +187,52 @@ function groupFailure(check) {
       );
     }
   }
-  if (check.added.pixels > 0) {
-    reasons.push(`the layer adds ${check.added.pixels} differing pixels, by up to ${check.added.maxDelta}`);
+  return addedReason(check, reasons);
+}
+
+function richFailure(check) {
+  const { done, reasons } = composedReasons(check);
+  if (done !== undefined) return done;
+  for (const [backend, { nodes, stray, placed, tiered }] of Object.entries(check.tiers)) {
+    if (placed && tiered) continue;
+    const each = nodes.map(
+      (node) =>
+        `${node.id} changed ${node.changed} pixels spanning ${JSON.stringify(node.span)} against ${JSON.stringify(node.box)}, ${node.colored} of ${node.inside} inside it in the ${node.tier} colour`,
+    );
+    reasons.push(`on ${backend} ${each.join(', ')}, and ${stray} elsewhere`);
   }
-  return reasons.join('; ');
+  return addedReason(check, reasons);
 }
 
 /**
- * The group outline's composed frames on both backends, each screenshotted
- * with the layer shown and hidden, or an error.
+ * A composed layer's frames on both backends, each screenshotted with the
+ * layer shown and hidden, or an error. `frame` names the page function that
+ * mounts the layer, given the WebGL2 side's control `shift`.
  */
-async function groupShots(paddingShift) {
+async function composedShots(frame, shift) {
   const shots = {};
   for (const backend of ['webgpu', 'webgl2']) {
-    const frame = await page.evaluate(([value, shift]) => window.groupFrame(value, shift), [
+    const mounted = await page.evaluate(([name, value, by]) => window[name](value, by), [
+      frame,
       backend,
-      backend === 'webgl2' ? paddingShift : 0,
+      backend === 'webgl2' ? shift : 0,
     ]);
-    if (frame.error !== undefined) return { error: `${backend}: ${frame.error}` };
+    if (mounted.error !== undefined) return { error: `${backend}: ${mounted.error}` };
     try {
       const shown = (await page.locator('#frame').screenshot()).toString('base64');
-      await page.evaluate(() => window.groupHide());
+      await page.evaluate(() => window.composedHide());
       const hidden = (await page.locator('#frame').screenshot()).toString('base64');
-      shots[backend === 'webgpu' ? 'gpu' : 'gl'] = { reported: frame.reported, shown, hidden };
+      shots[backend === 'webgpu' ? 'gpu' : 'gl'] = { reported: mounted.reported, shown, hidden };
     } finally {
-      await page.evaluate(() => window.groupRelease());
+      await page.evaluate(() => window.composedRelease());
     }
   }
   return shots;
 }
 
-async function groupParity(shots, paddingShift, expectedShift) {
+async function composedParity(check, shots, args) {
   if (shots.error !== undefined) return { pass: false, error: shots.error };
-  return page.evaluate((args) => window.groupParity(args), { ...shots, paddingShift, expectedShift });
+  return page.evaluate(([name, value]) => window[name](value), [check, { ...shots, ...args }]);
 }
 
 /**
@@ -206,18 +242,34 @@ async function groupParity(shots, paddingShift, expectedShift) {
  */
 function groupControlFailure(control, aimedAt) {
   if (control.pass) return 'passed, so the check cannot see a misplaced outline';
-  const sound =
-    control.error === undefined &&
-    control.sameSize &&
-    control.backends.webgpu === 'webgpu' &&
-    control.backends.webgl2 === 'webgl2' &&
-    control.canvasMatched.webgpu &&
-    control.canvasMatched.webgl2;
   const onAim =
     aimedAt === 'added'
       ? control.placed && control.added.pixels > 0
       : !control.placed && control.added.pixels === 0;
-  return sound && onAim ? undefined : `failed, but not on what it changes: ${groupFailure(control)}`;
+  return control.error === undefined && control.sameSize && control.sound && onAim
+    ? undefined
+    : `failed, but not on what it changes: ${groupFailure(control)}`;
+}
+
+/**
+ * The same for a tier control: `boundsShift` must fail only on the difference
+ * the tiers add, `expectedShift` only on placement, `swapTiers` only on which
+ * tier a node shows. A wider expected box also takes pixels the tiers do not
+ * cover into the colour test, so `expectedShift` may fail on the colour too.
+ */
+function richControlFailure(control, aimedAt) {
+  if (control.pass) return 'passed, so the check cannot see a misplaced or wrong tier';
+  const fails = {
+    added: control.added?.pixels > 0,
+    placed: control.placed === false,
+    tiered: control.tiered === false,
+  };
+  const onAim = Object.entries(fails).every(
+    ([check, failed]) => failed === (check === aimedAt) || (aimedAt === 'placed' && check === 'tiered'),
+  );
+  return control.error === undefined && control.sameSize && control.sound && onAim
+    ? undefined
+    : `failed, but not on what it changes: ${richFailure(control)}`;
 }
 
 function pickFailure(run) {
@@ -292,10 +344,25 @@ if (cliArgs.includes('--parity')) {
     flowControl: await page.evaluate(() => window.parity(0, 0, 0, false, true)),
     layerControl: await page.evaluate(() => window.parity(0, 0, 0, false, false, true)),
   };
-  const shots = await groupShots(0);
-  parity.groups = await groupParity(shots, 0, 0);
-  parity.outlineControl = await groupParity(await groupShots(GROUP_CONTROL_SHIFT_PX), GROUP_CONTROL_SHIFT_PX, 0);
-  parity.placementControl = await groupParity(shots, 0, GROUP_CONTROL_SHIFT_PX);
+  // The page keeps only the latest draw's canvas read back, so every check
+  // that reuses a set of screenshots runs before the next draw.
+  const shots = await composedShots('groupFrame', 0);
+  parity.groups = await composedParity('groupParity', shots, {});
+  parity.placementControl = await composedParity('groupParity', shots, { expectedShift: GROUP_CONTROL_SHIFT_PX });
+  parity.outlineControl = await composedParity(
+    'groupParity',
+    await composedShots('groupFrame', GROUP_CONTROL_SHIFT_PX),
+    { paddingShift: GROUP_CONTROL_SHIFT_PX },
+  );
+  const richShots = await composedShots('richFrame', 0);
+  parity.rich = await composedParity('richParity', richShots, {});
+  parity.richPlacementControl = await composedParity('richParity', richShots, { expectedShift: RICH_CONTROL_SHIFT_PX });
+  parity.tierControl = await composedParity('richParity', richShots, { swapTiers: true });
+  parity.richBoundsControl = await composedParity(
+    'richParity',
+    await composedShots('richFrame', RICH_CONTROL_SHIFT_PX),
+    { boundsShift: RICH_CONTROL_SHIFT_PX },
+  );
   if (!parity.check.pass) {
     console.error(`the parity check failed: ${parityFailure(parity.check)}`);
     process.exitCode = 1;
@@ -347,6 +414,21 @@ if (cliArgs.includes('--parity')) {
       `the placement control, with the expected outline ${GROUP_CONTROL_SHIFT_PX} px wider on both sides, ${placementControl}`,
     );
     process.exitCode = 1;
+  }
+  if (!parity.rich.pass) {
+    console.error(`the rich-node tier check failed: ${richFailure(parity.rich)}`);
+    process.exitCode = 1;
+  }
+  for (const [key, aimedAt, what] of [
+    ['richBoundsControl', 'added', `the rich bounds control, with one side's tier boxes moved ${RICH_CONTROL_SHIFT_PX} px`],
+    ['richPlacementControl', 'placed', `the rich placement control, with the expected tier boxes ${RICH_CONTROL_SHIFT_PX} px wider on both sides`],
+    ['tierControl', 'tiered', "the tier control, with each node expecting the other node's tier"],
+  ]) {
+    const failure = richControlFailure(parity[key], aimedAt);
+    if (failure !== undefined) {
+      console.error(`${what}, ${failure}`);
+      process.exitCode = 1;
+    }
   }
 }
 let pick;
