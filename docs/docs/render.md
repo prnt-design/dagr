@@ -962,7 +962,14 @@ differing on the later two. Then a solid ribbon on the above-nodes layer
 joined the scene, across the circle, against a sixth control that draws it
 below the nodes on one side and must fail. The check still passes, with every
 pixel over the circle's fill holding the edge colour on WebGPU and none of the
-ribbon's pixels differing.
+ribbon's pixels differing. On 2026-11-23 UTC a group outline joined it. The
+outline is `createNodeGroupLayer`'s SVG, drawn by the browser rather than by
+either backend, so the check composes it over the first frame on each backend
+and screenshots the result with the layer shown and without it. The layer
+changes only the outline and its title on both sides and adds no differing
+pixel between them, against a seventh control that widens one side's outline
+and an eighth that widens the outline the page expects, both of which must
+fail.
 
 ## Usage
 

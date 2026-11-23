@@ -30,7 +30,7 @@
  * Chrome instead of launching one. The output
  * records the browser, mode and flags, because a backend result without them
  * cannot be reproduced. `--parity` adds M4.9b's backend comparison and exits
- * non-zero unless it passes and all seven of its controls fail on what they
+ * non-zero unless it passes and all eight of its controls fail on what they
  * change. It also exits non-zero when the adapter reports `isFallbackAdapter`: a software
  * adapter such as
  * SwiftShader still comes up on `webgpu`, so its side of the comparison would
@@ -44,7 +44,7 @@
  * above-nodes ribbon below the nodes. A group outline, `createNodeGroupLayer`'s
  * SVG, is then composed over the first frame on each backend and screenshotted
  * with the layer shown and hidden; the seventh control widens one side's
- * padding.
+ * padding and the eighth the outline the page expects on both.
  * `--pick` adds M4.8b's check of `pickNode` on both backends at device pixel
  * ratios 1 and 2, and exits non-zero on the same adapter terms or on any pick
  * that disagrees with the shapes' distance functions.
@@ -68,8 +68,7 @@ const CONTROL_SHIFT_PX = 1 / 3;
 const EDGE_CONTROL_SHIFT_PX = 2;
 // A quarter of the dash period: wider than the band, so dash ends leave it.
 const DASH_CONTROL_SHIFT_PX = 3;
-// Wider than the band's 1 px, narrower than the 2 px ring the outline is
-// allowed to change on its own side.
+// Less than the 2 px ring, so only the check named in each control can see it.
 const GROUP_CONTROL_SHIFT_PX = 1.5;
 
 /**
@@ -155,6 +154,9 @@ function groupFailure(check) {
   if (check.backends.webgpu !== 'webgpu' || check.backends.webgl2 !== 'webgl2') {
     reasons.push(`the frames drew on ${check.backends.webgpu} and ${check.backends.webgl2}, not webgpu and webgl2`);
   }
+  for (const [backend, matched] of Object.entries(check.canvasMatched)) {
+    if (!matched) reasons.push(`on ${backend} the screenshot without the layer does not match the canvas read back`);
+  }
   for (const [backend, outline] of Object.entries(check.outline)) {
     if (!outline.placed) {
       reasons.push(
@@ -169,24 +171,53 @@ function groupFailure(check) {
 }
 
 /**
- * The group outline's composed frames on both backends: each screenshotted
- * with the layer shown and hidden, then compared in the page.
+ * The group outline's composed frames on both backends, each screenshotted
+ * with the layer shown and hidden, or an error.
  */
-async function groupParity(paddingShift) {
+async function groupShots(paddingShift) {
   const shots = {};
   for (const backend of ['webgpu', 'webgl2']) {
     const frame = await page.evaluate(([value, shift]) => window.groupFrame(value, shift), [
       backend,
       backend === 'webgl2' ? paddingShift : 0,
     ]);
-    if (frame.error !== undefined) return { pass: false, error: `${backend}: ${frame.error}` };
-    const shown = (await page.locator('#frame').screenshot()).toString('base64');
-    await page.evaluate(() => window.groupHide());
-    const hidden = (await page.locator('#frame').screenshot()).toString('base64');
-    await page.evaluate(() => window.groupRelease());
-    shots[backend === 'webgpu' ? 'gpu' : 'gl'] = { reported: frame.reported, shown, hidden };
+    if (frame.error !== undefined) return { error: `${backend}: ${frame.error}` };
+    try {
+      const shown = (await page.locator('#frame').screenshot()).toString('base64');
+      await page.evaluate(() => window.groupHide());
+      const hidden = (await page.locator('#frame').screenshot()).toString('base64');
+      shots[backend === 'webgpu' ? 'gpu' : 'gl'] = { reported: frame.reported, shown, hidden };
+    } finally {
+      await page.evaluate(() => window.groupRelease());
+    }
   }
-  return page.evaluate((args) => window.groupParity(args), { ...shots, paddingShift });
+  return shots;
+}
+
+async function groupParity(shots, paddingShift, expectedShift) {
+  if (shots.error !== undefined) return { pass: false, error: shots.error };
+  return page.evaluate((args) => window.groupParity(args), { ...shots, paddingShift, expectedShift });
+}
+
+/**
+ * Why an outline control did not fail on the check it is aimed at, or
+ * undefined when it did. `paddingShift` must fail only on the difference the
+ * layer adds between the backends, `expectedShift` only on placement.
+ */
+function groupControlFailure(control, aimedAt) {
+  if (control.pass) return 'passed, so the check cannot see a misplaced outline';
+  const sound =
+    control.error === undefined &&
+    control.sameSize &&
+    control.backends.webgpu === 'webgpu' &&
+    control.backends.webgl2 === 'webgl2' &&
+    control.canvasMatched.webgpu &&
+    control.canvasMatched.webgl2;
+  const onAim =
+    aimedAt === 'added'
+      ? control.placed && control.added.pixels > 0
+      : !control.placed && control.added.pixels === 0;
+  return sound && onAim ? undefined : `failed, but not on what it changes: ${groupFailure(control)}`;
 }
 
 function pickFailure(run) {
@@ -260,9 +291,11 @@ if (cliArgs.includes('--parity')) {
     curveControl: await page.evaluate(() => window.parity(0, 0, 0, true)),
     flowControl: await page.evaluate(() => window.parity(0, 0, 0, false, true)),
     layerControl: await page.evaluate(() => window.parity(0, 0, 0, false, false, true)),
-    groups: await groupParity(0),
-    groupControl: await groupParity(GROUP_CONTROL_SHIFT_PX),
   };
+  const shots = await groupShots(0);
+  parity.groups = await groupParity(shots, 0, 0);
+  parity.outlineControl = await groupParity(await groupShots(GROUP_CONTROL_SHIFT_PX), GROUP_CONTROL_SHIFT_PX, 0);
+  parity.placementControl = await groupParity(shots, 0, GROUP_CONTROL_SHIFT_PX);
   if (!parity.check.pass) {
     console.error(`the parity check failed: ${parityFailure(parity.check)}`);
     process.exitCode = 1;
@@ -303,12 +336,16 @@ if (cliArgs.includes('--parity')) {
     console.error(`the group outline check failed: ${groupFailure(parity.groups)}`);
     process.exitCode = 1;
   }
-  const { groupControl } = parity;
-  if (groupControl.pass) {
-    console.error(`the outline control, with one side's padding ${GROUP_CONTROL_SHIFT_PX} px wider, passed, so the check cannot see a misplaced outline`);
+  const outlineControl = groupControlFailure(parity.outlineControl, 'added');
+  if (outlineControl !== undefined) {
+    console.error(`the outline control, with one side's padding ${GROUP_CONTROL_SHIFT_PX} px wider, ${outlineControl}`);
     process.exitCode = 1;
-  } else if (groupControl.error !== undefined || !groupControl.placed || groupControl.added.pixels === 0) {
-    console.error(`the outline control failed, but not on what it changes: ${groupFailure(groupControl)}`);
+  }
+  const placementControl = groupControlFailure(parity.placementControl, 'placed');
+  if (placementControl !== undefined) {
+    console.error(
+      `the placement control, with the expected outline ${GROUP_CONTROL_SHIFT_PX} px wider on both sides, ${placementControl}`,
+    );
     process.exitCode = 1;
   }
 }

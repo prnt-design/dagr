@@ -573,7 +573,7 @@
       /**
        * Draws the parity scene on one backend, one frame per flow, and reads
        * each frame back. `keep` leaves the renderer alive and returns it, for
-       * a caller that screenshots the canvas afterwards.
+       * a caller that screenshots its frame afterwards.
        */
       const draw = async (backend, nodes, edges, dashed, flows, smooth, smoothDashed, curve, above, layer, keep = false) => {
         const previous = document.getElementById('stage');
@@ -830,51 +830,63 @@
        * draw it differently. What can differ is the frame it is composed into:
        * where the layer lands over the canvas, and whether it covers the
        * canvas the same way on both. So the runner screenshots `#frame` with
-       * the layer shown and with it hidden on each backend, and this compares
-       * the four.
+       * the layer shown and with it hidden on each backend, and `groupParity`
+       * compares the four.
        *
        * The group frames the rectangle, padded by `GROUP.padding` and with a
-       * title band, so its outline crosses three ribbons and its title sits
-       * over the clear colour. On each backend, every pixel the layer changes
-       * must lie within `GROUP_RING_DEVICE_PX` of the outline's rounded
-       * rectangle or inside the title's box, and the changed pixels on the
-       * outline must span that rectangle. Between the backends, the layer may
-       * not add a difference: a pixel that differs between the two composed
-       * frames must already differ between the two bare ones.
+       * title band, so its outline crosses three ribbons and its title starts
+       * on the diagonal one. Each hidden screenshot must match the canvas
+       * read back from the same renderer, or the bare frames could differ
+       * everywhere and excuse any difference the layer adds. On each backend,
+       * every pixel the layer changes must lie within `GROUP_RING_DEVICE_PX` of
+       * the outline's rounded rectangle or inside the title's box, and the
+       * changed pixels on the outline must span that rectangle. Between the
+       * backends, the layer may not add a difference: a pixel that differs
+       * between the two composed frames must already differ between the two
+       * bare ones.
        *
-       * `paddingShift` widens the WebGL2 side's padding by that much, the
-       * outline's control. It moves the outline and nothing else, so it fails
-       * only if the comparison can see where the outline lies.
+       * Two controls. `paddingShift` widens the WebGL2 side's padding by that
+       * much, moving its outline and title, so it fails only if the
+       * comparison between the backends can see where the outline lies; that
+       * side's expected rectangle moves with it. `expectedShift` widens the
+       * expected rectangle on both sides and leaves the layers alone, so it
+       * fails only if the placement check can see where the outline lies.
        */
       const GROUP = { id: 'group', nodeIds: ['rect'], label: 'group', padding: 24 };
-      // Half the 1.5 px stroke, plus one device pixel of antialiasing.
+      // Half the 1.5 px stroke plus one device pixel of antialiasing, rounded
+      // up.
       const GROUP_RING_DEVICE_PX = 2;
       const GROUP_CORNER_RADIUS = 10;
       let held;
+      const groupCanvas = {};
+
+      window.groupRelease = () => {
+        if (held === undefined) return;
+        held.layer?.dispose();
+        held.renderer.dispose();
+        held = undefined;
+      };
 
       window.groupFrame = async (backend, paddingShift = 0) => {
-        let scene;
+        window.groupRelease();
         try {
-          scene = await draw(backend, NODES, EDGES, DASHED, [FLOWS[0]], SMOOTH, SMOOTH_DASHED, 'smooth', ABOVE, 'above-nodes', true);
+          const scene = await draw(backend, NODES, EDGES, DASHED, [FLOWS[0]], SMOOTH, SMOOTH_DASHED, 'smooth', ABOVE, 'above-nodes', true);
+          held = { renderer: scene.renderer };
+          groupCanvas[backend] = scene.frames[0];
+          held.layer = createNodeGroupLayer({ parent: document.getElementById('frame'), camera: scene.renderer.camera });
+          held.layer.setGroups([{ ...GROUP, padding: GROUP.padding + paddingShift }]);
+          held.layer.setNodes(NODES);
+          held.layer.sync();
+          return { backend, reported: scene.reported };
         } catch (error) {
+          window.groupRelease();
           return { backend, error: String(error), code: error && error.code };
         }
-        const layer = createNodeGroupLayer({ parent: document.getElementById('frame'), camera: scene.renderer.camera });
-        layer.setGroups([{ ...GROUP, padding: GROUP.padding + paddingShift }]);
-        layer.setNodes(NODES);
-        layer.sync();
-        held = { renderer: scene.renderer, layer };
-        return { backend, reported: scene.reported };
       };
 
       window.groupHide = () => {
-        document.querySelector('#frame .dagr-node-groups').style.display = 'none';
-      };
-
-      window.groupRelease = () => {
         held.layer.dispose();
-        held.renderer.dispose();
-        held = undefined;
+        held.layer = undefined;
       };
 
       const decodePng = async (base64) => {
@@ -893,9 +905,9 @@
 
       // Where one backend's layer changed its own frame, against where the
       // outline and title should be for `paddingShift`.
-      const outlineOf = (shown, hidden, paddingShift) => {
+      const outlineOf = (shown, hidden, padding) => {
         const { width, height } = shown;
-        const bounds = nodeGroupBounds(NODES, { ...GROUP, padding: GROUP.padding + paddingShift });
+        const bounds = nodeGroupBounds(NODES, { ...GROUP, padding });
         const box = {
           left: bounds.minX + width / 2,
           right: bounds.maxX + width / 2,
@@ -903,7 +915,7 @@
           bottom: height / 2 - bounds.minY,
         };
         // The layer's own title placement (12 px in, baseline 18 px down, 12 px
-        // monospace) and its own 8 px a character width allowance, widened by
+        // monospace) and its own allowance of 8 px per character, widened by
         // two pixels for the glyphs' antialiasing.
         const title = {
           left: box.left + 12 - 2,
@@ -945,14 +957,25 @@
         return { ring, title: titled, stray, box, span, placed: ring > 0 && titled > 0 && stray === 0 && spans };
       };
 
-      window.groupParity = async ({ gpu, gl, paddingShift = 0 }) => {
+      window.groupParity = async ({ gpu, gl, paddingShift = 0, expectedShift = 0 }) => {
         const [gpuShown, gpuHidden, glShown, glHidden] = await Promise.all(
           [gpu.shown, gpu.hidden, gl.shown, gl.hidden].map(decodePng),
         );
         const frames = [gpuShown, gpuHidden, glShown, glHidden];
         const sameSize = frames.every((f) => f.width === gpuShown.width && f.height === gpuShown.height);
         if (!sameSize) return { pass: false, sameSize, sizes: frames.map((f) => [f.width, f.height]) };
-        const outline = { webgpu: outlineOf(gpuShown, gpuHidden, 0), webgl2: outlineOf(glShown, glHidden, paddingShift) };
+        const canvasMatched = {};
+        for (const [backend, hidden] of [['webgpu', gpuHidden], ['webgl2', glHidden]]) {
+          const read = groupCanvas[backend];
+          let differing = 0;
+          for (let i = 0; i < hidden.data.length; i += 4) if (pixelDelta(hidden.data, read, i) > 0) differing += 1;
+          canvasMatched[backend] = read.length === hidden.data.length && differing === 0;
+        }
+        const padding = GROUP.padding + expectedShift;
+        const outline = {
+          webgpu: outlineOf(gpuShown, gpuHidden, padding),
+          webgl2: outlineOf(glShown, glHidden, padding + paddingShift),
+        };
         const composed = { differing: 0, maxDelta: 0 };
         const bare = { differing: 0, maxDelta: 0 };
         const added = { pixels: 0, maxDelta: 0 };
@@ -971,10 +994,18 @@
         const backends = { webgpu: gpu.reported, webgl2: gl.reported };
         const placed = outline.webgpu.placed && outline.webgl2.placed;
         return {
-          pass: backends.webgpu === 'webgpu' && backends.webgl2 === 'webgl2' && placed && added.pixels === 0,
+          pass:
+            backends.webgpu === 'webgpu' &&
+            backends.webgl2 === 'webgl2' &&
+            canvasMatched.webgpu &&
+            canvasMatched.webgl2 &&
+            placed &&
+            added.pixels === 0,
           backends,
           sameSize,
           paddingShift,
+          expectedShift,
+          canvasMatched,
           placed,
           outline,
           composed,
