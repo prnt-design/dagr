@@ -518,12 +518,14 @@ through `'webgl2'` and compares each frame pixel by pixel with the other
 backend's. It exits non-zero unless both backends came up as named, the
 comparison passes on every frame with the ribbons, dashes and curves drawn
 where the page expects them, the above-nodes one over the circle's fill, and
-the group outline composed over the first frame lands where the page expects
-it and adds no difference between the backends, and all eight controls (one
-moves a shape, one every ribbon, the curves included, one the dash pattern,
-one draws the curves as polylines, one holds the flow, one draws the
-above-nodes ribbon below the nodes, one widens one side's outline, one the
-outline the page expects) fail on what they change,
+the group outline and the rich-node tiers composed over the first frame land
+where the page expects them and add no difference between the backends, and
+all eleven controls (one moves a shape, one every ribbon, the curves included,
+one the dash pattern, one draws the curves as polylines, one holds the flow,
+one draws the above-nodes ribbon below the nodes, one widens one side's
+outline, one the outline the page expects, one moves one side's tier boxes,
+one widens the boxes the page expects, one swaps the tiers the page expects)
+fail on what they change,
 and says on stderr which of these did not hold. It also exits non-zero, saying why on
 stderr before it compares, when the adapter reports `isFallbackAdapter`,
 because a software adapter such as SwiftShader comes up on `'webgpu'` too and
@@ -888,6 +890,43 @@ changed pixels outside the wider ring on each side. `--pick`, added to the
 last headless run, still passed on both backends at DPR 1 and 2, 9,532 picks
 each.
 
+**Rich-node tiers joined the comparison on 2026-11-23 UTC**, composed over the
+first frame the same way. `createRichNodes` registers one `createHtmlOverlay`
+box entry per node per tier, sized to the node's bounds and gated by its width
+on screen, so the browser draws the tiers and the renderer's camera places
+them. The page gives each tier one opaque colour and no text, so a pixel names
+the tier over it: a label up to 75 CSS pixels wide and a card from there. At
+zoom 1 the rectangle is 90 pixels wide and shows the card, the circle is 60 and
+shows the label, and neither shows the bottom tier (the shape alone, below 24).
+Each screenshot without the tiers must match its canvas read back, as for the
+outline, and between the backends the tiers may add no differing pixel. On each
+backend, every pixel the tiers change must lie within 1 device pixel of a
+node's box, the changed pixels must span each box to within that pixel, and
+every pixel more than a pixel inside a box must hold the colour of the tier
+that node should show. Three controls, each 1.5 pixels or a swap:
+
+- The bounds control moves every box on the WebGL2 side, and the boxes the page
+  expects there with it. The run fails if it passes or fails on anything but a
+  difference the tiers add between the backends.
+- The placement control reuses the check's screenshots and widens the boxes the
+  page expects on both sides. The run fails if it passes or does not fail on
+  placement; a wider box also takes uncovered pixels into the colour test, so
+  that may fail with it.
+- The tier control reuses them too and expects each node's tier on the other
+  node. The run fails if it passes or fails on anything but the colours.
+
+**What it found on 2026-11-23 UTC**, on the same Apple M4 Mac mini in Google
+Chrome 157.0.8103.79, headless and headed, no flags, adapter `apple`
+`metal-3`, not a fallback: the check passes, and the canvas comparison's and
+the outline's numbers are unchanged. On both backends the card changes the
+rectangle's 4,500 pixels (90 by 50) and the label the circle's box of 3,600
+(60 by 60), spanning each box to the pixel, with none elsewhere, and all 4,224
+and 3,364 pixels inside them hold their tier's colour. The composed frames
+differ in the same 81 pixels as the bare ones, so the tiers add none. The
+bounds control fails with the tiers adding 1,032 differing pixels by up to
+228, the placement control on both boxes' spans, and the tier control with no
+pixel inside either box in the swapped tier's colour.
+
 **Not a gate.** `bench/README.md`'s argument against a browser measurement in
 `bench:ci` is about timings, and a parity check is not a timing, so that
 argument does not carry. What does is the runner: the check needs a full Chrome
@@ -898,8 +937,8 @@ one machine, the probe's two shapes with two solid straight ribbons since
 smooth one since 2026-11-21, the dashes flowed by 4.5 pixels since
 2026-11-22 (so the dashes at rest are no longer compared), a smooth dashed
 one, the flow advancing over three frames and a ribbon on the above-nodes
-layer since that day, and a group outline composed over the first frame since
-2026-11-23, zoom 1, DPR 1. Rich-node tiers, other zooms and DPR 2 are not
+layer since that day, and a group outline and rich-node tiers composed over
+the first frame since 2026-11-23, zoom 1, DPR 1. Other zooms and DPR 2 are not
 compared.
 
 ## Node picking (M4.8b)

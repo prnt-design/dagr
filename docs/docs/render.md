@@ -623,9 +623,9 @@ checks:
   joins and a smooth one on 2026-11-21 (Chrome 157), the dashes flowed by
   4.5 pixels since 2026-11-22, and a smooth dashed one, the flow advancing
   over three frames and a ribbon on the above-nodes layer since that day.
-  A group outline, drawn by the browser rather than by either backend, is
-  composed over the first frame since 2026-11-23 and adds no difference.
-  Other GPUs, zooms, rich-node tiers and DPR 2 are unchecked.
+  A group outline and rich-node tiers, drawn by the browser rather than by
+  either backend, are composed over the first frame since 2026-11-23 and add
+  no difference. Other GPUs, zooms and DPR 2 are unchecked.
   See
   [What is verified, and on which backend](#what-is-verified-and-on-which-backend).
 - That a browser composes the overlay's two transforms the way the algebra says.
@@ -969,6 +969,11 @@ and screenshots the result with the layer shown and without it. The layer
 changes only the outline and its title on both sides and adds no differing
 pixel between them, against a seventh control that widens one side's outline
 and an eighth that widens the outline the page expects, both of which must
+fail. Rich-node tiers joined it the same day, composed the same way: at zoom 1
+the rectangle shows the card tier and the circle the label tier, each tier's
+box covers its node's bounds and nothing else on both sides, and the tiers add
+no differing pixel, against controls that move one side's boxes, widen the
+boxes the page expects and swap the tiers it expects, all of which must
 fail.
 
 ## Usage
@@ -2084,6 +2089,6 @@ complete, and `<DagrCanvas animate>` drives them from a graph a user is editing
   `DagrCanvas` picks through
   `pickNode` only behind its opt-in `hitTesting="gpu"`. See [Picking](#picking).
 - Backend parity beyond the probe scene and the one machine M4.9b compared on:
-  other GPUs, zooms, rich-node tiers and DPR 2.
+  other GPUs, zooms and DPR 2.
 - Ten thousand nodes at sixty frames a second, measured rather than hoped for
   (M4.10).
