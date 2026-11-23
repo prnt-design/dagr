@@ -263,8 +263,9 @@ A patch no fast path takes runs all four stages, warm-started from the drawing
 the engine holds. These are wall-clock milliseconds for one `engine.relayout`
 of such a patch on the same 10k corpus at the defaults, measured on an AMD
 Ryzen 9 9900X 12-Core Processor under Node 22.22.1 at a one-minute load average
-of 0.21. A cycle inserts a node into the middle of an edge and removes it, adds
-the reverse of that edge and removes it, then adds a leaf under a node on the
+of 0.21 on 2026-11-23 UTC. A cycle adds a node beside an edge, with an edge in
+from its source and one out to its target, and removes it, adds the reverse of
+that edge and removes it, then adds a leaf under a node on the
 last rank, on the added-leaf path and untimed, and removes it. Each figure is a
 median over eleven cycles after two warmups.
 
@@ -277,10 +278,12 @@ median over eleven cycles after two warmups.
 | remove a leaf alone on its rank | 448ms | 0.56x |
 
 In the table, a cold run of the same graph, measured in the same session, takes
-797ms, and the slowest fallback is 0.69x of a cold run. On this corpus a
-declined patch costs less than starting over, not more. That is M3.9b's stated
-ceiling for the fallback, measured rather than enforced. None of these is
-inside a frame: the fastest is 27 frames at 60 Hz.
+797ms, and the slowest fallback is 0.69x of a cold run. Each of these
+declined patches costs less than starting over, not more. That is the measured
+multiple M3.9b asks for, not a bound on every patch: a large batch, or one
+whose warm start holds few layers whole, is not among them, and nothing
+enforces it. None of these is inside a frame: the fastest is 27 frames at
+60 Hz.
 
 These were measured on a different machine from the table above, so compare
 each with its own cold run rather than with each other. As there, nothing gates
@@ -292,7 +295,7 @@ that starts taking one of them fails it until the table is re-measured.
 
 Every relayout in the session corpus is a full pipeline run, with one exception
 noted below; no session resizes a node or adds or removes a single leaf on its
-own, so none of the paths above fires there. The stability above comes from what the stages are handed rather than
+own, so none of the fast paths above fires there. The stability above comes from what the stages are handed rather than
 from work they skip, so a structural patch other than a single leaf still costs
 most of a cold layout in time.
 
@@ -315,7 +318,7 @@ has a reason, and none of them is that the corpus cannot see:
 
 What is still missing is most of the work the third bullet does not do. A
 resize and a removed leaf now run only position and route, and an added leaf
-skips the rank stage (see the table above), and no session in this corpus does
+skips the rank stage (see [What a relayout costs](#what-a-relayout-costs)), and no session in this corpus does
 any of those on its own. An added leaf still takes 12 frames, and bringing it
 inside one is what would make a small structural edit cheap in time rather
 than only stable in space.

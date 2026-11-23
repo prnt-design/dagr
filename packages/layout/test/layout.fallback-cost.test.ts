@@ -68,6 +68,7 @@ interface FallbackCostFile {
 
 const costPath = new URL('./fallback-cost.json', import.meta.url);
 
+const FRAME_MS = 1000 / 60;
 const RUNS = 11;
 const WARMUP = 2;
 const INNER = 'fallback-cost-inner';
@@ -178,11 +179,11 @@ function ranOf(samples: readonly Sample[], kind: Kind): readonly LayoutStageName
   return samples.find((sample) => sample.kind === kind)?.ran ?? [];
 }
 
-function ranByKind(spec: GraphSpec): Record<Kind, readonly LayoutStageName[]> {
+function ranByKind(spec: GraphSpec): Record<Sample['kind'], readonly LayoutStageName[]> {
   const { graph, engine, edge, bottom } = setUp(spec);
   const samples = cycle(graph, engine, edge, bottom);
-  return Object.fromEntries(KINDS.map((kind) => [kind, ranOf(samples, kind)])) as Record<
-    Kind,
+  return Object.fromEntries(samples.map((sample) => [sample.kind, sample.ran])) as Record<
+    Sample['kind'],
     readonly LayoutStageName[]
   >;
 }
@@ -251,6 +252,7 @@ describe('what a fallback relayout costs', () => {
       expect({ kind, ran: committed.kinds[kind].ran }).toEqual({ kind, ran: EVERY_STAGE });
       expect({ kind, ran: ran[kind] }).toEqual({ kind, ran: EVERY_STAGE });
     }
+    expect(ran['add-sole-leaf']).toEqual(['order', 'position', 'route']);
   }, 30_000);
 
   it('is the table the docs page publishes, and the ceiling beneath it', () => {
@@ -274,6 +276,7 @@ describe('what a fallback relayout costs', () => {
     for (const phrase of [
       `a cold run of the same graph, measured in the same session, takes ${render(cold)}`,
       `the slowest fallback is ${multiple(slowest, cold)} of a cold run`,
+      `the fastest is ${String(Math.round(Math.min(...KINDS.map((kind) => kinds[kind].total)) / FRAME_MS))} frames at 60 Hz`,
       `${committed.machine.cpu} under Node ${committed.machine.node.replace(/^v/u, '')}`,
       `load average of ${String(committed.machine.loadAverage)}`,
     ]) {
