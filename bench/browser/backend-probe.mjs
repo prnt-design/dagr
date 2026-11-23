@@ -30,8 +30,8 @@
  * Chrome instead of launching one. The output
  * records the browser, mode and flags, because a backend result without them
  * cannot be reproduced. `--parity` adds M4.9b's backend comparison and exits
- * non-zero unless it passes and all seventeen of its controls fail on what
- * they change. It also exits non-zero when the adapter reports `isFallbackAdapter`: a software
+ * non-zero unless it passes and all twenty-three of its controls fail on
+ * what they change. It also exits non-zero when the adapter reports `isFallbackAdapter`: a software
  * adapter such as
  * SwiftShader still comes up on `webgpu`, so its side of the comparison would
  * not be a GPU's. The compared scene has two solid edge ribbons under the
@@ -50,7 +50,8 @@
  * the tenth widens the boxes the page expects and the eleventh swaps the tiers
  * it expects. The tiers are checked again at zoom 0.5 and 2, each with a
  * bounds control, a placement control, and a control that expects zoom 1's
- * tiers.
+ * tiers, and the outline at zoom 0.5 and 1.5, each with a padding control, a
+ * placement control, and a control that expects zoom 1's outline.
  * `--pick` adds M4.8b's check of `pickNode` on both backends at device pixel
  * ratios 1 and 2, and exits non-zero on the same adapter terms or on any pick
  * that disagrees with the shapes' distance functions.
@@ -80,6 +81,9 @@ const GROUP_CONTROL_SHIFT_PX = 1.5;
 const RICH_CONTROL_SHIFT_PX = 1.5;
 // Either side of zoom 1, where the tiers both nodes show differ from zoom 1's.
 const RICH_ZOOMS = [0.5, 2];
+// Either side of zoom 1, with the outline's corners scaled at 0.5; at 2 its
+// left side leaves the frame.
+const GROUP_ZOOMS = [0.5, 1.5];
 
 /**
  * The page's import map, filled in from this process's own module resolution.
@@ -243,7 +247,8 @@ async function composedParity(check, shots, args) {
 /**
  * Why an outline control did not fail on the check it is aimed at, or
  * undefined when it did. `paddingShift` must fail only on the difference the
- * layer adds between the backends, `expectedShift` only on placement.
+ * layer adds between the backends, `expectedShift` and `expectedZoom` only on
+ * placement.
  */
 function groupControlFailure(control, aimedAt) {
   if (control.pass) return 'passed, so the check cannot see a misplaced outline';
@@ -360,6 +365,21 @@ if (cliArgs.includes('--parity')) {
     await composedShots('groupFrame', GROUP_CONTROL_SHIFT_PX),
     { paddingShift: GROUP_CONTROL_SHIFT_PX },
   );
+  parity.groupZooms = [];
+  for (const zoom of GROUP_ZOOMS) {
+    const zoomShots = await composedShots('groupFrame', 0, zoom);
+    const shift = GROUP_CONTROL_SHIFT_PX / zoom;
+    parity.groupZooms.push({
+      zoom,
+      check: await composedParity('groupParity', zoomShots, { zoom }),
+      placementControl: await composedParity('groupParity', zoomShots, { zoom, expectedShift: shift }),
+      zoomControl: await composedParity('groupParity', zoomShots, { zoom, expectedZoom: 1 }),
+      outlineControl: await composedParity('groupParity', await composedShots('groupFrame', shift, zoom), {
+        zoom,
+        paddingShift: shift,
+      }),
+    });
+  }
   const richShots = await composedShots('richFrame', 0);
   parity.rich = await composedParity('richParity', richShots, {});
   parity.richPlacementControl = await composedParity('richParity', richShots, { expectedShift: RICH_CONTROL_SHIFT_PX });
@@ -435,6 +455,23 @@ if (cliArgs.includes('--parity')) {
       `the placement control, with the expected outline ${GROUP_CONTROL_SHIFT_PX} px wider on both sides, ${placementControl}`,
     );
     process.exitCode = 1;
+  }
+  for (const { zoom, check, ...controls } of parity.groupZooms) {
+    if (!check.pass) {
+      console.error(`the group outline check at zoom ${zoom} failed: ${groupFailure(check)}`);
+      process.exitCode = 1;
+    }
+    for (const [key, aimedAt, what] of [
+      ['outlineControl', 'added', `one side's padding ${GROUP_CONTROL_SHIFT_PX} px wider`],
+      ['placementControl', 'placed', `the expected outline ${GROUP_CONTROL_SHIFT_PX} px wider on both sides`],
+      ['zoomControl', 'placed', "zoom 1's outline expected"],
+    ]) {
+      const failure = groupControlFailure(controls[key], aimedAt);
+      if (failure !== undefined) {
+        console.error(`the group ${key} at zoom ${zoom}, with ${what}, ${failure}`);
+        process.exitCode = 1;
+      }
+    }
   }
   if (!parity.rich.pass) {
     console.error(`the rich-node tier check failed: ${richFailure(parity.rich)}`);

@@ -520,14 +520,15 @@ comparison passes on every frame with the ribbons, dashes and curves drawn
 where the page expects them, the above-nodes one over the circle's fill, and
 the group outline and the rich-node tiers composed over the first frame land
 where the page expects them and add no difference between the backends, and
-all seventeen controls (one moves a shape, one every ribbon, the curves included,
+all twenty-three controls (one moves a shape, one every ribbon, the curves included,
 one the dash pattern, one draws the curves as polylines, one holds the flow,
 one draws the above-nodes ribbon below the nodes, one widens one side's
 outline, one the outline the page expects, one moves one side's tier boxes,
 one widens the boxes the page expects, one swaps the tiers the page expects,
-and at zoom 0.5 and at zoom 2 one moves one side's tier boxes, one widens the
-boxes the page expects and one expects zoom 1's tiers) fail on what they
-change,
+at zoom 0.5 and at zoom 2 one moves one side's tier boxes, one widens the
+boxes the page expects and one expects zoom 1's tiers, and at zoom 0.5 and
+at zoom 1.5 one widens one side's outline, one widens the outline the page
+expects and one expects zoom 1's outline) fail on what they change,
 and says on stderr which of these did not hold. It also exits non-zero, saying why on
 stderr before it compares, when the adapter reports `isFallbackAdapter`,
 because a software adapter such as SwiftShader comes up on `'webgpu'` too and
@@ -956,6 +957,32 @@ as the bare ones. The bounds control fails with 2,072 added pixels by up to
 158, the placement control on the spans, and the zoom control with no pixel
 inside the circle in the label colour.
 
+The group outline was checked at zoom 0.5 and 1.5 on 2026-11-23 UTC, on the
+same Apple M4 in Chrome 158.0.8127.37 (`apple` `metal-3`, not a fallback
+adapter), headless and headed. The layer places the outline through the
+camera, scales its corner radius below zoom 1 (5 pixels at 0.5) and keeps its
+title at its own pixel size, so the page's expected outline does the same.
+Zoom 2 would put the outline's left side off the frame, so the zooms are 0.5
+and 1.5 rather than the tiers' 0.5 and 2. Each zoom runs the check and three
+controls: the outline and placement controls above, each still 1.5 device
+pixels (1.5 divided by the zoom, in world units), and a zoom control that
+expects zoom 1's outline and must fail on placement alone.
+
+At zoom 0.5 the check passes: on both backends the layer changes 425 pixels
+on the outline, spanning its 69 by 61 pixel rectangle to within a pixel, and
+188 in the title headless (202 headed), with none elsewhere, and the composed
+frames differ in the same 53 pixels as the bare ones. The outline control
+fails with the layer adding 945 differing pixels by up to 204 (964 headed),
+the placement control with 149 changed pixels off the expected outline (147
+headed), and the zoom control with every changed pixel off it. At zoom 1.5:
+the check passes with 1,280 pixels on the outline (207 by 183) and the same
+title counts, none elsewhere, the composed frames differing in the same 44
+pixels as the bare ones; the outline control fails with 2,255 added pixels by
+up to 204 (2,274 headed), the placement control with 435 pixels off the
+outline (433 headed), and the zoom control with every changed pixel off it.
+Every earlier check and control in the run still passes or fails as before on
+Chrome 158.
+
 **Not a gate.** `bench/README.md`'s argument against a browser measurement in
 `bench:ci` is about timings, and a parity check is not a timing, so that
 argument does not carry. What does is the runner: the check needs a full Chrome
@@ -967,9 +994,9 @@ smooth one since 2026-11-21, the dashes flowed by 4.5 pixels since
 2026-11-22 (so the dashes at rest are no longer compared), a smooth dashed
 one, the flow advancing over three frames and a ribbon on the above-nodes
 layer since that day, and a group outline and rich-node tiers composed over
-the first frame since 2026-11-23, DPR 1. The canvas comparison and the
-outline are at zoom 1; the tiers are at zoom 0.5, 1 and 2. Other zooms for the
-canvas and the outline, and DPR 2, are not compared.
+the first frame since 2026-11-23, DPR 1. The canvas comparison is at zoom
+1, the outline at zoom 0.5, 1 and 1.5, and the tiers at zoom 0.5, 1 and 2.
+Other zooms for the canvas, and DPR 2, are not compared.
 
 ## Node picking (M4.8b)
 
