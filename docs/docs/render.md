@@ -618,15 +618,16 @@ checks:
   The abort check before `init()` is tested.
 - That the two backends agree beyond what the parity check has compared:
   one machine (an Apple M4 in Chrome 155), the two-shape probe scene, zoom 1
-  (the rich-node tiers below also at 0.5 and 2), device pixel ratio 1, with two solid straight edge ribbons added to that
+  (the rich-node tiers below also at 0.5 and 2, the group outline at 0.5 and
+  1.5), device pixel ratio 1, with two solid straight edge ribbons added to that
   scene on 2026-11-17, and two dashed straight ones, a dashed one through two
   joins and a smooth one on 2026-11-21 (Chrome 157), the dashes flowed by
   4.5 pixels since 2026-11-22, and a smooth dashed one, the flow advancing
   over three frames and a ribbon on the above-nodes layer since that day.
   A group outline and rich-node tiers, drawn by the browser rather than by
   either backend, are composed over the first frame since 2026-11-23 and add
-  no difference. Other GPUs, the canvas comparison and the group outline at
-  other zooms, and DPR 2 are unchecked.
+  no difference. Other GPUs, the canvas comparison at other zooms, and DPR 2
+  are unchecked.
   See
   [What is verified, and on which backend](#what-is-verified-and-on-which-backend).
 - That a browser composes the overlay's two transforms the way the algebra says,
@@ -983,7 +984,12 @@ both backends draw the canvas at that zoom and the overlay's layer carries
 `scale(zoom)`: both nodes show the label at 0.5 and the card at 2, each box
 lands where the zoom puts it, and the tiers add no differing pixel, against
 controls at each zoom that move one side's boxes, widen the expected boxes and
-expect zoom 1's tiers, all of which must fail.
+expect zoom 1's tiers, all of which must fail. The outline was then compared
+at zoom 0.5 and 1.5 (Chrome 158), its corners scaled below zoom 1 and its
+title at its own pixel size: it lands where the zoom puts it and adds no
+differing pixel, against controls at each zoom that widen one side's outline,
+widen the expected outline and expect zoom 1's outline, all of which must
+fail.
 
 ## Usage
 
@@ -2099,7 +2105,8 @@ complete, and `<DagrCanvas animate>` drives them from a graph a user is editing
   `DagrCanvas` picks through
   `pickNode` only behind its opt-in `hitTesting="gpu"`. See [Picking](#picking).
 - Backend parity beyond the probe scene and the one machine M4.9b compared on:
-  other GPUs, zooms other than 1 for the canvas comparison and the group
-  outline (the rich-node tiers are also compared at 0.5 and 2), and DPR 2.
+  other GPUs, zooms other than 1 for the canvas comparison (the rich-node
+  tiers are also compared at 0.5 and 2, the group outline at 0.5 and 1.5),
+  and DPR 2.
 - Ten thousand nodes at sixty frames a second, measured rather than hoped for
   (M4.10).

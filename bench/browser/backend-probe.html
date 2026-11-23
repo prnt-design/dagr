@@ -854,6 +854,15 @@
        * side's expected rectangle moves with it. `expectedShift` widens the
        * expected rectangle on both sides and leaves the layers alone, so it
        * fails only if the placement check can see where the outline lies.
+       *
+       * At zoom 0.5 and 1.5 the canvas is drawn at that zoom and the layer
+       * places the outline through that camera, its corner radius scaled
+       * below zoom 1 and its title kept at its own pixel size. Zoom 2 would
+       * push the outline's left side off the frame. `expectedZoom` expects
+       * zoom 1's outline, so it fails only if the placement check can see
+       * that the outline follows the zoom. Both shifts are in world units,
+       * and the runner passes 1.5 / zoom so each moves the outline 1.5
+       * device pixels at every zoom.
        */
       const GROUP = { id: 'group', nodeIds: ['rect'], label: 'group', padding: 24 };
       // Half the 1.5 px stroke plus one device pixel of antialiasing, rounded
@@ -897,13 +906,17 @@
         held.layer = undefined;
       };
 
-      window.groupFrame = (backend, paddingShift = 0) =>
-        composedFrame(backend, (camera, hold) => {
-          const layer = hold(createNodeGroupLayer({ parent: document.getElementById('frame'), camera }));
-          layer.setGroups([{ ...GROUP, padding: GROUP.padding + paddingShift }]);
-          layer.setNodes(NODES);
-          layer.sync();
-        });
+      window.groupFrame = (backend, paddingShift = 0, zoom = 1) =>
+        composedFrame(
+          backend,
+          (camera, hold) => {
+            const layer = hold(createNodeGroupLayer({ parent: document.getElementById('frame'), camera }));
+            layer.setGroups([{ ...GROUP, padding: GROUP.padding + paddingShift }]);
+            layer.setNodes(NODES);
+            layer.sync();
+          },
+          zoom,
+        );
 
       const decodePng = async (base64) => {
         const bytes = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0));
@@ -920,15 +933,15 @@
         Math.max(Math.abs(a[i] - b[i]), Math.abs(a[i + 1] - b[i + 1]), Math.abs(a[i + 2] - b[i + 2]), Math.abs(a[i + 3] - b[i + 3]));
 
       // Where one backend's layer changed its own frame, against where the
-      // outline and title should be for `paddingShift`.
-      const outlineOf = (shown, hidden, padding) => {
+      // outline and title should be for `padding` at `zoom`.
+      const outlineOf = (shown, hidden, padding, zoom) => {
         const { width, height } = shown;
         const bounds = nodeGroupBounds(NODES, { ...GROUP, padding });
         const box = {
-          left: bounds.minX + width / 2,
-          right: bounds.maxX + width / 2,
-          top: height / 2 - bounds.maxY,
-          bottom: height / 2 - bounds.minY,
+          left: bounds.minX * zoom + width / 2,
+          right: bounds.maxX * zoom + width / 2,
+          top: height / 2 - bounds.maxY * zoom,
+          bottom: height / 2 - bounds.minY * zoom,
         };
         // The layer's own title placement (12 px in, baseline 18 px down, 12 px
         // monospace) and its own allowance of 8 px per character, widened by
@@ -943,7 +956,7 @@
           shape: 'roundedRect',
           center: { x: (box.left + box.right) / 2, y: (box.top + box.bottom) / 2 },
           size: { width: box.right - box.left, height: box.bottom - box.top },
-          cornerRadius: GROUP_CORNER_RADIUS,
+          cornerRadius: Math.min(GROUP_CORNER_RADIUS, GROUP_CORNER_RADIUS * zoom),
         };
         const span = { left: Infinity, right: -Infinity, top: Infinity, bottom: -Infinity };
         let ring = 0;
@@ -1013,21 +1026,23 @@
         return { sameSize, backends, canvasMatched, sound, composed, bare, added, gpuShown, gpuHidden, glShown, glHidden };
       };
 
-      window.groupParity = async ({ gpu, gl, paddingShift = 0, expectedShift = 0 }) => {
+      window.groupParity = async ({ gpu, gl, zoom = 1, paddingShift = 0, expectedShift = 0, expectedZoom = zoom }) => {
         const compared = await composedCompare(gpu, gl);
         if (!compared.sameSize) return { pass: false, ...compared };
         const { gpuShown, gpuHidden, glShown, glHidden, ...common } = compared;
         const padding = GROUP.padding + expectedShift;
         const outline = {
-          webgpu: outlineOf(gpuShown, gpuHidden, padding),
-          webgl2: outlineOf(glShown, glHidden, padding + paddingShift),
+          webgpu: outlineOf(gpuShown, gpuHidden, padding, expectedZoom),
+          webgl2: outlineOf(glShown, glHidden, padding + paddingShift, expectedZoom),
         };
         const placed = outline.webgpu.placed && outline.webgl2.placed;
         return {
           pass: common.sound && placed && common.added.pixels === 0,
           ...common,
+          zoom,
           paddingShift,
           expectedShift,
+          expectedZoom,
           placed,
           outline,
         };
