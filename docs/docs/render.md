@@ -623,7 +623,9 @@ checks:
   joins and a smooth one on 2026-11-21 (Chrome 157), the dashes flowed by
   4.5 pixels since 2026-11-22, and a smooth dashed one, the flow advancing
   over three frames and a ribbon on the above-nodes layer since that day.
-  Other GPUs, zooms, group outlines, rich-node tiers and DPR 2 are unchecked.
+  A group outline, drawn by the browser rather than by either backend, is
+  composed over the first frame since 2026-11-23 and adds no difference.
+  Other GPUs, zooms, rich-node tiers and DPR 2 are unchecked.
   See
   [What is verified, and on which backend](#what-is-verified-and-on-which-backend).
 - That a browser composes the overlay's two transforms the way the algebra says.
@@ -2075,6 +2077,6 @@ complete, and `<DagrCanvas animate>` drives them from a graph a user is editing
   `DagrCanvas` picks through
   `pickNode` only behind its opt-in `hitTesting="gpu"`. See [Picking](#picking).
 - Backend parity beyond the probe scene and the one machine M4.9b compared on:
-  other GPUs, zooms, group outlines, rich-node tiers and DPR 2.
+  other GPUs, zooms, rich-node tiers and DPR 2.
 - Ten thousand nodes at sixty frames a second, measured rather than hoped for
   (M4.10).
