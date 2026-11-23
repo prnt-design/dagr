@@ -257,6 +257,37 @@ nothing gates on it. The test that holds this table to the committed file also
 checks, on the 1k corpus, which stages each patch kind runs, so a fast path that
 fires there without a re-measure fails it.
 
+## What a fallback costs
+
+A patch no fast path takes runs all four stages, warm-started from the drawing
+the engine holds. These are wall-clock milliseconds for one `engine.relayout`
+of such a patch on the same 10k corpus at the defaults, measured on an AMD
+Ryzen 9 9900X 12-Core Processor under Node 22.22.1 at a one-minute load average
+of 0.21. A cycle inserts a node into the middle of an edge and removes it, adds
+the reverse of that edge and removes it, then adds a leaf under a node on the
+last rank, on the added-leaf path and untimed, and removes it. Each figure is a
+median over eleven cycles after two warmups.
+
+| Patch | whole relayout | of a cold run |
+| --- | --- | --- |
+| add a node with an edge in and an edge out | 533ms | 0.67x |
+| remove that node | 464ms | 0.58x |
+| add an edge that closes a cycle | 474ms | 0.59x |
+| remove that edge | 548ms | 0.69x |
+| remove a leaf alone on its rank | 448ms | 0.56x |
+
+In the table, a cold run of the same graph, measured in the same session, takes
+797ms, and the slowest fallback is 0.69x of a cold run. On this corpus a
+declined patch costs less than starting over, not more. That is M3.9b's stated
+ceiling for the fallback, measured rather than enforced. None of these is
+inside a frame: the fastest is 27 frames at 60 Hz.
+
+These were measured on a different machine from the table above, so compare
+each with its own cold run rather than with each other. As there, nothing gates
+on it. The test that holds this table to the committed file also checks, on the
+1k corpus, that every patch it times still runs all four stages, so a fast path
+that starts taking one of them fails it until the table is re-measured.
+
 ## What is not here yet
 
 Every relayout in the session corpus is a full pipeline run, with one exception
@@ -299,6 +330,7 @@ evidence, and the compounding above is exactly the evidence that reopens it.
 ```
 UPDATE_GOLDEN=1 pnpm --filter @prnt/dagr-layout test layout.sequence.golden
 MEASURE_COST=1 pnpm --filter @prnt/dagr-layout test layout.relayout-cost
+MEASURE_COST=1 pnpm --filter @prnt/dagr-layout test layout.fallback-cost
 ```
 
 Do it when you deliberately changed what the pipeline does and can say what

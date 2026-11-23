@@ -1,0 +1,66 @@
+{
+  "measure": "MEASURE_COST=1 pnpm --filter @prnt/dagr-layout test layout.fallback-cost",
+  "isNotABaseline": "Wall-clock milliseconds on one machine, published so M3.9b states its fallback as a measured multiple of a cold run. Nothing gates on it and the benchmark gate never reads it.",
+  "machine": {
+    "platform": "linux",
+    "arch": "x64",
+    "cpu": "AMD Ryzen 9 9900X 12-Core Processor",
+    "cores": 24,
+    "node": "v22.22.1",
+    "loadAverage": 0.21
+  },
+  "runs": 11,
+  "corpus": {
+    "name": "large-10k",
+    "nodes": 10000,
+    "edges": 40000
+  },
+  "cold": 797.423,
+  "kinds": {
+    "add-inner-node": {
+      "ran": [
+        "rank",
+        "order",
+        "position",
+        "route"
+      ],
+      "total": 532.712
+    },
+    "remove-inner-node": {
+      "ran": [
+        "rank",
+        "order",
+        "position",
+        "route"
+      ],
+      "total": 464.257
+    },
+    "add-cycle-edge": {
+      "ran": [
+        "rank",
+        "order",
+        "position",
+        "route"
+      ],
+      "total": 473.545
+    },
+    "remove-cycle-edge": {
+      "ran": [
+        "rank",
+        "order",
+        "position",
+        "route"
+      ],
+      "total": 548.02
+    },
+    "remove-sole-leaf": {
+      "ran": [
+        "rank",
+        "order",
+        "position",
+        "route"
+      ],
+      "total": 448.482
+    }
+  }
+}
