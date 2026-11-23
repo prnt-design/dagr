@@ -650,6 +650,9 @@ export function createLayout(options: LayoutEngineOptions = {}): LayoutEngine {
    * All three are proportional to the live graph and never to patch history:
    * every relayout rebuilds them whole from the run it just did, which is what
    * makes a removed node's entry impossible to leak rather than merely unlikely.
+   * The one exception is bounded by the last full run rather than by history:
+   * a fast path's sizes read off that run's map, which keeps the size of a node
+   * removed since until the next full run (see `heldSizes` in `pipeline.ts`).
    * That is a property of {@link warmStartOf} rather than a free consequence of
    * rebuilding, and the first version of this file did not have it. The
    * incremental implementations from M3.5 on will not have it for free either,

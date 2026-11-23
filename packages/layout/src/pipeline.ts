@@ -977,14 +977,6 @@ function heldRanked(
   held: PreviousLayout,
   ranks: ReadonlyMap<NodeId, number>,
 ): RankedState {
-  const sizes = new Map(prepared.sizes);
-  for (const id of held.virtualNodes) {
-    const size = held.sizes.get(id);
-    if (size === undefined) {
-      throw new InternalLayoutError(`the held drawing declared ${id} and kept no size for it`);
-    }
-    sizes.set(id, size);
-  }
   return {
     graph: prepared.graph,
     config: prepared.config,
@@ -993,8 +985,117 @@ function heldRanked(
     reversedEdges: held.reversedEdges,
     virtualNodes: held.virtualNodes,
     virtualChains: held.virtualChains,
-    sizes,
+    sizes: heldSizes(prepared.sizes, held.virtualNodes, held.sizes),
   };
+}
+
+/**
+ * The sizes a fast path hands its stages: each of this run's nodes as `prepare`
+ * measured it, and each held dummy as the run that minted it did.
+ *
+ * Read off the map the last full run built because the 10k corpus's roster is
+ * 184,222 members, and copying them took 20ms to 23ms of every fast path on a
+ * Ryzen 9 9900X. Only the nodes whose size that map no longer gives are kept
+ * beside it, the ones resized or added since and the ones removed, because
+ * asking this run's sizes first for every id made the position stage about
+ * 12ms slower on the Apple M4. When there are none the map itself is the
+ * answer, and each view is built over the full run's map rather than over the
+ * last view, so a run of fast paths holds one full run's sizes and no chain of
+ * views.
+ *
+ * Every held dummy has a size in that map because the rank check required one
+ * on the full run, and every fast path since kept the same dummies. Correct
+ * only because node ids and dummy ids are disjoint: the rank check enforces it
+ * on the full run, and no fast path ranks a node that is already a held dummy.
+ */
+export function heldSizes(
+  nodes: ReadonlyMap<NodeId, Size>,
+  dummies: ReadonlySet<NodeId>,
+  held: ReadonlyMap<NodeId, Size>,
+): ReadonlyMap<NodeId, Size> {
+  const base = held instanceof HeldSizes ? held.base : held;
+  const changed = new Map<NodeId, Size>();
+  let kept = 0;
+  for (const [id, size] of nodes) {
+    const was = base.get(id);
+    if (was === undefined) {
+      changed.set(id, size);
+      continue;
+    }
+    kept += 1;
+    if (was.width !== size.width || was.height !== size.height) changed.set(id, size);
+  }
+  const gone = new Set<NodeId>();
+  if (kept + dummies.size < base.size) {
+    const candidates = held instanceof HeldSizes ? held.nodeIds() : base.keys();
+    for (const id of candidates) {
+      if (!nodes.has(id) && !dummies.has(id) && base.has(id)) gone.add(id);
+    }
+  }
+  if (changed.size === 0 && gone.size === 0) return base;
+  return new HeldSizes(base, changed, gone, nodes, base.size - gone.size + nodes.size - kept);
+}
+
+/** The view {@link heldSizes} builds when the full run's map is not the answer. */
+class HeldSizes implements ReadonlyMap<NodeId, Size> {
+  readonly base: ReadonlyMap<NodeId, Size>;
+  readonly size: number;
+  readonly #changed: ReadonlyMap<NodeId, Size>;
+  readonly #gone: ReadonlySet<NodeId>;
+  readonly #nodes: ReadonlyMap<NodeId, Size>;
+
+  constructor(
+    base: ReadonlyMap<NodeId, Size>,
+    changed: ReadonlyMap<NodeId, Size>,
+    gone: ReadonlySet<NodeId>,
+    nodes: ReadonlyMap<NodeId, Size>,
+    size: number,
+  ) {
+    this.base = base;
+    this.#changed = changed;
+    this.#gone = gone;
+    this.#nodes = nodes;
+    this.size = size;
+  }
+
+  /** Every id that could be a node `base` holds and the next run does not. */
+  *nodeIds(): Generator<NodeId> {
+    yield* this.#gone;
+    yield* this.#nodes.keys();
+  }
+
+  get(id: NodeId): Size | undefined {
+    const changed = this.#changed.get(id);
+    if (changed !== undefined) return changed;
+    return this.#gone.has(id) ? undefined : this.base.get(id);
+  }
+
+  has(id: NodeId): boolean {
+    return this.#changed.has(id) || (!this.#gone.has(id) && this.base.has(id));
+  }
+
+  forEach(visit: (size: Size, id: NodeId, map: ReadonlyMap<NodeId, Size>) => void): void {
+    for (const [id, size] of this) visit(size, id, this);
+  }
+
+  *entries(): MapIterator<[NodeId, Size]> {
+    for (const [id, size] of this.base) {
+      if (!this.#gone.has(id)) yield [id, this.#changed.get(id) ?? size];
+    }
+    for (const [id, size] of this.#changed) if (!this.base.has(id)) yield [id, size];
+  }
+
+  *keys(): MapIterator<NodeId> {
+    for (const [id] of this) yield id;
+  }
+
+  *values(): MapIterator<Size> {
+    for (const [, size] of this) yield size;
+  }
+
+  [Symbol.iterator](): MapIterator<[NodeId, Size]> {
+    return this.entries();
+  }
 }
 
 /**
