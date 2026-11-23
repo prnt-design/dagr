@@ -619,7 +619,7 @@ checks:
 - That the two backends agree beyond what the parity check has compared:
   one machine (an Apple M4 in Chrome 155), the two-shape probe scene, zoom 1
   (the rich-node tiers below also at 0.5 and 2, the group outline at 0.5 and
-  1.5), device pixel ratio 1, with two solid straight edge ribbons added to that
+  1.5 in Chrome 158), device pixel ratio 1, with two solid straight edge ribbons added to that
   scene on 2026-11-17, and two dashed straight ones, a dashed one through two
   joins and a smooth one on 2026-11-21 (Chrome 157), the dashes flowed by
   4.5 pixels since 2026-11-22, and a smooth dashed one, the flow advancing

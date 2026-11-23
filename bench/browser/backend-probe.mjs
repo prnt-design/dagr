@@ -81,8 +81,8 @@ const GROUP_CONTROL_SHIFT_PX = 1.5;
 const RICH_CONTROL_SHIFT_PX = 1.5;
 // Either side of zoom 1, where the tiers both nodes show differ from zoom 1's.
 const RICH_ZOOMS = [0.5, 2];
-// Either side of zoom 1, with the outline's corners scaled at 0.5; at 2 the
-// outline leaves the frame.
+// Either side of zoom 1, with the outline's corners scaled at 0.5; at 2 its
+// left side leaves the frame.
 const GROUP_ZOOMS = [0.5, 1.5];
 
 /**
@@ -247,7 +247,8 @@ async function composedParity(check, shots, args) {
 /**
  * Why an outline control did not fail on the check it is aimed at, or
  * undefined when it did. `paddingShift` must fail only on the difference the
- * layer adds between the backends, `expectedShift` only on placement.
+ * layer adds between the backends, `expectedShift` and `expectedZoom` only on
+ * placement.
  */
 function groupControlFailure(control, aimedAt) {
   if (control.pass) return 'passed, so the check cannot see a misplaced outline';
