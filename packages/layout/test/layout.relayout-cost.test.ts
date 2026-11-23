@@ -58,7 +58,7 @@ interface RelayoutCostFile {
   readonly runs: number;
   readonly corpus: { readonly name: string; readonly nodes: number; readonly edges: number };
   readonly stageNames: Readonly<Record<string, string>>;
-  /** A cold `run` of the same graph, which is what a fallback costs. */
+  /** A cold `run` of the same graph, the reference a fast path is judged against. */
   readonly cold: number;
   readonly kinds: Readonly<Record<Kind, KindRow>>;
 }
