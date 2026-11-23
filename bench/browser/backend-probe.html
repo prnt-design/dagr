@@ -859,6 +859,8 @@
       // up.
       const GROUP_RING_DEVICE_PX = 2;
       const GROUP_CORNER_RADIUS = 10;
+      // Shared by the group outline and the rich-node tiers below: the held
+      // renderer and layer, and the latest draw's canvas read back.
       let held;
       const composedCanvas = {};
 
@@ -1053,8 +1055,9 @@
        * Three controls. `boundsShift` moves every node's box on the WebGL2
        * side by that much in x and y, and that side's expected boxes with it,
        * so it fails only on the difference the tiers add. `expectedShift`
-       * widens the expected boxes on both sides, so it fails only on
-       * placement. `swapTiers` expects each node's tier on the other node, so
+       * widens the expected boxes on both sides, so it fails on
+       * placement, and may fail on the colour with it, since a wider box takes
+       * uncovered pixels into the colour test. `swapTiers` expects each node's tier on the other node, so
        * it fails only if the check can see which tier a node shows.
        */
       const RICH_TIERS = [
@@ -1070,8 +1073,8 @@
         update: () => {},
       }));
       const RICH_EXPECTED = { rect: 'card', circle: 'label' };
-      // Every box edge lands on a whole CSS pixel, so one pixel covers where
-      // a compositor rounds a shifted box.
+      // Every box edge lands on, or within half a pixel of, a whole CSS
+      // pixel, so one pixel covers where a compositor rounds a shifted box.
       const RICH_EDGE_DEVICE_PX = 1;
 
       const richBounds = (node, shift, grow = 0) => ({

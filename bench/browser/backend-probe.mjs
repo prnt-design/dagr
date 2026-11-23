@@ -153,7 +153,10 @@ function controlFailure(control, moved) {
   return failedOnShift ? undefined : `failed, but not on what it changes: ${parityFailure(control)}`;
 }
 
-/** The reasons every composed layer shares, or undefined when it cannot say more. */
+/**
+ * The reasons every composed layer shares: `{ done }` when the check stopped
+ * before comparing, otherwise `{ reasons }` to add to.
+ */
 function composedReasons(check) {
   if (check.error !== undefined) return { done: check.error };
   if (!check.sameSize) return { done: `the composed frames are different sizes: ${JSON.stringify(check.sizes)}` };
@@ -341,23 +344,25 @@ if (cliArgs.includes('--parity')) {
     flowControl: await page.evaluate(() => window.parity(0, 0, 0, false, true)),
     layerControl: await page.evaluate(() => window.parity(0, 0, 0, false, false, true)),
   };
+  // The page keeps only the latest draw's canvas read back, so every check
+  // that reuses a set of screenshots runs before the next draw.
   const shots = await composedShots('groupFrame', 0);
   parity.groups = await composedParity('groupParity', shots, {});
+  parity.placementControl = await composedParity('groupParity', shots, { expectedShift: GROUP_CONTROL_SHIFT_PX });
   parity.outlineControl = await composedParity(
     'groupParity',
     await composedShots('groupFrame', GROUP_CONTROL_SHIFT_PX),
     { paddingShift: GROUP_CONTROL_SHIFT_PX },
   );
-  parity.placementControl = await composedParity('groupParity', shots, { expectedShift: GROUP_CONTROL_SHIFT_PX });
   const richShots = await composedShots('richFrame', 0);
   parity.rich = await composedParity('richParity', richShots, {});
+  parity.richPlacementControl = await composedParity('richParity', richShots, { expectedShift: RICH_CONTROL_SHIFT_PX });
+  parity.tierControl = await composedParity('richParity', richShots, { swapTiers: true });
   parity.richBoundsControl = await composedParity(
     'richParity',
     await composedShots('richFrame', RICH_CONTROL_SHIFT_PX),
     { boundsShift: RICH_CONTROL_SHIFT_PX },
   );
-  parity.richPlacementControl = await composedParity('richParity', richShots, { expectedShift: RICH_CONTROL_SHIFT_PX });
-  parity.tierControl = await composedParity('richParity', richShots, { swapTiers: true });
   if (!parity.check.pass) {
     console.error(`the parity check failed: ${parityFailure(parity.check)}`);
     process.exitCode = 1;
@@ -415,13 +420,13 @@ if (cliArgs.includes('--parity')) {
     process.exitCode = 1;
   }
   for (const [key, aimedAt, what] of [
-    ['richBoundsControl', 'added', `with one side's tier boxes moved ${RICH_CONTROL_SHIFT_PX} px`],
-    ['richPlacementControl', 'placed', `with the expected tier boxes ${RICH_CONTROL_SHIFT_PX} px wider on both sides`],
-    ['tierControl', 'tiered', "with each node expecting the other node's tier"],
+    ['richBoundsControl', 'added', `the rich bounds control, with one side's tier boxes moved ${RICH_CONTROL_SHIFT_PX} px`],
+    ['richPlacementControl', 'placed', `the rich placement control, with the expected tier boxes ${RICH_CONTROL_SHIFT_PX} px wider on both sides`],
+    ['tierControl', 'tiered', "the tier control, with each node expecting the other node's tier"],
   ]) {
     const failure = richControlFailure(parity[key], aimedAt);
     if (failure !== undefined) {
-      console.error(`the tier control ${what}, ${failure}`);
+      console.error(`${what}, ${failure}`);
       process.exitCode = 1;
     }
   }
