@@ -30,8 +30,8 @@
  * Chrome instead of launching one. The output
  * records the browser, mode and flags, because a backend result without them
  * cannot be reproduced. `--parity` adds M4.9b's backend comparison and exits
- * non-zero unless it passes and all eleven of its controls fail on what they
- * change. It also exits non-zero when the adapter reports `isFallbackAdapter`: a software
+ * non-zero unless it passes and all seventeen of its controls fail on what
+ * they change. It also exits non-zero when the adapter reports `isFallbackAdapter`: a software
  * adapter such as
  * SwiftShader still comes up on `webgpu`, so its side of the comparison would
  * not be a GPU's. The compared scene has two solid edge ribbons under the
@@ -48,7 +48,9 @@
  * tiers, `createRichNodes` over `createHtmlOverlay`, are composed and
  * screenshotted the same way; the ninth control moves one side's tier boxes,
  * the tenth widens the boxes the page expects and the eleventh swaps the tiers
- * it expects.
+ * it expects. The tiers are checked again at zoom 0.5 and 2, each with a
+ * bounds control, a placement control, and a control that expects zoom 1's
+ * tiers.
  * `--pick` adds M4.8b's check of `pickNode` on both backends at device pixel
  * ratios 1 and 2, and exits non-zero on the same adapter terms or on any pick
  * that disagrees with the shapes' distance functions.
@@ -76,6 +78,8 @@ const DASH_CONTROL_SHIFT_PX = 3;
 const GROUP_CONTROL_SHIFT_PX = 1.5;
 // More than the 1 px a tier's box edge may sit from where the page expects it.
 const RICH_CONTROL_SHIFT_PX = 1.5;
+// Either side of zoom 1, where the tiers both nodes show differ from zoom 1's.
+const RICH_ZOOMS = [0.5, 2];
 
 /**
  * The page's import map, filled in from this process's own module resolution.
@@ -207,15 +211,16 @@ function richFailure(check) {
 /**
  * A composed layer's frames on both backends, each screenshotted with the
  * layer shown and hidden, or an error. `frame` names the page function that
- * mounts the layer, given the WebGL2 side's control `shift`.
+ * mounts the layer, given the WebGL2 side's control `shift` and the `zoom`.
  */
-async function composedShots(frame, shift) {
+async function composedShots(frame, shift, zoom = 1) {
   const shots = {};
   for (const backend of ['webgpu', 'webgl2']) {
-    const mounted = await page.evaluate(([name, value, by]) => window[name](value, by), [
+    const mounted = await page.evaluate(([name, value, by, at]) => window[name](value, by, at), [
       frame,
       backend,
       backend === 'webgl2' ? shift : 0,
+      zoom,
     ]);
     if (mounted.error !== undefined) return { error: `${backend}: ${mounted.error}` };
     try {
@@ -253,9 +258,10 @@ function groupControlFailure(control, aimedAt) {
 
 /**
  * The same for a tier control: `boundsShift` must fail only on the difference
- * the tiers add, `expectedShift` only on placement, `swapTiers` only on which
- * tier a node shows. A wider expected box also takes pixels the tiers do not
- * cover into the colour test, so `expectedShift` may fail on the colour too.
+ * the tiers add, `expectedShift` only on placement, `swapTiers` and
+ * `expectedZoom` only on which tier a node shows. A wider expected box also
+ * takes pixels the tiers do not cover into the colour test, so
+ * `expectedShift` may fail on the colour too.
  */
 function richControlFailure(control, aimedAt) {
   if (control.pass) return 'passed, so the check cannot see a misplaced or wrong tier';
@@ -363,6 +369,21 @@ if (cliArgs.includes('--parity')) {
     await composedShots('richFrame', RICH_CONTROL_SHIFT_PX),
     { boundsShift: RICH_CONTROL_SHIFT_PX },
   );
+  parity.richZooms = [];
+  for (const zoom of RICH_ZOOMS) {
+    const zoomShots = await composedShots('richFrame', 0, zoom);
+    const boundsShift = RICH_CONTROL_SHIFT_PX / zoom;
+    parity.richZooms.push({
+      zoom,
+      check: await composedParity('richParity', zoomShots, { zoom }),
+      placementControl: await composedParity('richParity', zoomShots, { zoom, expectedShift: RICH_CONTROL_SHIFT_PX }),
+      zoomControl: await composedParity('richParity', zoomShots, { zoom, expectedZoom: 1 }),
+      boundsControl: await composedParity('richParity', await composedShots('richFrame', boundsShift, zoom), {
+        zoom,
+        boundsShift,
+      }),
+    });
+  }
   if (!parity.check.pass) {
     console.error(`the parity check failed: ${parityFailure(parity.check)}`);
     process.exitCode = 1;
@@ -428,6 +449,23 @@ if (cliArgs.includes('--parity')) {
     if (failure !== undefined) {
       console.error(`${what}, ${failure}`);
       process.exitCode = 1;
+    }
+  }
+  for (const { zoom, check, ...controls } of parity.richZooms) {
+    if (!check.pass) {
+      console.error(`the rich-node tier check at zoom ${zoom} failed: ${richFailure(check)}`);
+      process.exitCode = 1;
+    }
+    for (const [key, aimedAt, what] of [
+      ['boundsControl', 'added', `one side's tier boxes moved ${RICH_CONTROL_SHIFT_PX} px`],
+      ['placementControl', 'placed', `the expected tier boxes ${RICH_CONTROL_SHIFT_PX} px wider on both sides`],
+      ['zoomControl', 'tiered', "zoom 1's tiers expected"],
+    ]) {
+      const failure = richControlFailure(controls[key], aimedAt);
+      if (failure !== undefined) {
+        console.error(`the rich ${key} at zoom ${zoom}, with ${what}, ${failure}`);
+        process.exitCode = 1;
+      }
     }
   }
 }

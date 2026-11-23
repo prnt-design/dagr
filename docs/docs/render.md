@@ -617,22 +617,26 @@ checks:
   Deleting it leaves the suite green, which was measured rather than assumed.
   The abort check before `init()` is tested.
 - That the two backends agree beyond what the parity check has compared:
-  one machine (an Apple M4 in Chrome 155), the two-shape probe scene, zoom 1,
-  device pixel ratio 1, with two solid straight edge ribbons added to that
+  one machine (an Apple M4 in Chrome 155), the two-shape probe scene, zoom 1
+  (the rich-node tiers below also at 0.5 and 2), device pixel ratio 1, with two solid straight edge ribbons added to that
   scene on 2026-11-17, and two dashed straight ones, a dashed one through two
   joins and a smooth one on 2026-11-21 (Chrome 157), the dashes flowed by
   4.5 pixels since 2026-11-22, and a smooth dashed one, the flow advancing
   over three frames and a ribbon on the above-nodes layer since that day.
   A group outline and rich-node tiers, drawn by the browser rather than by
   either backend, are composed over the first frame since 2026-11-23 and add
-  no difference. Other GPUs, zooms and DPR 2 are unchecked.
+  no difference. Other GPUs, the canvas comparison and the group outline at
+  other zooms, and DPR 2 are unchecked.
   See
   [What is verified, and on which backend](#what-is-verified-and-on-which-backend).
-- That a browser composes the overlay's two transforms the way the algebra says.
-  The layer's `translate() scale()` and an entry's own transform are asserted as
-  strings by a suite that never renders them, so a wrong composition order or a
-  wrong `transform-origin` would be a green suite and a label half its own size
-  away from its shape. The screenshot is what checks it.
+- That a browser composes the overlay's two transforms the way the algebra says,
+  for point entries. The layer's `translate() scale()` and an entry's own
+  transform are asserted as strings by a suite that never renders them, so a
+  wrong composition order or a wrong `transform-origin` would be a green suite
+  and a label half its own size away from its shape. A screenshot is what
+  checks it, and for box entries one does since 2026-11-23: the backend parity
+  check's rich-node tiers at zoom 0.5 and 2 land on their nodes' boxes to the
+  pixel on an Apple M4 in Chrome 157.
 - That the reason the overlay rebases its layer origin is quantitatively right.
   Compositor transforms being single precision, and 1e7 CSS pixels being where
   that starts to show, is a reading of how browsers work rather than something
@@ -974,7 +978,12 @@ the rectangle shows the card tier and the circle the label tier, each tier's
 box covers its node's bounds and nothing else on both sides, and the tiers add
 no differing pixel, against controls that move one side's boxes, widen the
 boxes the page expects and swap the tiers it expects, all of which must
-fail.
+fail. The same day the tiers were compared at zoom 0.5 and 2 as well, where
+both backends draw the canvas at that zoom and the overlay's layer carries
+`scale(zoom)`: both nodes show the label at 0.5 and the card at 2, each box
+lands where the zoom puts it, and the tiers add no differing pixel, against
+controls at each zoom that move one side's boxes, widen the expected boxes and
+expect zoom 1's tiers, all of which must fail.
 
 ## Usage
 
@@ -1245,7 +1254,8 @@ controls inside it.
 Two claims in this section are not executed by any test, and they belong on the
 list further up this page rather than being left implied. That a browser
 composes the layer's transform and an entry's the way the algebra says is
-verified by the committed screenshot and by nothing else. And the float32
+verified by the committed screenshot and, for box entries, by the backend
+parity check's rich-node tiers at zoom 0.5 and 2 (Apple M4, Chrome 157). And the float32
 argument for rebasing is a reading of how compositors work plus the absence of
 jitter at the zoom the demo reaches, which is evidence rather than a
 measurement.
@@ -2089,6 +2099,7 @@ complete, and `<DagrCanvas animate>` drives them from a graph a user is editing
   `DagrCanvas` picks through
   `pickNode` only behind its opt-in `hitTesting="gpu"`. See [Picking](#picking).
 - Backend parity beyond the probe scene and the one machine M4.9b compared on:
-  other GPUs, zooms and DPR 2.
+  other GPUs, zooms other than 1 for the canvas comparison and the group
+  outline (the rich-node tiers are also compared at 0.5 and 2), and DPR 2.
 - Ten thousand nodes at sixty frames a second, measured rather than hoped for
   (M4.10).
