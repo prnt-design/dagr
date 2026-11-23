@@ -259,8 +259,9 @@ function groupControlFailure(control, aimedAt) {
 /**
  * The same for a tier control: `boundsShift` must fail only on the difference
  * the tiers add, `expectedShift` only on placement, `swapTiers` and
- * `expectedZoom` only on which tier a node shows. A wider expected box also takes pixels the tiers do not
- * cover into the colour test, so `expectedShift` may fail on the colour too.
+ * `expectedZoom` only on which tier a node shows. A wider expected box also
+ * takes pixels the tiers do not cover into the colour test, so
+ * `expectedShift` may fail on the colour too.
  */
 function richControlFailure(control, aimedAt) {
   if (control.pass) return 'passed, so the check cannot see a misplaced or wrong tier';

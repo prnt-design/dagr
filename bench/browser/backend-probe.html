@@ -1068,8 +1068,9 @@
        * 120) show the card. There `swapTiers` would expect what is already
        * expected, so `expectedZoom` stands in for it: it expects zoom 1's
        * tiers, and fails only if the check can see that the tiers follow the
-       * zoom. Shifts and growth are in device pixels at every zoom, so the
-       * runner passes `boundsShift` in world units divided by the zoom.
+       * zoom. Each control moves an edge 1.5 device pixels at every zoom:
+       * `expectedShift` is in device pixels, and the runner passes
+       * `boundsShift` as 1.5 / zoom world units.
        */
       const RICH_TIERS = [
         { name: 'label', color: 0xe63946, minScreenWidth: 24, maxScreenWidth: 75 },

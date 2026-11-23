@@ -917,18 +917,6 @@ that node should show. Three controls, each 1.5 pixels or a swap:
 - The tier control reuses them too and expects each node's tier on the other
   node. The run fails if it passes or fails on anything but the colours.
 
-The tiers are also checked at zoom 0.5 and 2, the same day. Both backends draw
-the first frame at that zoom, and the overlay's layer carries `scale(zoom)`,
-which the browser composes with each box's own transform, so this is the
-first check that renders that composition. The gates are read on screen: at
-0.5 the rectangle is 45 pixels wide and the circle 30, so both show the label;
-at 2 they are 180 and 120, so both show the card. Each zoom runs the check and
-three controls of its own: the bounds and placement controls above, each still
-1.5 device pixels (the bounds shift is given in world units divided by the
-zoom), and a zoom control that expects zoom 1's tiers, in place of the tier
-control, which would expect the same tier on both nodes. The run fails if the
-zoom control passes or fails on anything but the colours.
-
 **What it found on 2026-11-23 UTC**, on the same Apple M4 Mac mini in Google
 Chrome 157.0.8103.79, headless and headed, no flags, adapter `apple`
 `metal-3`, not a fallback: the check passes, and the canvas comparison's and
@@ -940,6 +928,18 @@ differ in the same 81 pixels as the bare ones, so the tiers add none. The
 bounds control fails with the tiers adding 1,032 differing pixels by up to
 228, the placement control on both boxes' spans, and the tier control with no
 pixel inside either box in the swapped tier's colour.
+
+The tiers are also checked at zoom 0.5 and 2, the same day. Both backends draw
+the first frame at that zoom, and the overlay's layer carries `scale(zoom)`,
+which the browser composes with each box's own transform, so this is the
+first check that renders that composition. The gates are read on screen: at
+0.5 the rectangle is 45 pixels wide and the circle 30, so both show the label;
+at 2 they are 180 and 120, so both show the card. Each zoom runs the check and
+three controls of its own: the bounds and placement controls above, each still
+1.5 device pixels (the bounds shift is 1.5 divided by the zoom, in world
+units), and a zoom control that expects zoom 1's tiers, in place of the tier
+control, which would expect the same tier on both nodes. The run fails if the
+zoom control passes or fails on anything but the colours.
 
 At zoom 0.5, on the same machine and browser, headless and headed: the check
 passes. On both backends the label changes 1,196 pixels on the rectangle (its
