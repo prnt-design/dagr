@@ -518,9 +518,12 @@ through `'webgl2'` and compares each frame pixel by pixel with the other
 backend's. It exits non-zero unless both backends came up as named, the
 comparison passes on every frame with the ribbons, dashes and curves drawn
 where the page expects them, the above-nodes one over the circle's fill, and
-all six controls (one moves a shape, one every ribbon, the curves included,
-one the dash pattern, one draws the curves as polylines, one holds the flow,
-one draws the above-nodes ribbon below the nodes) fail on what they change,
+the group outline composed over the first frame lands where the page expects
+it and adds no difference between the backends, and all eight controls (one
+moves a shape, one every ribbon, the curves included, one the dash pattern,
+one draws the curves as polylines, one holds the flow, one draws the
+above-nodes ribbon below the nodes, one widens one side's outline, one the
+outline the page expects) fail on what they change,
 and says on stderr which of these did not hold. It also exits non-zero, saying why on
 stderr before it compares, when the adapter reports `isFallbackAdapter`,
 because a software adapter such as SwiftShader comes up on `'webgpu'` too and
@@ -842,6 +845,49 @@ shifts this ribbon too, fails with 12,454 band and 8,847 interior pixels; the
 other controls fail with the numbers above. `--pick`, added to the second
 headed run, still passed on both backends at DPR 1 and 2, 9,532 picks each.
 
+**A group outline joined the comparison on 2026-11-23 UTC.** The outline is
+`createNodeGroupLayer`'s SVG, drawn by the browser over the canvas rather than
+by either backend, so the two backends cannot draw it differently. What can
+differ is the frame it is composed into: where the layer lands over the canvas
+and what it covers there. So the runner draws the scene's first frame on each
+backend, leaves the renderer alive, mounts one group around the rectangle
+(padding 24, titled `group`, so its outline crosses three ribbons), and
+screenshots the canvas and layer together, once with the layer shown and once
+without it. Each screenshot without the layer must match the canvas read back
+from the same renderer, pixel for pixel, or a blank screenshot on one side
+would make the bare frames differ everywhere and excuse anything the layer
+adds. On each backend, every pixel the layer changes must lie within 2 device
+pixels of the outline's rounded rectangle (half the 1.5 pixel stroke and a pixel
+of antialiasing, rounded up) or inside the title's box, and the changed pixels
+on the outline must span that rectangle to within the same 2 pixels. Between
+the backends, a pixel that differs in the composed frames must already differ
+in the bare ones, so the layer adds no difference. Two controls come with it,
+each 1.5 pixels, inside the 2 pixel ring, so only the check it is aimed at can
+see it:
+
+- The outline control widens the WebGL2 side's padding, and the page's
+  expected rectangle on that side with it. The run fails if this control passes
+  or fails on anything but a difference the layer adds between the backends.
+- The placement control reuses the check's screenshots and widens the
+  rectangle the page expects on both sides. The run fails if this control
+  passes or fails on anything but the outline's placement.
+
+**What it found on 2026-11-23 UTC**, on the same Apple M4 Mac mini in Google
+Chrome 157.0.8103.79, headless four times and headed twice (the match against
+the canvas and the placement control on the last two headless runs and the
+last headed one), no flags, adapter `apple` `metal-3`, not a fallback: the
+check passes, and the canvas comparison's numbers are unchanged. On both
+backends the layer changes 621 pixels on the outline, spanning x 110.5 to
+249.5 and y 86.5 to 209.5 against a rectangle from 111 to 249 and 87 to 209,
+190 in the title headless and 195 headed, and none elsewhere. Every screenshot without the layer matches its canvas read back.
+The composed frames differ in 81 pixels by up to 77, the same 81 as the bare
+frames and as the canvas comparison's first frame, so the layer adds none. The
+outline control fails with the layer adding 1,568 differing pixels headless
+and 1,592 headed, by up to 204, and the placement control with 27 of the
+changed pixels outside the wider ring on each side. `--pick`, added to the
+last headless run, still passed on both backends at DPR 1 and 2, 9,532 picks
+each.
+
 **Not a gate.** `bench/README.md`'s argument against a browser measurement in
 `bench:ci` is about timings, and a parity check is not a timing, so that
 argument does not carry. What does is the runner: the check needs a full Chrome
@@ -852,8 +898,9 @@ one machine, the probe's two shapes with two solid straight ribbons since
 smooth one since 2026-11-21, the dashes flowed by 4.5 pixels since
 2026-11-22 (so the dashes at rest are no longer compared), a smooth dashed
 one, the flow advancing over three frames and a ribbon on the above-nodes
-layer since that day, zoom 1, DPR 1. Group outlines, rich-node tiers, other
-zooms and DPR 2 are not compared.
+layer since that day, and a group outline composed over the first frame since
+2026-11-23, zoom 1, DPR 1. Rich-node tiers, other zooms and DPR 2 are not
+compared.
 
 ## Node picking (M4.8b)
 

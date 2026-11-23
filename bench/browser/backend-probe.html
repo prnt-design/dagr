@@ -15,6 +15,11 @@
         assets/screenshots/ and so a stretched canvas cannot be mistaken for a
         rendering difference between the backends.
       */
+      #frame {
+        position: relative;
+        width: 480px;
+        height: 320px;
+      }
       #stage {
         width: 480px;
         height: 320px;
@@ -23,7 +28,7 @@
     </style>
   </head>
   <body>
-    <canvas id="stage"></canvas>
+    <div id="frame"><canvas id="stage"></canvas></div>
     <!--
       An import map rather than a bundler. The two specifiers @prnt/dagr-render's
       dist actually uses are three/webgpu and three/tsl, and the runner rewrites
@@ -34,7 +39,12 @@
       { "imports": { "three/webgpu": "__THREE_WEBGPU__", "three/tsl": "__THREE_TSL__" } }
     </script>
     <script type="module">
-      import { advanceDashFlow, createRenderer } from '/packages/render/dist/index.js';
+      import {
+        advanceDashFlow,
+        createNodeGroupLayer,
+        createRenderer,
+        nodeGroupBounds,
+      } from '/packages/render/dist/index.js';
       import {
         DEFAULT_FLATTEN_TOLERANCE_FRACTION,
         RIBBON_AA_PADDING_PIXELS,
@@ -560,6 +570,53 @@
         return Math.hypot(Math.max(qx, 0), Math.max(qy, 0)) + Math.min(Math.max(qx, qy), 0) - r;
       };
 
+      /**
+       * Draws the parity scene on one backend, one frame per flow, and reads
+       * each frame back. `keep` leaves the renderer alive and returns it, for
+       * a caller that screenshots its frame afterwards.
+       */
+      const draw = async (backend, nodes, edges, dashed, flows, smooth, smoothDashed, curve, above, layer, keep = false) => {
+        const previous = document.getElementById('stage');
+        const canvas = document.createElement('canvas');
+        canvas.id = 'stage';
+        previous.replaceWith(canvas);
+        const renderer = await createRenderer({
+          canvas,
+          backend,
+          nodes,
+          edgeGroups: [
+            { id: 'edges', style: EDGE_STYLE },
+            { id: 'dashed', style: DASHED_STYLE },
+            { id: 'smooth', style: EDGE_STYLE, curve },
+            { id: 'smooth-dashed', style: DASHED_STYLE, curve },
+            { id: 'above', style: EDGE_STYLE, layer },
+          ],
+        });
+        renderer.setEdges('edges', edges);
+        renderer.setEdges('dashed', dashed);
+        renderer.setEdges('smooth', smooth);
+        renderer.setEdges('smooth-dashed', smoothDashed);
+        renderer.setEdges('above', above);
+        renderer.camera.setViewport({ width: 480, height: 320, devicePixelRatio: 1 });
+        const frames = [];
+        for (const dashFlowPixels of flows) {
+          if (frames.length > 0) await new Promise((resolve) => requestAnimationFrame(resolve));
+          for (const group of ['dashed', 'smooth-dashed']) {
+            renderer.setEdgeStyle(group, {
+              halfWidthPixels: DASHED_STYLE.halfWidthPixels,
+              alpha: 1,
+              dashFlowPixels,
+            });
+          }
+          renderer.render();
+          frames.push(readPixels(canvas));
+        }
+        const reported = renderer.backend;
+        if (keep) return { renderer, frames, reported, width: canvas.width, height: canvas.height };
+        renderer.dispose();
+        return { frames, reported, width: canvas.width, height: canvas.height };
+      };
+
       window.parity = async (
         shiftX = 0,
         edgeShift = 0,
@@ -568,46 +625,6 @@
         holdFlow = false,
         layerControl = false,
       ) => {
-        const draw = async (backend, nodes, edges, dashed, flows, smooth, smoothDashed, curve, above, layer) => {
-          const previous = document.getElementById('stage');
-          const canvas = document.createElement('canvas');
-          canvas.id = 'stage';
-          previous.replaceWith(canvas);
-          const renderer = await createRenderer({
-            canvas,
-            backend,
-            nodes,
-            edgeGroups: [
-              { id: 'edges', style: EDGE_STYLE },
-              { id: 'dashed', style: DASHED_STYLE },
-              { id: 'smooth', style: EDGE_STYLE, curve },
-              { id: 'smooth-dashed', style: DASHED_STYLE, curve },
-              { id: 'above', style: EDGE_STYLE, layer },
-            ],
-          });
-          renderer.setEdges('edges', edges);
-          renderer.setEdges('dashed', dashed);
-          renderer.setEdges('smooth', smooth);
-          renderer.setEdges('smooth-dashed', smoothDashed);
-          renderer.setEdges('above', above);
-          renderer.camera.setViewport({ width: 480, height: 320, devicePixelRatio: 1 });
-          const frames = [];
-          for (const dashFlowPixels of flows) {
-            if (frames.length > 0) await new Promise((resolve) => requestAnimationFrame(resolve));
-            for (const group of ['dashed', 'smooth-dashed']) {
-              renderer.setEdgeStyle(group, {
-                halfWidthPixels: DASHED_STYLE.halfWidthPixels,
-                alpha: 1,
-                dashFlowPixels,
-              });
-            }
-            renderer.render();
-            frames.push(readPixels(canvas));
-          }
-          const reported = renderer.backend;
-          renderer.dispose();
-          return { frames, reported, width: canvas.width, height: canvas.height };
-        };
         const shifted = NODES.map((node, i) =>
           i === 0 ? { ...node, center: { x: node.center.x + shiftX, y: node.center.y } } : node,
         );
@@ -801,6 +818,199 @@
           curvedDash,
           over,
           ribbonDrawn,
+        };
+      };
+
+      /**
+       * A group outline over the parity scene's first frame, composed with
+       * the canvas on each backend.
+       *
+       * The outline is `createNodeGroupLayer`'s SVG, drawn by the browser over
+       * the canvas rather than by either backend, so the two backends cannot
+       * draw it differently. What can differ is the frame it is composed into:
+       * where the layer lands over the canvas, and whether it covers the
+       * canvas the same way on both. So the runner screenshots `#frame` with
+       * the layer shown and with it hidden on each backend, and `groupParity`
+       * compares the four.
+       *
+       * The group frames the rectangle, padded by `GROUP.padding` and with a
+       * title band, so its outline crosses three ribbons and its title starts
+       * on the diagonal one. Each hidden screenshot must match the canvas
+       * read back from the same renderer, or the bare frames could differ
+       * everywhere and excuse any difference the layer adds. On each backend,
+       * every pixel the layer changes must lie within `GROUP_RING_DEVICE_PX` of
+       * the outline's rounded rectangle or inside the title's box, and the
+       * changed pixels on the outline must span that rectangle. Between the
+       * backends, the layer may not add a difference: a pixel that differs
+       * between the two composed frames must already differ between the two
+       * bare ones.
+       *
+       * Two controls. `paddingShift` widens the WebGL2 side's padding by that
+       * much, moving its outline and title, so it fails only if the
+       * comparison between the backends can see where the outline lies; that
+       * side's expected rectangle moves with it. `expectedShift` widens the
+       * expected rectangle on both sides and leaves the layers alone, so it
+       * fails only if the placement check can see where the outline lies.
+       */
+      const GROUP = { id: 'group', nodeIds: ['rect'], label: 'group', padding: 24 };
+      // Half the 1.5 px stroke plus one device pixel of antialiasing, rounded
+      // up.
+      const GROUP_RING_DEVICE_PX = 2;
+      const GROUP_CORNER_RADIUS = 10;
+      let held;
+      const groupCanvas = {};
+
+      window.groupRelease = () => {
+        if (held === undefined) return;
+        held.layer?.dispose();
+        held.renderer.dispose();
+        held = undefined;
+      };
+
+      window.groupFrame = async (backend, paddingShift = 0) => {
+        window.groupRelease();
+        try {
+          const scene = await draw(backend, NODES, EDGES, DASHED, [FLOWS[0]], SMOOTH, SMOOTH_DASHED, 'smooth', ABOVE, 'above-nodes', true);
+          held = { renderer: scene.renderer };
+          groupCanvas[backend] = scene.frames[0];
+          held.layer = createNodeGroupLayer({ parent: document.getElementById('frame'), camera: scene.renderer.camera });
+          held.layer.setGroups([{ ...GROUP, padding: GROUP.padding + paddingShift }]);
+          held.layer.setNodes(NODES);
+          held.layer.sync();
+          return { backend, reported: scene.reported };
+        } catch (error) {
+          window.groupRelease();
+          return { backend, error: String(error), code: error && error.code };
+        }
+      };
+
+      window.groupHide = () => {
+        held.layer.dispose();
+        held.layer = undefined;
+      };
+
+      const decodePng = async (base64) => {
+        const bytes = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0));
+        const bitmap = await createImageBitmap(new Blob([bytes], { type: 'image/png' }));
+        const scratch = document.createElement('canvas');
+        scratch.width = bitmap.width;
+        scratch.height = bitmap.height;
+        const ctx = scratch.getContext('2d');
+        ctx.drawImage(bitmap, 0, 0);
+        return { data: ctx.getImageData(0, 0, bitmap.width, bitmap.height).data, width: bitmap.width, height: bitmap.height };
+      };
+
+      const pixelDelta = (a, b, i) =>
+        Math.max(Math.abs(a[i] - b[i]), Math.abs(a[i + 1] - b[i + 1]), Math.abs(a[i + 2] - b[i + 2]), Math.abs(a[i + 3] - b[i + 3]));
+
+      // Where one backend's layer changed its own frame, against where the
+      // outline and title should be for `paddingShift`.
+      const outlineOf = (shown, hidden, padding) => {
+        const { width, height } = shown;
+        const bounds = nodeGroupBounds(NODES, { ...GROUP, padding });
+        const box = {
+          left: bounds.minX + width / 2,
+          right: bounds.maxX + width / 2,
+          top: height / 2 - bounds.maxY,
+          bottom: height / 2 - bounds.minY,
+        };
+        // The layer's own title placement (12 px in, baseline 18 px down, 12 px
+        // monospace) and its own allowance of 8 px per character, widened by
+        // two pixels for the glyphs' antialiasing.
+        const title = {
+          left: box.left + 12 - 2,
+          right: box.left + 12 + GROUP.label.length * 8 + 2,
+          top: box.top + 18 - 12 - 2,
+          bottom: box.top + 18 + 4,
+        };
+        const outlineNode = {
+          shape: 'roundedRect',
+          center: { x: (box.left + box.right) / 2, y: (box.top + box.bottom) / 2 },
+          size: { width: box.right - box.left, height: box.bottom - box.top },
+          cornerRadius: GROUP_CORNER_RADIUS,
+        };
+        const span = { left: Infinity, right: -Infinity, top: Infinity, bottom: -Infinity };
+        let ring = 0;
+        let titled = 0;
+        let stray = 0;
+        for (let row = 0; row < height; row += 1) {
+          for (let col = 0; col < width; col += 1) {
+            if (pixelDelta(shown.data, hidden.data, (row * width + col) * 4) === 0) continue;
+            const x = col + 0.5;
+            const y = row + 0.5;
+            if (Math.abs(signedDistance(outlineNode, x, y)) <= GROUP_RING_DEVICE_PX) {
+              ring += 1;
+              span.left = Math.min(span.left, x);
+              span.right = Math.max(span.right, x);
+              span.top = Math.min(span.top, y);
+              span.bottom = Math.max(span.bottom, y);
+            } else if (x >= title.left && x <= title.right && y >= title.top && y <= title.bottom) {
+              titled += 1;
+            } else {
+              stray += 1;
+            }
+          }
+        }
+        const spans = ['left', 'right', 'top', 'bottom'].every(
+          (side) => Math.abs(span[side] - box[side]) <= GROUP_RING_DEVICE_PX,
+        );
+        return { ring, title: titled, stray, box, span, placed: ring > 0 && titled > 0 && stray === 0 && spans };
+      };
+
+      window.groupParity = async ({ gpu, gl, paddingShift = 0, expectedShift = 0 }) => {
+        const [gpuShown, gpuHidden, glShown, glHidden] = await Promise.all(
+          [gpu.shown, gpu.hidden, gl.shown, gl.hidden].map(decodePng),
+        );
+        const frames = [gpuShown, gpuHidden, glShown, glHidden];
+        const sameSize = frames.every((f) => f.width === gpuShown.width && f.height === gpuShown.height);
+        if (!sameSize) return { pass: false, sameSize, sizes: frames.map((f) => [f.width, f.height]) };
+        const canvasMatched = {};
+        for (const [backend, hidden] of [['webgpu', gpuHidden], ['webgl2', glHidden]]) {
+          const read = groupCanvas[backend];
+          let differing = 0;
+          for (let i = 0; i < hidden.data.length; i += 4) if (pixelDelta(hidden.data, read, i) > 0) differing += 1;
+          canvasMatched[backend] = read.length === hidden.data.length && differing === 0;
+        }
+        const padding = GROUP.padding + expectedShift;
+        const outline = {
+          webgpu: outlineOf(gpuShown, gpuHidden, padding),
+          webgl2: outlineOf(glShown, glHidden, padding + paddingShift),
+        };
+        const composed = { differing: 0, maxDelta: 0 };
+        const bare = { differing: 0, maxDelta: 0 };
+        const added = { pixels: 0, maxDelta: 0 };
+        for (let i = 0; i < gpuShown.data.length; i += 4) {
+          const shownDelta = pixelDelta(gpuShown.data, glShown.data, i);
+          const hiddenDelta = pixelDelta(gpuHidden.data, glHidden.data, i);
+          if (shownDelta > 0) composed.differing += 1;
+          if (hiddenDelta > 0) bare.differing += 1;
+          composed.maxDelta = Math.max(composed.maxDelta, shownDelta);
+          bare.maxDelta = Math.max(bare.maxDelta, hiddenDelta);
+          if (shownDelta > 0 && hiddenDelta === 0) {
+            added.pixels += 1;
+            added.maxDelta = Math.max(added.maxDelta, shownDelta);
+          }
+        }
+        const backends = { webgpu: gpu.reported, webgl2: gl.reported };
+        const placed = outline.webgpu.placed && outline.webgl2.placed;
+        return {
+          pass:
+            backends.webgpu === 'webgpu' &&
+            backends.webgl2 === 'webgl2' &&
+            canvasMatched.webgpu &&
+            canvasMatched.webgl2 &&
+            placed &&
+            added.pixels === 0,
+          backends,
+          sameSize,
+          paddingShift,
+          expectedShift,
+          canvasMatched,
+          placed,
+          outline,
+          composed,
+          bare,
+          added,
         };
       };
 
