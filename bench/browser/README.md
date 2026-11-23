@@ -964,20 +964,20 @@ camera, scales its corner radius below zoom 1 (5 pixels at 0.5) and keeps its
 title at its own pixel size, so the page's expected outline does the same.
 Zoom 2 would put the outline's left side off the frame, so the zooms are 0.5
 and 1.5 rather than the tiers' 0.5 and 2. Each zoom runs the check and three
-controls: the padding and placement controls above, each still 1.5 device
+controls: the outline and placement controls above, each still 1.5 device
 pixels (1.5 divided by the zoom, in world units), and a zoom control that
 expects zoom 1's outline and must fail on placement alone.
 
 At zoom 0.5 the check passes: on both backends the layer changes 425 pixels
 on the outline, spanning its 69 by 61 pixel rectangle to within a pixel, and
 188 in the title headless (202 headed), with none elsewhere, and the composed
-frames differ in the same 53 pixels as the bare ones. The padding control
+frames differ in the same 53 pixels as the bare ones. The outline control
 fails with the layer adding 945 differing pixels by up to 204 (964 headed),
 the placement control with 149 changed pixels off the expected outline (147
 headed), and the zoom control with every changed pixel off it. At zoom 1.5:
 the check passes with 1,280 pixels on the outline (207 by 183) and the same
 title counts, none elsewhere, the composed frames differing in the same 44
-pixels as the bare ones; the padding control fails with 2,255 added pixels by
+pixels as the bare ones; the outline control fails with 2,255 added pixels by
 up to 204 (2,274 headed), the placement control with 435 pixels off the
 outline (433 headed), and the zoom control with every changed pixel off it.
 Every earlier check and control in the run still passes or fails as before on
