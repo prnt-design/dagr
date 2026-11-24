@@ -171,6 +171,19 @@ size changes, 22 relayouts.
 | everything else | 53.5ms | 36.3ms | 35.5ms |
 | **whole relayout** | **183ms** | **79.9ms** | **83.4ms** |
 
+On 2026-11-24 UTC, a separate Ryzen 9 9900X measurement (Node 22.22.1)
+compared an index that builds four CSR adjacency arrays with one that reuses
+the graph-direction pair when every retained segment points down the layers.
+The added leaf's order stage measured 114.0ms before and 103.9ms after,
+and its whole relayout 287.4ms and 271.9ms, at load averages 0.47 and 1.94.
+Both runs used `MEASURE_COST=1 pnpm --filter @prnt/dagr-layout test layout.relayout-cost`
+inside an exclusive compute window. Instrumenting the original index put
+numbering and ranks around 34ms to 37ms, segments around 16ms to 20ms, and
+compression around 4ms to 7ms. This bounded change removes two compression
+passes on downward drawings; mixed directions retain all four. These timings
+include run-to-run variation and do not replace the Apple M4 table above.
+Order goldens and fast-path tests check that the layers stay unchanged.
+
 **A resize runs only position and route.** Neither the rank stage nor the order
 stage reads a size, and run again over an unchanged graph both would land where
 they are, so the engine positions and routes over the ranks and layers it

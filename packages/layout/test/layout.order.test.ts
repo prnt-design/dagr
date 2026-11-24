@@ -87,6 +87,19 @@ function ordered(state: RankedState, options?: Parameters<typeof barycenterOrder
 }
 
 describe('barycenterOrder, the seed permutation', () => {
+  it('keeps the same layers with downward, mixed and empty segment directions', () => {
+    const stage = barycenterOrder();
+    for (const edges of [
+      [['a', 'd'], ['b', 'c'], ['a', 'd'], ['a', 'a']],
+      [['a', 'd'], ['c', 'b'], ['a', 'd'], ['a', 'a']],
+      [],
+    ] as const) {
+      const state = stateOf(build(['a', 'b', 'c', 'd'], edges), [['a', 'b'], ['c', 'd']]);
+      const expected = edges.length === 0 ? [['a', 'b'], ['c', 'd']] : [['a', 'b'], ['d', 'c']];
+      expect(stage.run(state).layers).toEqual(expected);
+    }
+  });
+
   /**
    * The rule M3.6 warm starts from, on the smallest graph that shows it. Roster
    * order puts `c` before `d` because that is the order they were added in; the
