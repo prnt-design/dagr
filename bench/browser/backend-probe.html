@@ -927,10 +927,14 @@
        *
        * `smooth` compares the solid smooth ribbon alone instead, measured
        * against the flattened curve the renderer draws. The renderer flattens
-       * in world units, so the chords are the same at every zoom, while a
+       * in world units, so the chords keep their turns at every zoom, and a
        * mitre's overshoot is a fraction of the width and so stays 0.15 device
-       * pixels; only its butt caps go in the band whole. `curve` is the WebGL2
-       * side's curve, `parity`'s curve control when `'polyline'`.
+       * pixels; only its butt caps go in the band whole. The chords' length on
+       * screen does follow the zoom: at 0.5 two of them are shorter than the
+       * bound in `ribbon.ts` below which a quad between two joins folds into a
+       * bow tie, and the check sees no hole there, but below 0.5 more of them
+       * fold and the inside check may fail on both backends. `curve` is the
+       * WebGL2 side's curve, `parity`'s curve control when `'polyline'`.
        */
       const BESIDE_DEVICE_PX = 3;
       window.ribbonParity = async (zoom, edgeShift = 0, expectedZoom = zoom, smooth = false, curve = 'smooth') => {
@@ -952,8 +956,6 @@
         } catch (error) {
           return { pass: false, error: String(error), code: error && error.code };
         }
-        // A smooth ribbon's flattened points are joins too shallow to need
-        // the band, so only its ends are corners.
         const inDevice = (scale) =>
           routes.map((edge) => {
             const points = edge.points.map((p) => ({ x: p.x * scale, y: p.y * scale }));

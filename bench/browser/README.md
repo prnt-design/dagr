@@ -567,7 +567,8 @@ one moves a shape and one expects zoom 1's shapes, and at zoom 0.5 and at
 zoom 1.5 one moves the ribbons and one expects zoom 1's ribbons, and at
 zoom 0.5 and at zoom 1.2 one flows one side's dashes further and one expects
 a period in world units, and at zoom 0.5 and at zoom 1.2 one moves the
-smooth ribbon, one expects zoom 1's and one draws one side's as a polyline)
+smooth ribbon, one expects zoom 1's curve and one draws one side's as a
+polyline)
 fail on what they change, and says on stderr which of these did not hold. It also exits non-zero, saying why on
 stderr before it compares, when the adapter reports `isFallbackAdapter`,
 because a software adapter such as SwiftShader comes up on `'webgpu'` too and
@@ -1114,9 +1115,14 @@ with `smooth` draws it with no shapes at that zoom on each backend and
 measures it as the solid straight ribbons are measured, against the
 flattened curve the renderer draws, which the page flattens with the
 renderer's own `smoothCentreline`. The renderer flattens in world units, so
-the chords are the same at every zoom, and a mitre's overshoot is a fraction
-of the width, which stays in device pixels, so the 0.15 device pixels it
-reaches at zoom 1 hold at every zoom; only the caps go in the band whole.
+the chords keep their turns at every zoom, and a mitre's overshoot is a
+fraction of the width, which stays in device pixels, so the 0.15 device
+pixels it reaches at zoom 1 hold at every zoom; only the caps go in the band
+whole. The chords' length on screen follows the zoom, though: at 0.5 two of
+them (1.15 and 1.26 device pixels) are shorter than the bound in
+`ribbon.ts` below which a quad between two joins folds into a bow tie, and
+the check finds no hole there, but below 0.5 more of them fold, so a lower
+zoom could fail the inside check on both backends.
 Zoom 1.2 keeps the whole curve in the frame; above about 1.21 its top
 leaves it. Each zoom runs the check and three controls: the edge control,
 the WebGL2 side's ribbon shifted 2 device pixels along each axis, and the

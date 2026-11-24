@@ -54,9 +54,9 @@
  * control that shifts them and one that expects zoom 1's ribbons, and the
  * three dashed ribbons alone at zoom 0.5 and 1.2, each with a control that
  * flows one side's dashes further and one that expects a period in world units,
- * and the solid smooth ribbon alone at zoom 0.5 and 1.2, with a control that
- * shifts it, one that expects zoom 1's curve and one that draws one side's as
- * a polyline.
+ * and the solid smooth ribbon alone at zoom 0.5 and 1.2, each with a control
+ * that shifts it, one that expects zoom 1's curve and one that draws one
+ * side's as a polyline.
  * The tiers are checked again at zoom 0.5 and 2, each with a bounds control,
  * a placement control, and a control that expects zoom 1's tiers, and the
  * outline at zoom 0.5 and 1.5, each with a padding control, a
