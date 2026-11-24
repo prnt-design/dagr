@@ -156,9 +156,9 @@ left.
 
 Wall-clock milliseconds for one `engine.relayout(patch)` on the 10k corpus
 (10,000 nodes, 40,000 edges) at the defaults, measured on an Apple M4 under Node
-25.6.1 on 2026-11-24 UTC at a one-minute load average of 2.8. A cycle adds a leaf under a node in
-the middle of the graph, grows that node with a `nodeSize` callback, shrinks it
-back and removes the leaf. Each figure is a median over eleven cycles after two
+25.6.1 on 2026-11-24 UTC at a one-minute load average of 2.8. A cycle adds a
+leaf under a node in the middle of the graph, grows that node with a
+`nodeSize` callback, shrinks it back and removes the leaf. Each figure is a median over eleven cycles after two
 warmups, so the resize column pools both size changes, 22 relayouts.
 
 | Phase | add a leaf | remove a leaf | resize a node |
@@ -207,8 +207,10 @@ than by a comparison sort, then took that step from about 20ms to about 4ms and
 the stage to 86.8ms at a load average of 1.61. Building its index with each
 segment written into a typed array sized up front, rather than pushed onto
 growing arrays, then took the stage to 75.0ms at a load average of 2.95; the
-stage has not changed since, and the table has measured it at 76.6ms on
-2026-11-20 UTC and 67.9ms on 2026-11-24 UTC. What is
+stage has not changed since. The table measured it at 76.6ms on 2026-11-20
+UTC and 67.9ms on 2026-11-24 UTC, and loaded runs on the Apple M4 that second
+day put it at 73ms to 97ms, so that gap is the spread between runs rather than
+a change. What is
 left of it is mostly building that index, which still numbers every node and
 dummy by id, and its warm-start cohorts and sweeping the leaf's layer, not
 sweeping the held layers.
@@ -230,9 +232,9 @@ beside its roster set. On that Ryzen machine, two runs each before and after
 on 2026-11-20 UTC, the work outside the stages went from 166ms to 167ms down
 to 126ms to 128ms for an added leaf, from 113ms down to 99ms to 100ms for a
 removed leaf and from 95ms to 97ms down to 82ms to 83ms for a resize. The table above
-was measured after that change too, on 2026-11-20 UTC; on the Apple M4 the work
-outside the stages for an added leaf was 96.8ms before it, at a load average of
-2.95, against 77.4ms after it at 1.72.
+was measured after that change too. On the Apple M4 on 2026-11-20 UTC, the work
+outside the stages for an added leaf went from 96.8ms before it, at a load
+average of 2.95, to 77.4ms after it at 1.72.
 
 After that, a relayout that skips the rank stage stopped copying every roster
 member's size into a new map. It now reads the sizes off the map the last full
@@ -268,7 +270,7 @@ load averages of 3.4 to 7.4, agree: an added leaf's work outside the stages
 went from 84.2ms to 67.2ms in one pair and from 65.5ms to 54.0ms in the other,
 and a removed leaf's from 60.8ms to 43.4ms and from 46.2ms to 37.7ms. The table
 above was measured on the Apple M4 after this change, later that day, and a
-second run beside it agreed within 4.4ms on every whole relayout.
+second run beside it agreed within 4.5ms on every whole relayout.
 
 Like the pipeline page's [What a run costs](layout.md#what-a-run-costs), which
 was measured on a different machine, this is a measurement and not a baseline:
