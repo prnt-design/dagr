@@ -619,8 +619,9 @@ checks:
 - That the two backends agree beyond what the parity check has compared:
   one machine (an Apple M4 in Chrome 155), the two-shape probe scene, zoom 1
   (the rich-node tiers below also at 0.5 and 2, and in Chrome 158 the group
-  outline at 0.5 and 1.5, the shapes alone at 0.5 and 2 and the solid
-  straight ribbons alone at 0.5 and 1.5), device pixel ratio 1, with two solid straight edge ribbons added to that
+  outline at 0.5 and 1.5, the shapes alone at 0.5 and 2 and, since
+  2026-11-24, the solid straight ribbons named next alone at 0.5 and 1.5),
+  device pixel ratio 1, with two solid straight edge ribbons added to that
   scene on 2026-11-17, and two dashed straight ones, a dashed one through two
   joins and a smooth one on 2026-11-21 (Chrome 157), the dashes flowed by
   4.5 pixels since 2026-11-22, and a smooth dashed one, the flow advancing
@@ -996,8 +997,8 @@ byte-identical on both, with every pixel more than a device pixel inside the
 that shift one shape by a third of a device pixel and expect zoom 1's
 shapes, both of which must fail. The two solid straight ribbons alone were
 then compared at zoom 0.5 and 1.5 (Chrome 158), byte-identical on both, with
-every pixel more than a device pixel inside them in the edge colour and a
-strip just outside them in the clear colour, since `halfWidthPixels` stays in
+every pixel more than a device pixel inside them, away from their caps and
+joins, in the edge colour and a strip just outside them in the clear colour, since `halfWidthPixels` stays in
 device pixels while the route scales, against controls at each zoom that
 shift the ribbons by 2 device pixels and expect zoom 1's ribbons, both of
 which must fail.

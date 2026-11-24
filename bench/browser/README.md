@@ -534,8 +534,7 @@ at zoom 1.5 one widens one side's outline, one widens the outline the page
 expects and one expects zoom 1's outline, at zoom 0.5 and at zoom 2
 one moves a shape and one expects zoom 1's shapes, and at zoom 0.5 and at
 zoom 1.5 one moves the ribbons and one expects zoom 1's ribbons) fail on
-what they change,
-and says on stderr which of these did not hold. It also exits non-zero, saying why on
+what they change, and says on stderr which of these did not hold. It also exits non-zero, saying why on
 stderr before it compares, when the adapter reports `isFallbackAdapter`,
 because a software adapter such as SwiftShader comes up on `'webgpu'` too and
 its frame is not a GPU's.
@@ -1025,7 +1024,9 @@ and every pixel in a strip from the band out to 3 device pixels beyond the
 edge, at least 6 from a route point so clear of the mitred corners, the
 clear colour, so a ribbon whose width followed the zoom cannot pass; one
 drawn with `halfWidthPixels` times the zoom fails at both zooms. Zoom 2 is
-not used because the elbow's middle run leaves the frame there. Each zoom
+not used because the elbow's middle run leaves the frame there; at 1.5 the
+diagonal's first cap, and about 100 device pixels of the diagonal, are
+outside it. Each zoom
 runs the check and two controls: the edge control, both ribbons shifted 2
 device pixels along each axis (2 divided by the zoom, in world units), which
 must fail on the interior, and a zoom control that expects zoom 1's ribbons
@@ -1054,7 +1055,7 @@ one, the flow advancing over three frames and a ribbon on the above-nodes
 layer since that day, and a group outline and rich-node tiers composed over
 the first frame since 2026-11-23, DPR 1. The canvas comparison is at zoom
 1, the shapes alone also at zoom 0.5 and 2, the solid straight ribbons
-alone at zoom 0.5 and 1.5, the outline at zoom 0.5, 1 and 1.5, and the tiers
+alone at zoom 0.5 and 1.5 since 2026-11-24, the outline at zoom 0.5, 1 and 1.5, and the tiers
 at zoom 0.5, 1 and 2. The dashed, smooth and above-nodes ribbons at other
 zooms, and DPR 2, are not compared.
 

@@ -114,7 +114,7 @@ differing on the later two, and a ribbon on the above-nodes layer, with none
 of its pixels differing. A group outline and rich-node tiers composed over
 the first frame (2026-11-23, the tiers also at zoom 0.5 and 2 and the
 outline at 0.5 and 1.5) add no differing pixel, the shapes alone are
-byte-identical at zoom 0.5 and 2, and the solid straight ribbons alone at
+byte-identical at zoom 0.5 and 2, as are the solid straight ribbons alone at
 zoom 0.5 and 1.5 (2026-11-24). The original probe also
 passed on AMD RDNA 2 in Chrome 156, with four edge-band pixels differing by
 one. Other GPUs, other zooms for the dashed, smooth and above-nodes ribbons,

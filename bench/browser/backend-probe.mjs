@@ -91,7 +91,7 @@ const GROUP_ZOOMS = [0.5, 1.5];
 // Either side of zoom 1, with both shapes and their glow inside the frame.
 const SHAPE_ZOOMS = [0.5, 2];
 // Either side of zoom 1, with both of the elbow's joins inside the frame; at 2
-// its middle run leaves it.
+// its middle run leaves it. At 1.5 the diagonal's first cap is outside it.
 const RIBBON_ZOOMS = [0.5, 1.5];
 
 /**
@@ -169,11 +169,11 @@ function ribbonFailure(check) {
     reasons.push(`the frames drew on ${check.backends.webgpu} and ${check.backends.webgl2}, not webgpu and webgl2`);
   }
   if (!check.sameSize) reasons.push("the two backends' frames are different sizes");
-  if (!check.ribbonDrawn) {
-    reasons.push(
-      `${check.ribbon.edgeColored} of ${check.ribbon.pixels} pixels inside the ribbons hold the edge colour on webgpu`,
-      `${check.beside.clear} of ${check.beside.pixels} pixels just outside them hold the clear colour on webgpu`,
-    );
+  if (check.ribbon.pixels === 0 || check.ribbon.edgeColored < check.ribbon.pixels) {
+    reasons.push(`${check.ribbon.edgeColored} of ${check.ribbon.pixels} pixels inside the ribbons hold the edge colour on webgpu`);
+  }
+  if (check.beside.pixels === 0 || check.beside.clear < check.beside.pixels) {
+    reasons.push(`${check.beside.clear} of ${check.beside.pixels} pixels just outside them hold the clear colour on webgpu`);
   }
   if (check.interior.maxDelta > check.tolerance.interiorMaxDelta) {
     reasons.push(
@@ -191,7 +191,8 @@ function ribbonFailure(check) {
 function ribbonControlFailure(control, aimedAt) {
   if (control.pass) return 'passed, so the check cannot see what it changes';
   const shifted = control.interior?.maxDelta > control.tolerance?.interiorMaxDelta;
-  const onAim = aimedAt === 'interior' ? shifted && control.ribbonDrawn : !shifted && !control.ribbonDrawn;
+  const unlit = control.ribbon?.edgeColored < control.ribbon?.pixels;
+  const onAim = aimedAt === 'interior' ? shifted && control.ribbonDrawn : !shifted && unlit;
   return control.error === undefined &&
     control.backends.webgpu === 'webgpu' &&
     control.backends.webgl2 === 'webgl2' &&
