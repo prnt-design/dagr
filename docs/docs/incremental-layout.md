@@ -158,8 +158,9 @@ Wall-clock milliseconds for one `engine.relayout(patch)` on the 10k corpus
 (10,000 nodes, 40,000 edges) at the defaults, measured on an Apple M4 under Node
 25.6.1 on 2026-11-24 UTC at a one-minute load average of 2.8. A cycle adds a
 leaf under a node in the middle of the graph, grows that node with a
-`nodeSize` callback, shrinks it back and removes the leaf. Each figure is a median over eleven cycles after two
-warmups, so the resize column pools both size changes, 22 relayouts.
+`nodeSize` callback, shrinks it back and removes the leaf. Each figure is a
+median over eleven cycles after two warmups, so the resize column pools both
+size changes, 22 relayouts.
 
 | Phase | add a leaf | remove a leaf | resize a node |
 | --- | --- | --- | --- |
