@@ -924,25 +924,43 @@
        * the ribbons the page expects at that zoom while the canvas and the band
        * stay at `zoom`, so it fails only if the edge colour check can see that
        * the routes follow the zoom.
+       *
+       * `smooth` compares the solid smooth ribbon alone instead, measured
+       * against the flattened curve the renderer draws. The renderer flattens
+       * in world units, so the chords keep their turns at every zoom, and a
+       * mitre's overshoot is a fraction of the width and so stays 0.15 device
+       * pixels; only its butt caps go in the band whole. The chords' length on
+       * screen does follow the zoom: at 0.5 two of them are shorter than the
+       * bound in `ribbon.ts` below which a quad between two joins folds into a
+       * bow tie, and the check sees no hole there, but below 0.5 more of them
+       * fold and the inside check may fail on both backends. `curve` is the
+       * WebGL2 side's curve, `parity`'s curve control when `'polyline'`.
        */
       const BESIDE_DEVICE_PX = 3;
-      window.ribbonParity = async (zoom, edgeShift = 0, expectedZoom = zoom) => {
-        const shifted = EDGES.map((edge) => ({
+      window.ribbonParity = async (zoom, edgeShift = 0, expectedZoom = zoom, smooth = false, curve = 'smooth') => {
+        const source = smooth ? SMOOTH : EDGES;
+        const routes = smooth ? SMOOTH_DRAWN : EDGES;
+        const shifted = source.map((edge) => ({
           ...edge,
           points: edge.points.map((p) => ({ x: p.x + edgeShift, y: p.y + edgeShift })),
         }));
-        const ribbons = (backend, edges) =>
-          draw(backend, [], edges, [], [FLOWS[0]], [], [], 'smooth', [], 'above-nodes', false, zoom);
+        const ribbons = (backend, edges, drawnCurve) =>
+          smooth
+            ? draw(backend, [], [], [], [FLOWS[0]], edges, [], drawnCurve, [], 'above-nodes', false, zoom)
+            : draw(backend, [], edges, [], [FLOWS[0]], [], [], 'smooth', [], 'above-nodes', false, zoom);
         let gpu;
         let gl;
         try {
-          gpu = await ribbons('webgpu', EDGES);
-          gl = await ribbons('webgl2', shifted);
+          gpu = await ribbons('webgpu', source, 'smooth');
+          gl = await ribbons('webgl2', shifted, curve);
         } catch (error) {
           return { pass: false, error: String(error), code: error && error.code };
         }
         const inDevice = (scale) =>
-          EDGES.map((edge) => ({ ...edge, points: edge.points.map((p) => ({ x: p.x * scale, y: p.y * scale })) }));
+          routes.map((edge) => {
+            const points = edge.points.map((p) => ({ x: p.x * scale, y: p.y * scale }));
+            return { ...edge, points, corners: smooth ? [points[0], points[points.length - 1]] : points };
+          });
         const drawn = inDevice(zoom);
         const expected = inDevice(expectedZoom);
         const hw = EDGE_STYLE.halfWidthPixels;
@@ -959,17 +977,19 @@
             const x = col + 0.5 - gpu.width / 2;
             const y = gpu.height / 2 - (row + 0.5);
             const i = (row * gpu.width + col) * 4;
+            const toCorner = (edge) => Math.min(...edge.corners.map((p) => Math.hypot(x - p.x, y - p.y)));
             let nearest = Infinity;
             for (const edge of drawn) {
-              const { centreline, point } = ribbonDistances(edge, x, y);
-              if (point < hw + 2) nearest = 0;
+              const { centreline } = ribbonDistances(edge, x, y);
+              if (toCorner(edge) < hw + 2) nearest = 0;
               nearest = Math.min(nearest, Math.abs(centreline - hw));
             }
             let onRibbon = false;
             let toRibbon = Infinity;
             let toPoint = Infinity;
             for (const edge of expected) {
-              const { centreline, point } = ribbonDistances(edge, x, y);
+              const { centreline } = ribbonDistances(edge, x, y);
+              const point = toCorner(edge);
               if (centreline < hw - EDGE_BAND_DEVICE_PX && point >= hw + 2) onRibbon = true;
               toRibbon = Math.min(toRibbon, centreline);
               toPoint = Math.min(toPoint, point);
@@ -1006,6 +1026,8 @@
           zoom,
           edgeShift,
           expectedZoom,
+          smooth,
+          curve,
           band,
           interior,
           ribbon,
