@@ -519,8 +519,9 @@ backend's. It exits non-zero unless both backends came up as named, the
 comparison passes on every frame with the ribbons, dashes and curves drawn
 where the page expects them, the above-nodes one over the circle's fill, and
 the group outline and the rich-node tiers composed over the first frame land
-where the page expects them and add no difference between the backends, and
-all twenty-seven controls (one moves a shape, one every ribbon, the curves included,
+where the page expects them and add no difference between the backends, the
+shapes alone at zoom 0.5 and 2 compare within tolerance with every fill
+pixel in its fill colour, and all twenty-seven controls (one moves a shape, one every ribbon, the curves included,
 one the dash pattern, one draws the curves as polylines, one holds the flow,
 one draws the above-nodes ribbon below the nodes, one widens one side's
 outline, one the outline the page expects, one moves one side's tier boxes,

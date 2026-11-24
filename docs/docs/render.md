@@ -618,8 +618,8 @@ checks:
   The abort check before `init()` is tested.
 - That the two backends agree beyond what the parity check has compared:
   one machine (an Apple M4 in Chrome 155), the two-shape probe scene, zoom 1
-  (the shapes alone and the rich-node tiers below also at 0.5 and 2, the
-  group outline at 0.5 and 1.5 in Chrome 158), device pixel ratio 1, with two solid straight edge ribbons added to that
+  (the rich-node tiers below also at 0.5 and 2, and in Chrome 158 the group
+  outline at 0.5 and 1.5 and the shapes alone at 0.5 and 2), device pixel ratio 1, with two solid straight edge ribbons added to that
   scene on 2026-11-17, and two dashed straight ones, a dashed one through two
   joins and a smooth one on 2026-11-21 (Chrome 157), the dashes flowed by
   4.5 pixels since 2026-11-22, and a smooth dashed one, the flow advancing
@@ -989,10 +989,11 @@ at zoom 0.5 and 1.5 (Chrome 158), its corners scaled below zoom 1 and its
 title at its own pixel size: it lands where the zoom puts it and adds no
 differing pixel, against controls at each zoom that widen one side's outline,
 widen the expected outline and expect zoom 1's outline, all of which must
-fail. The shapes alone were then compared at zoom 0.5 and 2, byte-identical
-on both, with every pixel the fill colour from where a 2 device pixel
-outline ends, against controls at each zoom that shift one shape by a
-third of a device pixel and expect zoom 1's shapes, both of which must fail.
+fail. The shapes alone were then compared at zoom 0.5 and 2 (Chrome 158),
+byte-identical on both, with every pixel more than a device pixel inside the
+2 device pixel outline in the fill colour, against controls at each zoom
+that shift one shape by a third of a device pixel and expect zoom 1's
+shapes, both of which must fail.
 
 ## Usage
 
