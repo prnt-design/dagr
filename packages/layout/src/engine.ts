@@ -653,6 +653,8 @@ export function createLayout(options: LayoutEngineOptions = {}): LayoutEngine {
    * The one exception is bounded by the last full run rather than by history:
    * a fast path's sizes read off that run's map, which keeps the size of a node
    * removed since until the next full run (see `heldSizes` in `pipeline.ts`).
+   * A fast path's ranks read through that run's map too, but never keep a
+   * removed node's (see `withoutRank` in `pipeline.ts`).
    * That is a property of {@link warmStartOf} rather than a free consequence of
    * rebuilding, and the first version of this file did not have it. The
    * incremental implementations from M3.5 on will not have it for free either,

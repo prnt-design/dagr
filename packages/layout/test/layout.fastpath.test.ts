@@ -518,6 +518,27 @@ describe('the relayout that drops a removed leaf', () => {
     }, 60_000);
   }
 
+  it('gives the answer the full path gives for a leaf a full run drew, removed after a leaf was added', () => {
+    const spec = smallCorpus();
+    const step = lockstep(spec, {});
+    const middle = spec.nodes[Math.floor(spec.nodes.length / 2)] ?? '';
+    const first = spec.nodes[0] ?? '';
+
+    step(ALL_STAGES, (graph) =>
+      graph.batch(() => {
+        graph.addNode('drawn');
+        graph.addNode('spare');
+        graph.addEdge(middle, 'drawn');
+        graph.addEdge(first, 'spare');
+      }),
+    );
+    step(ORDERED_STAGES, addLeaf(first, 'leaf'));
+    step(ORDERED_STAGES, addLeaf(middle, 'other'));
+    step(PLACED_STAGES, (graph) => graph.removeNode('drawn'));
+    step(PLACED_STAGES, (graph) => graph.removeNode('leaf'));
+    step(PLACED_STAGES, (graph) => graph.removeNode('other'));
+  }, 60_000);
+
   it('gives the answer the full path gives on a graph with cycles in it', () => {
     const spec = smallCorpus();
     const step = lockstep(
