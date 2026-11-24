@@ -253,13 +253,15 @@ table above predates that change.
 
 After that, an added leaf stopped copying the held ranks, 184,222 of them on
 the 10k, into a new map. Its ranks now read through the held map with the leaf
-beside it, and a removed leaf that one of those added comes back out with no
-copy at all. On a Ryzen 9 9900X under Node 22.22.1, two runs each before and
+beside it, and a removed leaf that one of those added comes back out without a
+copy of the map beneath. On a Ryzen 9 9900X under Node 22.22.1, two runs each before and
 after on 2026-11-24 UTC at load averages below 0.9, the work outside the stages
 went from 102ms to 113ms down to 81ms to 90ms for an added leaf and from 72ms
 to 80ms down to 55ms to 57ms for a removed leaf, whose whole relayout went from
-134ms to 153ms down to 116ms to 126ms. A resize does neither and stayed at 56ms
-to 60ms. The order stage varied from 98ms to 112ms between those runs, so an
+134ms to 153ms down to 116ms to 126ms. A resize copies no ranks either way, and
+its work outside the stages stayed at 56ms to 60ms. The stages that read the
+ranks through the view did not slow beyond their spread between runs. The
+order stage varied from 98ms to 112ms between those runs, so an
 added leaf's whole relayout did not separate: 287ms to 304ms before, 252ms to
 313ms after. Two pairs on the Apple M4 that day, each run beside the other at
 load averages of 3.4 to 7.4, agree: an added leaf's work outside the stages

@@ -334,6 +334,13 @@ branches never enter public docs, source, npm artifacts, or job fixtures.
   79.7ms down to 61.7ms to 63.7ms and the leaf from 194ms to 207ms down to
   188ms to 191ms (11 frames), with the position stage about 4ms to 6ms
   slower reading through it.
+  An added leaf then stopped copying the held ranks, 2026-11-24 UTC: it reads
+  them through the held map with the leaf beside it, and a removed leaf one of
+  those added comes back out without a copy of the map beneath. On a Ryzen 9
+  9900X (Node 22.22.1) the work outside the stages went from 102ms to 113ms
+  down to 81ms to 90ms for an added leaf and from 72ms to 80ms down to 55ms to
+  57ms for a removed leaf, in the same direction in two loaded pairs on the
+  Apple M4.
   The fallback's cost against a cold run was measured on 2026-11-23 UTC:
   five patches every fast path declines (an added and a removed inner node,
   an added and a removed cycle-closing edge, and a removed leaf alone on its

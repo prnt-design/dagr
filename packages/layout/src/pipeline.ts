@@ -1209,7 +1209,8 @@ export function withoutLeaf(
 /**
  * `ranks` less `id`, in the order a copy with `id` deleted iterates. A leaf
  * {@link withLeaf} added comes out of its view with no copy of the map
- * beneath, and any other copy is of plain maps, which is the fast one.
+ * beneath. Any other id flattens the view into a plain map, copied from the
+ * map beneath rather than through the view's iterator, which is far slower.
  */
 function withoutRank(ranks: ReadonlyMap<NodeId, number>, id: NodeId): ReadonlyMap<NodeId, number> {
   if (ranks instanceof LeafRanks && ranks.leaves.has(id)) {
