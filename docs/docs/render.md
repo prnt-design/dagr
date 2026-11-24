@@ -620,7 +620,8 @@ checks:
   one machine (an Apple M4 in Chrome 155), the two-shape probe scene, zoom 1
   (the rich-node tiers below also at 0.5 and 2, and in Chrome 158 the group
   outline at 0.5 and 1.5, the shapes alone at 0.5 and 2 and, since
-  2026-11-24, the solid straight ribbons named next alone at 0.5 and 1.5),
+  2026-11-24, the solid straight ribbons named next alone at 0.5 and 1.5
+  and the three dashed ones, the joined one included, alone at 0.5 and 1.2),
   device pixel ratio 1, with two solid straight edge ribbons added to that
   scene on 2026-11-17, and two dashed straight ones, a dashed one through two
   joins and a smooth one on 2026-11-21 (Chrome 157), the dashes flowed by
@@ -628,8 +629,8 @@ checks:
   over three frames and a ribbon on the above-nodes layer since that day.
   A group outline and rich-node tiers, drawn by the browser rather than by
   either backend, are composed over the first frame since 2026-11-23 and add
-  no difference. Other GPUs, the dashed, smooth and above-nodes ribbons at
-  other zooms, and DPR 2 are unchecked.
+  no difference. Other GPUs, the smooth, smooth dashed and above-nodes
+  ribbons at other zooms, and DPR 2 are unchecked.
   See
   [What is verified, and on which backend](#what-is-verified-and-on-which-backend).
 - That a browser composes the overlay's two transforms the way the algebra says,
@@ -1001,7 +1002,13 @@ every pixel more than a device pixel inside them, away from their caps and
 joins, in the edge colour and a strip just outside them in the clear colour, since `halfWidthPixels` stays in
 device pixels while the route scales, against controls at each zoom that
 shift the ribbons by 2 device pixels and expect zoom 1's ribbons, both of
-which must fail.
+which must fail. The three dashed ribbons alone, the joined one included, were then compared
+at zoom 0.5 and 1.2 (Chrome 158), passing on both with 7 and 15 edge-band
+pixels differing and no interior pixel, with every pixel more than a device
+pixel inside a dash in the edge colour and inside a gap in the clear colour,
+since the dash period stays in device pixels while the route scales,
+against controls at each zoom that flow one side's dashes 3 pixels further
+and expect a period in world units, both of which must fail.
 
 ## Usage
 
@@ -2117,9 +2124,9 @@ complete, and `<DagrCanvas animate>` drives them from a graph a user is editing
   `DagrCanvas` picks through
   `pickNode` only behind its opt-in `hitTesting="gpu"`. See [Picking](#picking).
 - Backend parity beyond the probe scene and the one machine M4.9b compared on:
-  other GPUs, zooms other than 1 for the dashed, smooth and above-nodes
-  ribbons (the shapes alone and the rich-node tiers are also compared at 0.5
-  and 2, the solid straight ribbons and the group outline at 0.5 and 1.5),
-  and DPR 2.
+  other GPUs, zooms other than 1 for the smooth, smooth dashed and
+  above-nodes ribbons (the shapes alone and the rich-node tiers are also
+  compared at 0.5 and 2, the solid straight ribbons and the group outline at
+  0.5 and 1.5, the three dashed ribbons at 0.5 and 1.2), and DPR 2.
 - Ten thousand nodes at sixty frames a second, measured rather than hoped for
   (M4.10).
