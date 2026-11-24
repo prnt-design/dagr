@@ -30,7 +30,7 @@
  * Chrome instead of launching one. The output
  * records the browser, mode and flags, because a backend result without them
  * cannot be reproduced. `--parity` adds M4.9b's backend comparison and exits
- * non-zero unless it passes and all twenty-three of its controls fail on
+ * non-zero unless it passes and all twenty-seven of its controls fail on
  * what they change. It also exits non-zero when the adapter reports `isFallbackAdapter`: a software
  * adapter such as
  * SwiftShader still comes up on `webgpu`, so its side of the comparison would
@@ -48,9 +48,11 @@
  * tiers, `createRichNodes` over `createHtmlOverlay`, are composed and
  * screenshotted the same way; the ninth control moves one side's tier boxes,
  * the tenth widens the boxes the page expects and the eleventh swaps the tiers
- * it expects. The tiers are checked again at zoom 0.5 and 2, each with a
- * bounds control, a placement control, and a control that expects zoom 1's
- * tiers, and the outline at zoom 0.5 and 1.5, each with a padding control, a
+ * it expects. The shapes alone are compared again at zoom 0.5 and 2, each
+ * with a control that shifts one shape and one that expects zoom 1's shapes.
+ * The tiers are checked again at zoom 0.5 and 2, each with a bounds control,
+ * a placement control, and a control that expects zoom 1's tiers, and the
+ * outline at zoom 0.5 and 1.5, each with a padding control, a
  * placement control, and a control that expects zoom 1's outline.
  * `--pick` adds M4.8b's check of `pickNode` on both backends at device pixel
  * ratios 1 and 2, and exits non-zero on the same adapter terms or on any pick
@@ -84,6 +86,8 @@ const RICH_ZOOMS = [0.5, 2];
 // Either side of zoom 1, with the outline's corners scaled at 0.5; at 2 its
 // left side leaves the frame.
 const GROUP_ZOOMS = [0.5, 1.5];
+// Either side of zoom 1, with both shapes and their glow inside the frame.
+const SHAPE_ZOOMS = [0.5, 2];
 
 /**
  * The page's import map, filled in from this process's own module resolution.
@@ -116,6 +120,41 @@ function pageHtml() {
   return readFileSync(`${ROOT}bench/browser/backend-probe.html`, 'utf8')
     .replace('__THREE_WEBGPU__', served('three/webgpu'))
     .replace('__THREE_TSL__', served('three/tsl'));
+}
+
+function shapeFailure(check) {
+  if (check.error !== undefined) return check.error;
+  const reasons = [];
+  if (check.backends.webgpu !== 'webgpu' || check.backends.webgl2 !== 'webgl2') {
+    reasons.push(`the frames drew on ${check.backends.webgpu} and ${check.backends.webgl2}, not webgpu and webgl2`);
+  }
+  if (!check.sameSize) reasons.push("the two backends' frames are different sizes");
+  if (!check.filled) {
+    reasons.push(`${check.fill.filled} of ${check.fill.pixels} pixels inside the fills hold the fill colour on webgpu`);
+  }
+  if (check.interior.maxDelta > check.tolerance.interiorMaxDelta) {
+    reasons.push(
+      `${check.interior.differing} interior pixels differ, by up to ${check.interior.maxDelta} against a tolerance of ${check.tolerance.interiorMaxDelta}`,
+    );
+  }
+  return reasons.join('; ');
+}
+
+/**
+ * Why a shape control at another zoom did not fail on the check it is aimed
+ * at: the shift only on the interior, the expected zoom only on the fills.
+ */
+function shapeControlFailure(control, aimedAt) {
+  if (control.pass) return 'passed, so the check cannot see what it changes';
+  const shifted = control.interior?.maxDelta > control.tolerance?.interiorMaxDelta;
+  const onAim = aimedAt === 'interior' ? shifted && control.filled : !shifted && !control.filled;
+  return control.error === undefined &&
+    control.backends.webgpu === 'webgpu' &&
+    control.backends.webgl2 === 'webgl2' &&
+    control.sameSize &&
+    onAim
+    ? undefined
+    : `failed, but not on what it changes: ${shapeFailure(control)}`;
 }
 
 function parityFailure(check) {
@@ -355,6 +394,15 @@ if (cliArgs.includes('--parity')) {
     flowControl: await page.evaluate(() => window.parity(0, 0, 0, false, true)),
     layerControl: await page.evaluate(() => window.parity(0, 0, 0, false, false, true)),
   };
+  parity.shapeZooms = [];
+  for (const zoom of SHAPE_ZOOMS) {
+    parity.shapeZooms.push({
+      zoom,
+      check: await page.evaluate((at) => window.shapeParity(at), zoom),
+      control: await page.evaluate(([at, shift]) => window.shapeParity(at, shift), [zoom, CONTROL_SHIFT_PX / zoom]),
+      zoomControl: await page.evaluate((at) => window.shapeParity(at, 0, 1), zoom),
+    });
+  }
   // The page keeps only the latest draw's canvas read back, so every check
   // that reuses a set of screenshots runs before the next draw.
   const shots = await composedShots('groupFrame', 0);
@@ -439,6 +487,22 @@ if (cliArgs.includes('--parity')) {
   if (layerControl !== undefined) {
     console.error(`the layer control, with one side's above-nodes ribbon drawn below the nodes, ${layerControl}`);
     process.exitCode = 1;
+  }
+  for (const { zoom, check, control, zoomControl } of parity.shapeZooms) {
+    if (!check.pass) {
+      console.error(`the shape check at zoom ${zoom} failed: ${shapeFailure(check)}`);
+      process.exitCode = 1;
+    }
+    for (const [run, aimedAt, what] of [
+      [control, 'interior', `one shape shifted by ${Number(CONTROL_SHIFT_PX.toPrecision(3))} px`],
+      [zoomControl, 'fill', "zoom 1's shapes expected"],
+    ]) {
+      const failure = shapeControlFailure(run, aimedAt);
+      if (failure !== undefined) {
+        console.error(`the shape control at zoom ${zoom}, with ${what}, ${failure}`);
+        process.exitCode = 1;
+      }
+    }
   }
   if (!parity.groups.pass) {
     console.error(`the group outline check failed: ${groupFailure(parity.groups)}`);
