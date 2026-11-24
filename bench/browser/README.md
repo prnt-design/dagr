@@ -351,6 +351,33 @@ the layer.
 
 ## The backend probe
 
+
+On 2026-11-24, all 12 picking rows passed on the same machine in Windows
+Chrome 158.0.8127.38 headless, attached through `windows-chrome.mjs`:
+WebGPU reported `webgpu`, WebGL2 reported `webgl2`, and the adapter reported
+NVIDIA `lovelace`, `isFallbackAdapter: false`. Each row checked 9,467 to
+9,550 pointers with zero mismatches. The four stale-camera controls at DPR 1
+failed with 688 mismatches at zoom 0.5 and 826 at zoom 1.2 on each backend.
+Screenshots were captured before disposal for all 12 rows. No supported
+backend difference was observed in this static-camera picking case.
+
+
+
+The `--pick` sweep also checks zoom 0.5 and 1.2, with camera center
+`{ x: 12, y: -8 }`, alongside the original zoom 1 centered row. Each runs
+on both requested backends at DPR 1 and 2. The expected world coordinate is
+computed explicitly from the CSS pointer, zoom and center, independently of
+the renderer camera conversion. A one CSS pixel boundary margin is excluded
+at every zoom; all remaining picks must match exactly, and every fixture node
+must be hit. At DPR 1, each added zoom also runs a stale-camera negative
+control: the oracle expects zoom 1 and center zero while the renderer uses
+the changed camera. Each control must report the requested backend and at
+least one mismatched pick. The fixture retains its overlap to check draw order. Passing a
+screenshot path writes a separate `.pick-BACKEND-dprDPR-zoomZOOM.png` for each
+row before disposal. These rows test picking of static geometry under a changed
+camera, not picking during node animation or actual pointer event dispatch.
+
+
 ```
 pnpm --filter @prnt/dagr-render build          # the page imports from dist
 npm --prefix bench/browser install --no-save playwright-core

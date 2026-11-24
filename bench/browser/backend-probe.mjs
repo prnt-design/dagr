@@ -59,7 +59,8 @@
  * outline at zoom 0.5 and 1.5, each with a padding control, a
  * placement control, and a control that expects zoom 1's outline.
  * `--pick` adds M4.8b's check of `pickNode` on both backends at device pixel
- * ratios 1 and 2, and exits non-zero on the same adapter terms or on any pick
+ * ratios 1 and 2, at zoom 1 and at zoom 0.5 and 1.2 with a panned camera,
+ * and exits non-zero on the same adapter terms or on any pick
  * that disagrees with the shapes' distance functions.
  */
 import { createRequire } from 'node:module';
@@ -723,12 +724,33 @@ if (cliArgs.includes('--pick')) {
   pick = [];
   for (const backend of ['webgpu', 'webgl2']) {
     for (const ratio of [1, 2]) {
-      const run = await page.evaluate(([value, dpr]) => window.pickCheck(value, dpr), [backend, ratio]);
-      pick.push(run.devicePixelRatio === undefined ? { ...run, devicePixelRatio: ratio } : run);
+      for (const zoom of [1, 0.5, 1.2]) {
+        const center = zoom === 1 ? { x: 0, y: 0 } : { x: 12, y: -8 };
+        const run = await page.evaluate(
+          ([value, dpr, scale, position]) => window.pickCheck(value, dpr, scale, position, true),
+          [backend, ratio, zoom, center],
+        );
+        if (screenshotPath !== undefined && run.reported === backend) {
+          await page.locator('#stage').screenshot({ path: `${screenshotPath}.pick-${backend}-dpr${ratio}-zoom${zoom}.png` });
+        }
+        if (run.reported === backend) await page.evaluate(() => window.disposePick());
+        if (ratio === 1 && zoom !== 1) {
+          const control = await page.evaluate(
+            ([value, scale, position]) => window.pickCheck(value, 1, scale, position, false, true),
+            [backend, zoom, center],
+          );
+          run.staleCameraControl = control;
+          if (control.reported !== backend || !(control.mismatchCount > 0) || control.pass) {
+            console.error(`the stale-camera pick control failed on ${backend} at zoom ${zoom}`);
+            process.exitCode = 1;
+          }
+        }
+        pick.push({ ...run, devicePixelRatio: ratio, zoom, center });
+      }
     }
   }
   for (const run of pick.filter((each) => !each.pass)) {
-    console.error(`the pick check failed on ${run.backend} at DPR ${run.devicePixelRatio}: ${pickFailure(run)}`);
+    console.error(`the pick check failed on ${run.backend} at DPR ${run.devicePixelRatio}, zoom ${run.zoom}: ${pickFailure(run)}`);
     process.exitCode = 1;
   }
 }
