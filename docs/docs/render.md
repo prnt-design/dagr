@@ -989,7 +989,10 @@ at zoom 0.5 and 1.5 (Chrome 158), its corners scaled below zoom 1 and its
 title at its own pixel size: it lands where the zoom puts it and adds no
 differing pixel, against controls at each zoom that widen one side's outline,
 widen the expected outline and expect zoom 1's outline, all of which must
-fail.
+fail. The shapes alone were then compared at zoom 0.5 and 2, byte-identical
+on both, with the outline still 2 device pixels wide and every fill pixel
+the fill colour, against controls at each zoom that shift one shape by a
+third of a device pixel and expect zoom 1's shapes, both of which must fail.
 
 ## Usage
 

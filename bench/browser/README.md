@@ -520,7 +520,7 @@ comparison passes on every frame with the ribbons, dashes and curves drawn
 where the page expects them, the above-nodes one over the circle's fill, and
 the group outline and the rich-node tiers composed over the first frame land
 where the page expects them and add no difference between the backends, and
-all twenty-three controls (one moves a shape, one every ribbon, the curves included,
+all twenty-seven controls (one moves a shape, one every ribbon, the curves included,
 one the dash pattern, one draws the curves as polylines, one holds the flow,
 one draws the above-nodes ribbon below the nodes, one widens one side's
 outline, one the outline the page expects, one moves one side's tier boxes,
@@ -528,7 +528,8 @@ one widens the boxes the page expects, one swaps the tiers the page expects,
 at zoom 0.5 and at zoom 2 one moves one side's tier boxes, one widens the
 boxes the page expects and one expects zoom 1's tiers, and at zoom 0.5 and
 at zoom 1.5 one widens one side's outline, one widens the outline the page
-expects and one expects zoom 1's outline) fail on what they change,
+expects and one expects zoom 1's outline, and at zoom 0.5 and at zoom 2
+one moves a shape and one expects zoom 1's shapes) fail on what they change,
 and says on stderr which of these did not hold. It also exits non-zero, saying why on
 stderr before it compares, when the adapter reports `isFallbackAdapter`,
 because a software adapter such as SwiftShader comes up on `'webgpu'` too and
@@ -983,6 +984,29 @@ outline (433 headed), and the zoom control with every changed pixel off it.
 Every earlier check and control in the run still passes or fails as before on
 Chrome 158.
 
+The shapes alone were compared at zoom 0.5 and 2 on 2026-11-23 UTC, on the
+same Apple M4 in Chrome 158.0.8127.37 (`apple` `metal-3`, not a fallback
+adapter), headless and headed with the same counts. `shapeParity` draws the
+two shapes with no ribbons at that zoom on each backend, maps each device
+pixel centre into the world through the zoom, and puts in the band every
+pixel within one device pixel of a boundary or of the outline's inner edge,
+which stays 2 device pixels inside the boundary at every zoom. The glow is in
+world units and still wider than `aaWidth` at both zooms, so it stays outside
+the band. Every pixel further inside a fill than the band must hold the fill
+colour on WebGPU. Each zoom runs the check and two controls: the shape
+control, one shape shifted 1/3 of a device pixel (1/3 divided by the zoom, in
+world units), which must fail on the interior, and a zoom control that
+expects zoom 1's shapes and must fail on the fills alone.
+
+At zoom 0.5 the check passes byte-identical: none of 656 band pixels or
+152,944 interior pixels differ, and all 1,132 fill pixels hold the fill
+colour. The shape control fails with 244 interior pixels differing by up to
+23, and the zoom control with 790 of 5,948 expected fill pixels holding it.
+At zoom 2 it passes byte-identical over 3,552 band and 150,048 interior
+pixels with all 26,328 fill pixels in the fill colour; the shape control
+fails with 4,234 interior pixels differing by up to 7, and the zoom control
+with 3,966 of 5,948.
+
 **Not a gate.** `bench/README.md`'s argument against a browser measurement in
 `bench:ci` is about timings, and a parity check is not a timing, so that
 argument does not carry. What does is the runner: the check needs a full Chrome
@@ -995,8 +1019,9 @@ smooth one since 2026-11-21, the dashes flowed by 4.5 pixels since
 one, the flow advancing over three frames and a ribbon on the above-nodes
 layer since that day, and a group outline and rich-node tiers composed over
 the first frame since 2026-11-23, DPR 1. The canvas comparison is at zoom
-1, the outline at zoom 0.5, 1 and 1.5, and the tiers at zoom 0.5, 1 and 2.
-Other zooms for the canvas, and DPR 2, are not compared.
+1, the shapes alone also at zoom 0.5 and 2, the outline at zoom 0.5, 1 and
+1.5, and the tiers at zoom 0.5, 1 and 2. The ribbons at other zooms, and DPR
+2, are not compared.
 
 ## Node picking (M4.8b)
 

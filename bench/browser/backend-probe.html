@@ -825,6 +825,86 @@
       };
 
       /**
+       * The shapes alone at a zoom other than 1, compared the way `parity`
+       * compares them at zoom 1.
+       *
+       * A device pixel is `1 / zoom` world units here, so the page maps each
+       * pixel centre into the world through the zoom. The outline stays
+       * `OUTLINE_DEVICE_PX` device pixels wide at every zoom, so its inner
+       * edge sits that many device pixels inside the boundary, and the band is
+       * one device pixel either side of each edge. The glow is in world units
+       * and still exceeds `aaWidth` (two world units at zoom 0.5), so it
+       * leaves the band where it was.
+       *
+       * Every pixel further inside a fill than the band must hold the fill
+       * colour on WebGPU, so a shape drawn at another size cannot pass.
+       * `shiftX` is `parity`'s control, given in world units. `expectedZoom`
+       * places the shapes at that zoom while the canvas is drawn at `zoom`, so
+       * it fails only if the fill check can see that the shapes follow the
+       * zoom.
+       */
+      window.shapeParity = async (zoom, shiftX = 0, expectedZoom = zoom) => {
+        const shifted = NODES.map((node, i) =>
+          i === 0 ? { ...node, center: { x: node.center.x + shiftX, y: node.center.y } } : node,
+        );
+        const shapes = (backend, nodes) =>
+          draw(backend, nodes, [], [], [FLOWS[0]], [], [], 'smooth', [], 'above-nodes', false, zoom);
+        let gpu;
+        let gl;
+        try {
+          gpu = await shapes('webgpu', NODES);
+          gl = await shapes('webgl2', shifted);
+        } catch (error) {
+          return { pass: false, error: String(error), code: error && error.code };
+        }
+        const [gpuData] = gpu.frames;
+        const [glData] = gl.frames;
+        const band = { pixels: 0, differing: 0, maxDelta: 0 };
+        const interior = { pixels: 0, differing: 0, maxDelta: 0 };
+        const fill = { pixels: 0, filled: 0 };
+        for (let row = 0; row < gpu.height; row += 1) {
+          for (let col = 0; col < gpu.width; col += 1) {
+            const x = (col + 0.5 - gpu.width / 2) / expectedZoom;
+            const y = (gpu.height / 2 - (row + 0.5)) / expectedZoom;
+            const i = (row * gpu.width + col) * 4;
+            let nearest = Infinity;
+            for (const node of NODES) {
+              const d = signedDistance(node, x, y) * expectedZoom;
+              nearest = Math.min(nearest, Math.abs(d), Math.abs(d + OUTLINE_DEVICE_PX));
+              if (d < -(OUTLINE_DEVICE_PX + EDGE_BAND_DEVICE_PX)) {
+                fill.pixels += 1;
+                if ([16, 8, 0].every((s, c) => Math.abs(gpuData[i + c] - ((node.fillColor >> s) & 0xff)) <= ROUNDING)) {
+                  fill.filled += 1;
+                }
+              }
+            }
+            const bucket = nearest < EDGE_BAND_DEVICE_PX ? band : interior;
+            const delta = pixelDelta(gpuData, glData, i);
+            bucket.pixels += 1;
+            if (delta > 0) bucket.differing += 1;
+            bucket.maxDelta = Math.max(bucket.maxDelta, delta);
+          }
+        }
+        const backends = { webgpu: gpu.reported, webgl2: gl.reported };
+        const sameSize = gl.width === gpu.width && gl.height === gpu.height;
+        const filled = fill.pixels > 0 && fill.filled === fill.pixels;
+        return {
+          pass:
+            backends.webgpu === 'webgpu' && backends.webgl2 === 'webgl2' && sameSize && filled && interior.maxDelta <= ROUNDING,
+          backends,
+          sameSize,
+          tolerance: { edgeBandDevicePx: EDGE_BAND_DEVICE_PX, interiorMaxDelta: ROUNDING },
+          zoom,
+          shiftX,
+          expectedZoom,
+          band,
+          interior,
+          fill,
+          filled,
+        };
+      };
+
+      /**
        * A group outline over the parity scene's first frame, composed with
        * the canvas on each backend.
        *
