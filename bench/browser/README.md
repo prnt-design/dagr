@@ -521,7 +521,9 @@ where the page expects them, the above-nodes one over the circle's fill, and
 the group outline and the rich-node tiers composed over the first frame land
 where the page expects them and add no difference between the backends, the
 shapes alone at zoom 0.5 and 2 compare within tolerance with every fill
-pixel in its fill colour, and all twenty-seven controls (one moves a shape, one every ribbon, the curves included,
+pixel in its fill colour, the solid straight ribbons alone at zoom 0.5 and
+1.5 compare within tolerance with the edge colour inside them and the clear
+colour just outside, and all thirty-one controls (one moves a shape, one every ribbon, the curves included,
 one the dash pattern, one draws the curves as polylines, one holds the flow,
 one draws the above-nodes ribbon below the nodes, one widens one side's
 outline, one the outline the page expects, one moves one side's tier boxes,
@@ -529,8 +531,10 @@ one widens the boxes the page expects, one swaps the tiers the page expects,
 at zoom 0.5 and at zoom 2 one moves one side's tier boxes, one widens the
 boxes the page expects and one expects zoom 1's tiers, and at zoom 0.5 and
 at zoom 1.5 one widens one side's outline, one widens the outline the page
-expects and one expects zoom 1's outline, and at zoom 0.5 and at zoom 2
-one moves a shape and one expects zoom 1's shapes) fail on what they change,
+expects and one expects zoom 1's outline, at zoom 0.5 and at zoom 2
+one moves a shape and one expects zoom 1's shapes, and at zoom 0.5 and at
+zoom 1.5 one moves the ribbons and one expects zoom 1's ribbons) fail on
+what they change,
 and says on stderr which of these did not hold. It also exits non-zero, saying why on
 stderr before it compares, when the adapter reports `isFallbackAdapter`,
 because a software adapter such as SwiftShader comes up on `'webgpu'` too and
@@ -1008,6 +1012,35 @@ pixels with all 26,328 fill pixels in the fill colour; the shape control
 fails with 4,234 interior pixels differing by up to 7, and the zoom control
 with 3,966 of 5,948.
 
+The two solid straight ribbons alone were compared at zoom 0.5 and 1.5 on
+2026-11-24 UTC, on the same Apple M4 in Chrome 158.0.8127.37 (`apple`
+`metal-3`, not a fallback adapter), headless and headed with the same
+counts. `ribbonParity` draws the elbow and the diagonal with no shapes at
+that zoom on each backend. A route point is in world units but
+`halfWidthPixels` is in device pixels, so the page scales the routes into
+device pixels by the zoom and bands them as at zoom 1: one device pixel
+either side of the visible edge, and the caps and joins whole. Every pixel
+further inside a ribbon than the band must hold the edge colour on WebGPU,
+and every pixel in a strip from the band out to 3 device pixels beyond the
+edge, at least 6 from a route point so clear of the mitred corners, the
+clear colour, so a ribbon whose width followed the zoom cannot pass; one
+drawn with `halfWidthPixels` times the zoom fails at both zooms. Zoom 2 is
+not used because the elbow's middle run leaves the frame there. Each zoom
+runs the check and two controls: the edge control, both ribbons shifted 2
+device pixels along each axis (2 divided by the zoom, in world units), which
+must fail on the interior, and a zoom control that expects zoom 1's ribbons
+and must fail on the edge colour alone.
+
+At zoom 0.5 the check passes byte-identical: none of 1,017 band pixels or
+152,583 interior pixels differ, all 348 pixels inside the ribbons hold the
+edge colour and all 683 beside them the clear colour. The edge control fails
+with 546 interior pixels differing by up to 158, and the zoom control with
+none of 758 expected ribbon pixels in the edge colour. At zoom 1.5 it passes
+byte-identical over 2,244 band and 151,356 interior pixels, with all 984
+inside and all 1,965 beside in their colours; the edge control fails with
+1,355 interior pixels differing by up to 158, and the zoom control with none
+of 758.
+
 **Not a gate.** `bench/README.md`'s argument against a browser measurement in
 `bench:ci` is about timings, and a parity check is not a timing, so that
 argument does not carry. What does is the runner: the check needs a full Chrome
@@ -1020,9 +1053,10 @@ smooth one since 2026-11-21, the dashes flowed by 4.5 pixels since
 one, the flow advancing over three frames and a ribbon on the above-nodes
 layer since that day, and a group outline and rich-node tiers composed over
 the first frame since 2026-11-23, DPR 1. The canvas comparison is at zoom
-1, the shapes alone also at zoom 0.5 and 2, the outline at zoom 0.5, 1 and
-1.5, and the tiers at zoom 0.5, 1 and 2. The ribbons at other zooms, and DPR
-2, are not compared.
+1, the shapes alone also at zoom 0.5 and 2, the solid straight ribbons
+alone at zoom 0.5 and 1.5, the outline at zoom 0.5, 1 and 1.5, and the tiers
+at zoom 0.5, 1 and 2. The dashed, smooth and above-nodes ribbons at other
+zooms, and DPR 2, are not compared.
 
 ## Node picking (M4.8b)
 
