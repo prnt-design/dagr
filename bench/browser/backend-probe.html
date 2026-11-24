@@ -839,9 +839,9 @@
        * Every pixel further inside a fill than the band must hold the fill
        * colour on WebGPU, so a shape drawn at another size cannot pass.
        * `shiftX` is `parity`'s control, given in world units. `expectedZoom`
-       * places the shapes at that zoom while the canvas is drawn at `zoom`, so
-       * it fails only if the fill check can see that the shapes follow the
-       * zoom.
+       * places the fills the page expects at that zoom while the canvas and
+       * the band stay at `zoom`, so it fails only if the fill check can see
+       * that the shapes follow the zoom.
        */
       window.shapeParity = async (zoom, shiftX = 0, expectedZoom = zoom) => {
         const shifted = NODES.map((node, i) =>
@@ -864,14 +864,15 @@
         const fill = { pixels: 0, filled: 0 };
         for (let row = 0; row < gpu.height; row += 1) {
           for (let col = 0; col < gpu.width; col += 1) {
-            const x = (col + 0.5 - gpu.width / 2) / expectedZoom;
-            const y = (gpu.height / 2 - (row + 0.5)) / expectedZoom;
+            const x = col + 0.5 - gpu.width / 2;
+            const y = gpu.height / 2 - (row + 0.5);
             const i = (row * gpu.width + col) * 4;
             let nearest = Infinity;
             for (const node of NODES) {
-              const d = signedDistance(node, x, y) * expectedZoom;
+              const d = signedDistance(node, x / zoom, y / zoom) * zoom;
               nearest = Math.min(nearest, Math.abs(d), Math.abs(d + OUTLINE_DEVICE_PX));
-              if (d < -(OUTLINE_DEVICE_PX + EDGE_BAND_DEVICE_PX)) {
+              const expected = signedDistance(node, x / expectedZoom, y / expectedZoom) * expectedZoom;
+              if (expected < -(OUTLINE_DEVICE_PX + EDGE_BAND_DEVICE_PX)) {
                 fill.pixels += 1;
                 if ([16, 8, 0].every((s, c) => Math.abs(gpuData[i + c] - ((node.fillColor >> s) & 0xff)) <= ROUNDING)) {
                   fill.filled += 1;

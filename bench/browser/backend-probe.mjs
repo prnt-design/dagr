@@ -49,9 +49,10 @@
  * screenshotted the same way; the ninth control moves one side's tier boxes,
  * the tenth widens the boxes the page expects and the eleventh swaps the tiers
  * it expects. The shapes alone are compared again at zoom 0.5 and 2, each
- * with a control that shifts one shape and one that expects zoom 1's shapes. The tiers are checked again at zoom 0.5 and 2, each with a
- * bounds control, a placement control, and a control that expects zoom 1's
- * tiers, and the outline at zoom 0.5 and 1.5, each with a padding control, a
+ * with a control that shifts one shape and one that expects zoom 1's shapes.
+ * The tiers are checked again at zoom 0.5 and 2, each with a bounds control,
+ * a placement control, and a control that expects zoom 1's tiers, and the
+ * outline at zoom 0.5 and 1.5, each with a padding control, a
  * placement control, and a control that expects zoom 1's outline.
  * `--pick` adds M4.8b's check of `pickNode` on both backends at device pixel
  * ratios 1 and 2, and exits non-zero on the same adapter terms or on any pick
@@ -144,7 +145,7 @@ function shapeFailure(check) {
  * at: the shift only on the interior, the expected zoom only on the fills.
  */
 function shapeControlFailure(control, aimedAt) {
-  if (control.pass) return 'passed, so the check cannot see a misplaced shape';
+  if (control.pass) return 'passed, so the check cannot see what it changes';
   const shifted = control.interior?.maxDelta > control.tolerance?.interiorMaxDelta;
   const onAim = aimedAt === 'interior' ? shifted && control.filled : !shifted && !control.filled;
   return control.error === undefined &&
