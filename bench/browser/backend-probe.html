@@ -478,8 +478,7 @@
         return { centreline, point };
       };
 
-      // The page's copy of `dashDistance`, at zoom 1 and DPR 1 where an arc in
-      // world units is an arc in device pixels.
+      // The page's copy of `dashDistance`, given the arc in device pixels.
       const dashDistance = (arc, flowPixels) => {
         const { periodPixels, duty } = DASHED_STYLE.dash;
         const phase = (arc - flowPixels) / periodPixels;
@@ -512,8 +511,12 @@
        * Under centroid or per-sample interpolation the arc along a mitred
        * segment's quad moves by about 1.5 px across one pixel, more than the
        * one-pixel margin.
+       *
+       * Positions and `arc` are world units and the offsets device pixels, so
+       * at `zoom` the positions scale into device pixels by it and the arc by
+       * `arcZoom`, which differs from `zoom` only for a control.
        */
-      const dashedClasses = (routes, options, flowPixels, width, height) => {
+      const dashedClasses = (routes, options, flowPixels, width, height, zoom = 1, arcZoom = zoom) => {
         const { position, offset, across, arc, index } = tessellateRibbons(routes, options);
         const hw = DASHED_STYLE.halfWidthPixels;
         const expand = hw + RIBBON_AA_PADDING_PIXELS;
@@ -521,8 +524,8 @@
         const classes = new Uint8Array(width * height);
         for (let t = 0; t < index.length; t += 3) {
           const v = [index[t], index[t + 1], index[t + 2]];
-          const vx = v.map((k) => position[2 * k] + offset[2 * k] * expand);
-          const vy = v.map((k) => position[2 * k + 1] + offset[2 * k + 1] * expand);
+          const vx = v.map((k) => position[2 * k] * zoom + offset[2 * k] * expand);
+          const vy = v.map((k) => position[2 * k + 1] * zoom + offset[2 * k + 1] * expand);
           const det = (vx[1] - vx[0]) * (vy[2] - vy[0]) - (vx[2] - vx[0]) * (vy[1] - vy[0]);
           if (det <= 0) continue;
           const colFrom = Math.max(0, Math.floor(Math.min(...vx) - reach + width / 2));
@@ -546,7 +549,7 @@
                 if (outside > reach) continue;
               }
               const side = Math.abs(w0 * across[v[0]] + w1 * across[v[1]] + w2 * across[v[2]]) * expand - hw;
-              const along = dashDistance(w0 * arc[v[0]] + w1 * arc[v[1]] + w2 * arc[v[2]], flowPixels);
+              const along = dashDistance((w0 * arc[v[0]] + w1 * arc[v[1]] + w2 * arc[v[2]]) * arcZoom, flowPixels);
               let cls = BAND;
               if (Math.max(side, along) < -EDGE_BAND_DEVICE_PX) cls = SOLID;
               else if (side < -EDGE_BAND_DEVICE_PX && along > EDGE_BAND_DEVICE_PX) cls = GAP;
@@ -1008,6 +1011,95 @@
           ribbon,
           beside,
           ribbonDrawn,
+        };
+      };
+
+      /**
+       * The dashed straight ribbons alone at a zoom other than 1, on the first
+       * frame's flow, compared the way `parity` compares them at zoom 1.
+       *
+       * The dash period and flow are device pixels while the arc is world
+       * units, so the pattern keeps its size at every zoom while the routes
+       * scale. `dashedClasses` places the dashes at `zoom` from the group's
+       * own triangles. Inside a dash must hold the edge colour on WebGPU and
+       * inside a gap the clear colour, so a pattern that followed the zoom
+       * cannot pass. `dashShift` is `parity`'s dash control. `expectedArcZoom`
+       * lays out the dashes the page expects with the arc scaled by it while
+       * the canvas, the routes and the band stay at `zoom`; at 1 it expects a
+       * period in world units, and fails only if the dash and gap checks can
+       * see that the pattern does not follow the zoom.
+       */
+      window.dashParity = async (zoom, dashShift = 0, expectedArcZoom = zoom) => {
+        const dashes = (backend, flow) =>
+          draw(backend, [], [], DASHED, [flow], [], [], 'smooth', [], 'above-nodes', false, zoom);
+        let gpu;
+        let gl;
+        try {
+          gpu = await dashes('webgpu', FLOWS[0]);
+          gl = await dashes('webgl2', FLOWS[0] + dashShift);
+        } catch (error) {
+          return { pass: false, error: String(error), code: error && error.code };
+        }
+        const drawnAt = dashedClasses(DASHED, undefined, FLOWS[0], gpu.width, gpu.height, zoom);
+        const expectedAt = dashedClasses(DASHED, undefined, FLOWS[0], gpu.width, gpu.height, zoom, expectedArcZoom);
+        const hw = DASHED_STYLE.halfWidthPixels;
+        const [gpuData] = gpu.frames;
+        const [glData] = gl.frames;
+        const band = { pixels: 0, differing: 0, maxDelta: 0 };
+        const interior = { pixels: 0, differing: 0, maxDelta: 0 };
+        const dash = { pixels: 0, edgeColored: 0 };
+        const gap = { pixels: 0, clear: 0 };
+        const near = (data, i, color) =>
+          [16, 8, 0].every((s, c) => Math.abs(data[i + c] - ((color >> s) & 0xff)) <= ROUNDING);
+        for (let row = 0; row < gpu.height; row += 1) {
+          for (let col = 0; col < gpu.width; col += 1) {
+            const x = col + 0.5 - gpu.width / 2;
+            const y = gpu.height / 2 - (row + 0.5);
+            const i = (row * gpu.width + col) * 4;
+            let capped = false;
+            for (const edge of DASHED) {
+              for (const p of [edge.points[0], edge.points[edge.points.length - 1]]) {
+                if (Math.hypot(x - p.x * zoom, y - p.y * zoom) < hw + 2) capped = true;
+              }
+            }
+            const at = row * gpu.width + col;
+            if (!capped && expectedAt[at] === SOLID) {
+              dash.pixels += 1;
+              if (near(gpuData, i, EDGE_COLOR)) dash.edgeColored += 1;
+            }
+            if (!capped && expectedAt[at] === GAP) {
+              gap.pixels += 1;
+              if (near(gpuData, i, CLEAR_COLOR)) gap.clear += 1;
+            }
+            const bucket = capped || drawnAt[at] === BAND ? band : interior;
+            const delta = pixelDelta(gpuData, glData, i);
+            bucket.pixels += 1;
+            if (delta > 0) bucket.differing += 1;
+            bucket.maxDelta = Math.max(bucket.maxDelta, delta);
+          }
+        }
+        const backends = { webgpu: gpu.reported, webgl2: gl.reported };
+        const sameSize = gl.width === gpu.width && gl.height === gpu.height;
+        const dashesDrawn =
+          dash.pixels > 0 && dash.edgeColored === dash.pixels && gap.pixels > 0 && gap.clear === gap.pixels;
+        return {
+          pass:
+            backends.webgpu === 'webgpu' &&
+            backends.webgl2 === 'webgl2' &&
+            sameSize &&
+            dashesDrawn &&
+            interior.maxDelta <= ROUNDING,
+          backends,
+          sameSize,
+          tolerance: { edgeBandDevicePx: EDGE_BAND_DEVICE_PX, interiorMaxDelta: ROUNDING },
+          zoom,
+          dashShift,
+          expectedArcZoom,
+          band,
+          interior,
+          dash,
+          gap,
+          dashesDrawn,
         };
       };
 

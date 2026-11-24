@@ -30,7 +30,7 @@
  * Chrome instead of launching one. The output
  * records the browser, mode and flags, because a backend result without them
  * cannot be reproduced. `--parity` adds M4.9b's backend comparison and exits
- * non-zero unless it passes and all thirty-one of its controls fail on
+ * non-zero unless it passes and all thirty-five of its controls fail on
  * what they change. It also exits non-zero when the adapter reports `isFallbackAdapter`: a software
  * adapter such as
  * SwiftShader still comes up on `webgpu`, so its side of the comparison would
@@ -50,8 +50,10 @@
  * the tenth widens the boxes the page expects and the eleventh swaps the tiers
  * it expects. The shapes alone are compared again at zoom 0.5 and 2, each
  * with a control that shifts one shape and one that expects zoom 1's shapes,
- * and the solid straight ribbons alone at zoom 0.5 and 1.5, each with a
- * control that shifts them and one that expects zoom 1's ribbons.
+ * the solid straight ribbons alone at zoom 0.5 and 1.5, each with a
+ * control that shifts them and one that expects zoom 1's ribbons, and the
+ * dashed straight ribbons alone at zoom 0.5 and 1.2, each with a control that
+ * flows one side's dashes further and one that expects a period in world units.
  * The tiers are checked again at zoom 0.5 and 2, each with a bounds control,
  * a placement control, and a control that expects zoom 1's tiers, and the
  * outline at zoom 0.5 and 1.5, each with a padding control, a
@@ -93,6 +95,9 @@ const SHAPE_ZOOMS = [0.5, 2];
 // Either side of zoom 1, with both of the elbow's joins inside the frame; at 2
 // its middle run leaves it. At 1.5 the diagonal's first cap is outside it.
 const RIBBON_ZOOMS = [0.5, 1.5];
+// Either side of zoom 1, with the dashed joins' right angle and fanned turn
+// inside the frame; above about 1.21 the horizontal leaves it.
+const DASH_ZOOMS = [0.5, 1.2];
 
 /**
  * The page's import map, filled in from this process's own module resolution.
@@ -200,6 +205,47 @@ function ribbonControlFailure(control, aimedAt) {
     onAim
     ? undefined
     : `failed, but not on what it changes: ${ribbonFailure(control)}`;
+}
+
+function dashFailure(check) {
+  if (check.error !== undefined) return check.error;
+  const reasons = [];
+  if (check.backends.webgpu !== 'webgpu' || check.backends.webgl2 !== 'webgl2') {
+    reasons.push(`the frames drew on ${check.backends.webgpu} and ${check.backends.webgl2}, not webgpu and webgl2`);
+  }
+  if (!check.sameSize) reasons.push("the two backends' frames are different sizes");
+  if (check.dash.pixels === 0 || check.dash.edgeColored < check.dash.pixels) {
+    reasons.push(`${check.dash.edgeColored} of ${check.dash.pixels} pixels inside the dashes hold the edge colour on webgpu`);
+  }
+  if (check.gap.pixels === 0 || check.gap.clear < check.gap.pixels) {
+    reasons.push(`${check.gap.clear} of ${check.gap.pixels} pixels inside the dash gaps hold the clear colour on webgpu`);
+  }
+  if (check.interior.maxDelta > check.tolerance.interiorMaxDelta) {
+    reasons.push(
+      `${check.interior.differing} interior pixels differ, by up to ${check.interior.maxDelta} against a tolerance of ${check.tolerance.interiorMaxDelta}`,
+    );
+  }
+  return reasons.join('; ');
+}
+
+/**
+ * Why a dash control at another zoom did not fail on the check it is aimed
+ * at: the flow only on the interior, the world-unit period only on the dash
+ * and gap colours.
+ */
+function dashControlFailure(control, aimedAt) {
+  if (control.pass) return 'passed, so the check cannot see what it changes';
+  const shifted = control.interior?.maxDelta > control.tolerance?.interiorMaxDelta;
+  const miscoloured =
+    control.dash?.edgeColored < control.dash?.pixels || control.gap?.clear < control.gap?.pixels;
+  const onAim = aimedAt === 'interior' ? shifted && control.dashesDrawn : !shifted && miscoloured;
+  return control.error === undefined &&
+    control.backends.webgpu === 'webgpu' &&
+    control.backends.webgl2 === 'webgl2' &&
+    control.sameSize &&
+    onAim
+    ? undefined
+    : `failed, but not on what it changes: ${dashFailure(control)}`;
 }
 
 function parityFailure(check) {
@@ -457,6 +503,15 @@ if (cliArgs.includes('--parity')) {
       zoomControl: await page.evaluate((at) => window.ribbonParity(at, 0, 1), zoom),
     });
   }
+  parity.dashZooms = [];
+  for (const zoom of DASH_ZOOMS) {
+    parity.dashZooms.push({
+      zoom,
+      check: await page.evaluate((at) => window.dashParity(at), zoom),
+      control: await page.evaluate(([at, shift]) => window.dashParity(at, shift), [zoom, DASH_CONTROL_SHIFT_PX]),
+      zoomControl: await page.evaluate((at) => window.dashParity(at, 0, 1), zoom),
+    });
+  }
   // The page keeps only the latest draw's canvas read back, so every check
   // that reuses a set of screenshots runs before the next draw.
   const shots = await composedShots('groupFrame', 0);
@@ -570,6 +625,22 @@ if (cliArgs.includes('--parity')) {
       const failure = ribbonControlFailure(run, aimedAt);
       if (failure !== undefined) {
         console.error(`the ribbon control at zoom ${zoom}, with ${what}, ${failure}`);
+        process.exitCode = 1;
+      }
+    }
+  }
+  for (const { zoom, check, control, zoomControl } of parity.dashZooms) {
+    if (!check.pass) {
+      console.error(`the dash check at zoom ${zoom} failed: ${dashFailure(check)}`);
+      process.exitCode = 1;
+    }
+    for (const [run, aimedAt, what] of [
+      [control, 'interior', `the dashes flowed ${DASH_CONTROL_SHIFT_PX} px further`],
+      [zoomControl, 'dash colours', 'a period in world units expected'],
+    ]) {
+      const failure = dashControlFailure(run, aimedAt);
+      if (failure !== undefined) {
+        console.error(`the dash control at zoom ${zoom}, with ${what}, ${failure}`);
         process.exitCode = 1;
       }
     }
