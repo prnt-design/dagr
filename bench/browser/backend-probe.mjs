@@ -30,7 +30,7 @@
  * Chrome instead of launching one. The output
  * records the browser, mode and flags, because a backend result without them
  * cannot be reproduced. `--parity` adds M4.9b's backend comparison and exits
- * non-zero unless it passes and all twenty-seven of its controls fail on
+ * non-zero unless it passes and all thirty-one of its controls fail on
  * what they change. It also exits non-zero when the adapter reports `isFallbackAdapter`: a software
  * adapter such as
  * SwiftShader still comes up on `webgpu`, so its side of the comparison would
@@ -49,7 +49,9 @@
  * screenshotted the same way; the ninth control moves one side's tier boxes,
  * the tenth widens the boxes the page expects and the eleventh swaps the tiers
  * it expects. The shapes alone are compared again at zoom 0.5 and 2, each
- * with a control that shifts one shape and one that expects zoom 1's shapes.
+ * with a control that shifts one shape and one that expects zoom 1's shapes,
+ * and the solid straight ribbons alone at zoom 0.5 and 1.5, each with a
+ * control that shifts them and one that expects zoom 1's ribbons.
  * The tiers are checked again at zoom 0.5 and 2, each with a bounds control,
  * a placement control, and a control that expects zoom 1's tiers, and the
  * outline at zoom 0.5 and 1.5, each with a padding control, a
@@ -88,6 +90,9 @@ const RICH_ZOOMS = [0.5, 2];
 const GROUP_ZOOMS = [0.5, 1.5];
 // Either side of zoom 1, with both shapes and their glow inside the frame.
 const SHAPE_ZOOMS = [0.5, 2];
+// Either side of zoom 1, with both of the elbow's joins inside the frame; at 2
+// its middle run leaves it. At 1.5 the diagonal's first cap is outside it.
+const RIBBON_ZOOMS = [0.5, 1.5];
 
 /**
  * The page's import map, filled in from this process's own module resolution.
@@ -155,6 +160,46 @@ function shapeControlFailure(control, aimedAt) {
     onAim
     ? undefined
     : `failed, but not on what it changes: ${shapeFailure(control)}`;
+}
+
+function ribbonFailure(check) {
+  if (check.error !== undefined) return check.error;
+  const reasons = [];
+  if (check.backends.webgpu !== 'webgpu' || check.backends.webgl2 !== 'webgl2') {
+    reasons.push(`the frames drew on ${check.backends.webgpu} and ${check.backends.webgl2}, not webgpu and webgl2`);
+  }
+  if (!check.sameSize) reasons.push("the two backends' frames are different sizes");
+  if (check.ribbon.pixels === 0 || check.ribbon.edgeColored < check.ribbon.pixels) {
+    reasons.push(`${check.ribbon.edgeColored} of ${check.ribbon.pixels} pixels inside the ribbons hold the edge colour on webgpu`);
+  }
+  if (check.beside.pixels === 0 || check.beside.clear < check.beside.pixels) {
+    reasons.push(`${check.beside.clear} of ${check.beside.pixels} pixels just outside them hold the clear colour on webgpu`);
+  }
+  if (check.interior.maxDelta > check.tolerance.interiorMaxDelta) {
+    reasons.push(
+      `${check.interior.differing} interior pixels differ, by up to ${check.interior.maxDelta} against a tolerance of ${check.tolerance.interiorMaxDelta}`,
+    );
+  }
+  return reasons.join('; ');
+}
+
+/**
+ * Why a ribbon control at another zoom did not fail on the check it is aimed
+ * at: the shift only on the interior, the expected zoom only on the edge
+ * colour.
+ */
+function ribbonControlFailure(control, aimedAt) {
+  if (control.pass) return 'passed, so the check cannot see what it changes';
+  const shifted = control.interior?.maxDelta > control.tolerance?.interiorMaxDelta;
+  const unlit = control.ribbon?.edgeColored < control.ribbon?.pixels;
+  const onAim = aimedAt === 'interior' ? shifted && control.ribbonDrawn : !shifted && unlit;
+  return control.error === undefined &&
+    control.backends.webgpu === 'webgpu' &&
+    control.backends.webgl2 === 'webgl2' &&
+    control.sameSize &&
+    onAim
+    ? undefined
+    : `failed, but not on what it changes: ${ribbonFailure(control)}`;
 }
 
 function parityFailure(check) {
@@ -403,6 +448,15 @@ if (cliArgs.includes('--parity')) {
       zoomControl: await page.evaluate((at) => window.shapeParity(at, 0, 1), zoom),
     });
   }
+  parity.ribbonZooms = [];
+  for (const zoom of RIBBON_ZOOMS) {
+    parity.ribbonZooms.push({
+      zoom,
+      check: await page.evaluate((at) => window.ribbonParity(at), zoom),
+      control: await page.evaluate(([at, shift]) => window.ribbonParity(at, shift), [zoom, EDGE_CONTROL_SHIFT_PX / zoom]),
+      zoomControl: await page.evaluate((at) => window.ribbonParity(at, 0, 1), zoom),
+    });
+  }
   // The page keeps only the latest draw's canvas read back, so every check
   // that reuses a set of screenshots runs before the next draw.
   const shots = await composedShots('groupFrame', 0);
@@ -500,6 +554,22 @@ if (cliArgs.includes('--parity')) {
       const failure = shapeControlFailure(run, aimedAt);
       if (failure !== undefined) {
         console.error(`the shape control at zoom ${zoom}, with ${what}, ${failure}`);
+        process.exitCode = 1;
+      }
+    }
+  }
+  for (const { zoom, check, control, zoomControl } of parity.ribbonZooms) {
+    if (!check.pass) {
+      console.error(`the ribbon check at zoom ${zoom} failed: ${ribbonFailure(check)}`);
+      process.exitCode = 1;
+    }
+    for (const [run, aimedAt, what] of [
+      [control, 'interior', `the ribbons shifted by ${EDGE_CONTROL_SHIFT_PX} px`],
+      [zoomControl, 'edge colour', "zoom 1's ribbons expected"],
+    ]) {
+      const failure = ribbonControlFailure(run, aimedAt);
+      if (failure !== undefined) {
+        console.error(`the ribbon control at zoom ${zoom}, with ${what}, ${failure}`);
         process.exitCode = 1;
       }
     }
