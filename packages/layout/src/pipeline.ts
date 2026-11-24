@@ -1110,13 +1110,66 @@ class HeldSizes implements ReadonlyMap<NodeId, Size> {
  * is still inside one, the seeded view stays acyclic, and one more arc only loosens the
  * half-arcs bound. A leaf under the last rank opens a layer of its own, which
  * the order stage builds.
+ *
+ * The answer reads through the held map rather than copying it, since the 10k
+ * corpus holds 184,222 ranks. A view over a view is built over the map
+ * beneath, so a run of added leaves holds one map and the leaves beside it.
  */
 export function withLeaf(held: PreviousLayout, edge: AddEdgeOp): ReadonlyMap<NodeId, number> | undefined {
   const rank = held.ranks.get(edge.source);
   if (rank === undefined || held.ranks.has(edge.target)) return undefined;
-  const ranks = new Map(held.ranks);
-  ranks.set(edge.target, rank + 1);
-  return ranks;
+  const base = held.ranks instanceof LeafRanks ? held.ranks.base : held.ranks;
+  const leaves = new Map(held.ranks instanceof LeafRanks ? held.ranks.leaves : undefined);
+  leaves.set(edge.target, rank + 1);
+  return new LeafRanks(base, leaves);
+}
+
+/**
+ * The ranks {@link withLeaf} returns: `base`, then `leaves`, in that order,
+ * which is the order copying `base` and setting each leaf on the copy gives.
+ * Correct only because no leaf is in `base`, which `withLeaf` checks first.
+ */
+class LeafRanks implements ReadonlyMap<NodeId, number> {
+  readonly base: ReadonlyMap<NodeId, number>;
+  readonly leaves: ReadonlyMap<NodeId, number>;
+
+  constructor(base: ReadonlyMap<NodeId, number>, leaves: ReadonlyMap<NodeId, number>) {
+    this.base = base;
+    this.leaves = leaves;
+  }
+
+  get size(): number {
+    return this.base.size + this.leaves.size;
+  }
+
+  get(id: NodeId): number | undefined {
+    return this.base.get(id) ?? this.leaves.get(id);
+  }
+
+  has(id: NodeId): boolean {
+    return this.base.has(id) || this.leaves.has(id);
+  }
+
+  forEach(visit: (rank: number, id: NodeId, map: ReadonlyMap<NodeId, number>) => void): void {
+    for (const [id, rank] of this) visit(rank, id, this);
+  }
+
+  *entries(): MapIterator<[NodeId, number]> {
+    yield* this.base.entries();
+    yield* this.leaves.entries();
+  }
+
+  *keys(): MapIterator<NodeId> {
+    for (const [id] of this) yield id;
+  }
+
+  *values(): MapIterator<number> {
+    for (const [, rank] of this) yield rank;
+  }
+
+  [Symbol.iterator](): MapIterator<[NodeId, number]> {
+    return this.entries();
+  }
 }
 
 /**
@@ -1148,11 +1201,27 @@ export function withoutLeaf(
   }
   const layer = held.layers[rank];
   if (layer === undefined || layer.length < 2 || !layer.includes(leaf)) return undefined;
-  const ranks = new Map(held.ranks);
-  ranks.delete(leaf);
   const layers = [...held.layers];
   layers[rank] = layer.filter((id) => id !== leaf);
-  return { ...held, ranks, layers };
+  return { ...held, ranks: withoutRank(held.ranks, leaf), layers };
+}
+
+/**
+ * `ranks` less `id`, in the order a copy with `id` deleted iterates. A leaf
+ * {@link withLeaf} added comes out of its view with no copy of the map
+ * beneath, and any other copy is of plain maps, which is the fast one.
+ */
+function withoutRank(ranks: ReadonlyMap<NodeId, number>, id: NodeId): ReadonlyMap<NodeId, number> {
+  if (ranks instanceof LeafRanks && ranks.leaves.has(id)) {
+    if (ranks.leaves.size === 1) return ranks.base;
+    const leaves = new Map(ranks.leaves);
+    leaves.delete(id);
+    return new LeafRanks(ranks.base, leaves);
+  }
+  const copy = new Map(ranks instanceof LeafRanks ? ranks.base : ranks);
+  copy.delete(id);
+  if (ranks instanceof LeafRanks) for (const [leaf, rank] of ranks.leaves) copy.set(leaf, rank);
+  return copy;
 }
 
 function placed(
