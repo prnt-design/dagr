@@ -156,19 +156,20 @@ left.
 
 Wall-clock milliseconds for one `engine.relayout(patch)` on the 10k corpus
 (10,000 nodes, 40,000 edges) at the defaults, measured on an Apple M4 under Node
-25.6.1 at a one-minute load average of 1.72. A cycle adds a leaf under a node in
-the middle of the graph, grows that node with a `nodeSize` callback, shrinks it
-back and removes the leaf. Each figure is a median over eleven cycles after two
-warmups, so the resize column pools both size changes, 22 relayouts.
+25.6.1 on 2026-11-24 UTC at a one-minute load average of 2.8. A cycle adds a
+leaf under a node in the middle of the graph, grows that node with a
+`nodeSize` callback, shrinks it back and removes the leaf. Each figure is a
+median over eleven cycles after two warmups, so the resize column pools both
+size changes, 22 relayouts.
 
 | Phase | add a leaf | remove a leaf | resize a node |
 | --- | --- | --- | --- |
 | `longest-path-rank` | not run | not run | not run |
-| `barycenter-order` | 76.6ms | not run | not run |
-| `grid-position` | 19.1ms | 17.6ms | 17.9ms |
-| `polyline-route` | 25.8ms | 24.6ms | 24.5ms |
-| everything else | 77.4ms | 58.5ms | 49.4ms |
-| **whole relayout** | **202ms** | **103ms** | **92.3ms** |
+| `barycenter-order` | 67.9ms | not run | not run |
+| `grid-position` | 23.4ms | 18.2ms | 22.5ms |
+| `polyline-route` | 25.0ms | 23.5ms | 24.7ms |
+| everything else | 53.5ms | 36.3ms | 35.5ms |
+| **whole relayout** | **183ms** | **79.9ms** | **83.4ms** |
 
 **A resize runs only position and route.** Neither the rank stage nor the order
 stage reads a size, and run again over an unchanged graph both would land where
@@ -207,16 +208,18 @@ than by a comparison sort, then took that step from about 20ms to about 4ms and
 the stage to 86.8ms at a load average of 1.61. Building its index with each
 segment written into a typed array sized up front, rather than pushed onto
 growing arrays, then took the stage to 75.0ms at a load average of 2.95; the
-stage has not changed since, and the 76.6ms the table measures it at now is
-within the spread between runs. What is
+stage has not changed since. The table measured it at 76.6ms on 2026-11-20
+UTC and 67.9ms on 2026-11-24 UTC, and loaded runs on the Apple M4 that second
+day put it at 73ms to 97ms, so that gap is the spread between runs rather than
+a change. What is
 left of it is mostly building that index, which still numbers every node and
 dummy by id, and its warm-start cohorts and sweeping the leaf's layer, not
 sweeping the held layers.
 In the table, a cold run of the same graph, measured in the same session, takes
-648ms, and an added leaf takes 12 frames at 60 Hz, against M3.9b's budget of one; a removed
-leaf takes 6. The order stage is 38% of an added leaf. Skipping stages alone
-cannot meet that budget: "everything else", the work outside them, is about 5
-frames on its own for an added leaf, and about 3 even for a resize, which skips
+649ms, and an added leaf takes 11 frames at 60 Hz, against M3.9b's budget of one; a removed
+leaf takes 5. The order stage is 37% of an added leaf. Skipping stages alone
+cannot meet that budget: "everything else", the work outside them, is about 3
+frames on its own for an added leaf, and about 2 even for a resize, which skips
 the rank and order contract checks. It
 includes measuring nodes, the influence region, merging the dummy sizes, the
 stage contract checks, assembling the result, the delta and retaining the warm
@@ -230,9 +233,9 @@ beside its roster set. On that Ryzen machine, two runs each before and after
 on 2026-11-20 UTC, the work outside the stages went from 166ms to 167ms down
 to 126ms to 128ms for an added leaf, from 113ms down to 99ms to 100ms for a
 removed leaf and from 95ms to 97ms down to 82ms to 83ms for a resize. The table above
-was measured after that change too, on 2026-11-20 UTC; on the Apple M4 the work
-outside the stages for an added leaf was 96.8ms before it, at a load average of
-2.95, against 77.4ms after it at 1.72.
+was measured after that change too. On the Apple M4 on 2026-11-20 UTC, the work
+outside the stages for an added leaf went from 96.8ms before it, at a load
+average of 2.95, to 77.4ms after it at 1.72.
 
 After that, a relayout that skips the rank stage stopped copying every roster
 member's size into a new map. It now reads the sizes off the map the last full
@@ -249,7 +252,7 @@ to 94ms down to 83ms to 84ms. The leaf the cycle removes is the one it added
 on a fast path, so that relayout is handed the full run's map itself and its
 position stage did not slow down; removing a node the full run drew pays the
 view's reads too, and one walk of the full run's map to find what left. The
-table above predates that change.
+table above was measured after that change too.
 
 After that, an added leaf stopped copying the held ranks, 184,222 of them on
 the 10k, into a new map. Its ranks now read through the held map with the leaf
@@ -267,7 +270,8 @@ added leaf's whole relayout did not separate: 287ms to 304ms before, 252ms to
 load averages of 3.4 to 7.4, agree: an added leaf's work outside the stages
 went from 84.2ms to 67.2ms in one pair and from 65.5ms to 54.0ms in the other,
 and a removed leaf's from 60.8ms to 43.4ms and from 46.2ms to 37.7ms. The table
-above predates this change too.
+above was measured on the Apple M4 after this change, later that day, and a
+second run beside it agreed within 4.5ms on every whole relayout.
 
 Like the pipeline page's [What a run costs](layout.md#what-a-run-costs), which
 was measured on a different machine, this is a measurement and not a baseline:
@@ -337,7 +341,7 @@ has a reason, and none of them is that the corpus cannot see:
 What is still missing is most of the work the third bullet does not do. A
 resize and a removed leaf now run only position and route, and an added leaf
 skips the rank stage (see [What a relayout costs](#what-a-relayout-costs)), and no session in this corpus does
-any of those on its own. An added leaf still takes 12 frames, and bringing it
+any of those on its own. An added leaf still takes 11 frames, and bringing it
 inside one is what would make a small structural edit cheap in time rather
 than only stable in space.
 
