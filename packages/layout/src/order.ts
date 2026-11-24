@@ -446,6 +446,7 @@ function buildIndex(input: RankedState): OrderIndex {
   const lowerAll = new Int32Array(capacity);
   const gapAll = new Int32Array(capacity);
   let kept = 0;
+  let allDown = true;
   forEachSegment(input.graph, input.virtualChains, (fromId, toId) => {
     const source = numberOf.get(fromId);
     const target = numberOf.get(toId);
@@ -456,6 +457,7 @@ function buildIndex(input: RankedState): OrderIndex {
     fromAll[kept] = source;
     toAll[kept] = target;
     const down = sourceLayer < targetLayer;
+    if (!down) allDown = false;
     upperAll[kept] = down ? source : target;
     lowerAll[kept] = down ? target : source;
     gapAll[kept] = Math.min(sourceLayer, targetLayer);
@@ -472,8 +474,9 @@ function buildIndex(input: RankedState): OrderIndex {
   // Up and down are about LAYERS, not about direction: an edge the ranker
   // reversed runs from a lower layer to a higher one, and its source is then
   // the neighbour below rather than above.
-  const up = compress(segLower, segUpper, count);
-  const down = compress(segUpper, segLower, count);
+  // When direction already follows the layers, these CSR pairs are identical.
+  const up = allDown ? incoming : compress(segLower, segUpper, count);
+  const down = allDown ? out : compress(segUpper, segLower, count);
 
   const layerCount = sorted.length;
   const gapStart = new Int32Array(Math.max(layerCount, 1));
