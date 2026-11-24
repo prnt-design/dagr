@@ -52,7 +52,7 @@
  * with a control that shifts one shape and one that expects zoom 1's shapes,
  * the solid straight ribbons alone at zoom 0.5 and 1.5, each with a
  * control that shifts them and one that expects zoom 1's ribbons, and the
- * dashed straight ribbons alone at zoom 0.5 and 1.2, each with a control that
+ * three dashed ribbons alone at zoom 0.5 and 1.2, each with a control that
  * flows one side's dashes further and one that expects a period in world units.
  * The tiers are checked again at zoom 0.5 and 2, each with a bounds control,
  * a placement control, and a control that expects zoom 1's tiers, and the
@@ -96,7 +96,8 @@ const SHAPE_ZOOMS = [0.5, 2];
 // its middle run leaves it. At 1.5 the diagonal's first cap is outside it.
 const RIBBON_ZOOMS = [0.5, 1.5];
 // Either side of zoom 1, with the dashed joins' right angle and fanned turn
-// inside the frame; above about 1.21 the horizontal leaves it.
+// inside the frame; above about 1.21 the horizontal's lower edge leaves it. At
+// 1.2 the diagonal's first cap and the joined route's last run are outside it.
 const DASH_ZOOMS = [0.5, 1.2];
 
 /**

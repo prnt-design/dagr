@@ -523,7 +523,7 @@ where the page expects them and add no difference between the backends, the
 shapes alone at zoom 0.5 and 2 compare within tolerance with every fill
 pixel in its fill colour, the solid straight ribbons alone at zoom 0.5 and
 1.5 compare within tolerance with the edge colour inside them and the clear
-colour just outside, the dashed straight ribbons alone at zoom 0.5 and 1.2
+colour just outside, the three dashed ribbons alone at zoom 0.5 and 1.2
 compare within tolerance with the edge colour inside the dashes and the clear
 colour inside the gaps, and all thirty-five controls (one moves a shape, one every ribbon, the curves included,
 one the dash pattern, one draws the curves as polylines, one holds the flow,
@@ -1045,7 +1045,7 @@ inside and all 1,965 beside in their colours; the edge control fails with
 1,355 interior pixels differing by up to 158, and the zoom control with none
 of 758.
 
-The three dashed straight ribbons alone were compared at zoom 0.5 and 1.2
+The three dashed ribbons alone, the joined one included, were compared at zoom 0.5 and 1.2
 on 2026-11-24 UTC, on the same Apple M4 in Chrome 158.0.8127.37 (`apple`
 `metal-3`, not a fallback adapter), headless and headed with the same
 counts. `dashParity` draws them with no shapes at that zoom on the first
@@ -1058,7 +1058,8 @@ then classes each pixel as at zoom 1, and the caps go in the band whole.
 Every pixel further inside a dash than the band must hold the edge colour
 on WebGPU and every pixel further inside a gap the clear colour. Zoom 1.2,
 not 1.5, keeps the dashed joins' right angle and fanned turn in the frame;
-above about 1.21 the horizontal ribbon leaves it. Each zoom runs the check
+above about 1.21 the horizontal ribbon's lower edge leaves it, and at 1.2 the
+diagonal's first cap and the joined route's last run are already outside. Each zoom runs the check
 and two controls: the dash control, one side's dashes flowed 3 pixels
 further, which must fail on the interior, and a zoom control that expects
 the arc unscaled, a period in world units, and must fail on the dash and gap
@@ -1088,7 +1089,7 @@ one, the flow advancing over three frames and a ribbon on the above-nodes
 layer since that day, and a group outline and rich-node tiers composed over
 the first frame since 2026-11-23, DPR 1. The canvas comparison is at zoom
 1, the shapes alone also at zoom 0.5 and 2, the solid straight ribbons
-alone at zoom 0.5 and 1.5 and the dashed straight ones at 0.5 and 1.2 since
+alone at zoom 0.5 and 1.5 and the three dashed ones at 0.5 and 1.2 since
 2026-11-24, the outline at zoom 0.5, 1 and 1.5, and the tiers
 at zoom 0.5, 1 and 2. The smooth, smooth dashed and above-nodes ribbons at
 other zooms, and DPR 2, are not compared.
