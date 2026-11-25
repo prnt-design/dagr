@@ -1154,8 +1154,8 @@ three dashed ribbons are classed at a zoom, from the renderer's own
 triangles tessellated with `curve: 'smooth'`, so the flattened curve's
 short joins place their dash ends as drawn and a chord that folds at the
 zoom is skipped as the renderer skips it. Zoom 1.2 keeps both of the
-curve's turns in the frame; above about 1.09 its first cap leaves it, and at
-1.2 so does the start of its first run. Each zoom runs the check and three
+curve's turns in the frame; above about 1.08 its first cap starts to leave
+it, and at 1.2 so does about two thirds of the way to its first turn. Each zoom runs the check and three
 controls: the dash control and the zoom control of the three dashed ribbons,
 and the curve control, the WebGL2 side's ribbon drawn as a polyline through
 its four points, which must fail on the interior.

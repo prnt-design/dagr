@@ -109,8 +109,8 @@ const DASH_ZOOMS = [0.5, 1.2];
 // 1.21 its top leaves it.
 const SMOOTH_ZOOMS = [0.5, 1.2];
 // Either side of zoom 1, with both of the curve's turns inside the frame. Above
-// about 1.09 its first cap leaves it, and at 1.2 so does the start of its first
-// run.
+// about 1.08 its first cap starts to leave it, and at 1.2 so does about two
+// thirds of the way to its first turn.
 const SMOOTH_DASH_ZOOMS = [0.5, 1.2];
 
 /**
