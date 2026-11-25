@@ -2146,11 +2146,10 @@ complete, and `<DagrCanvas animate>` drives them from a graph a user is editing
   `DagrCanvas` picks through
   `pickNode` only behind its opt-in `hitTesting="gpu"`. See [Picking](#picking).
 - Backend parity beyond the probe scene and the one machine M4.9b compared on:
-  other GPUs, and DPR 2 for everything but the shapes alone at zoom 1
-  (beyond zoom 1, the shapes alone, the above-nodes ribbon with the circle
+  other GPUs, and DPR 2 for everything but the shapes alone at zoom 1.
+  Beyond zoom 1, the shapes alone, the above-nodes ribbon with the circle
   and the rich-node tiers are compared at 0.5 and 2, the solid straight
-  ribbons and the group outline at 0.5 and 1.5, and the
-  three dashed ribbons, the solid smooth one and the smooth dashed one at
-  0.5 and 1.2).
+  ribbons and the group outline at 0.5 and 1.5, and the three dashed
+  ribbons, the solid smooth one and the smooth dashed one at 0.5 and 1.2.
 - Ten thousand nodes at sixty frames a second, measured rather than hoped for
   (M4.10).

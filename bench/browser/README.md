@@ -1059,8 +1059,8 @@ with 3,966 of 5,948.
 The shapes alone were compared at device pixel ratio 2 and zoom 1 on
 2026-11-25 UTC, on the same Apple M4 in Chrome 158.0.8127.37 (`apple`
 `metal-3`, not a fallback adapter), headless and headed with the same counts.
-`shapeParity` sets the viewport's `devicePixelRatio` to 2, so each backend's
-drawing buffer is 960 by 640, and maps each device pixel centre into the world
+`shapeParity` passes `devicePixelRatio: 2` to the renderer camera's
+`setViewport`, so each backend's drawing buffer is 960 by 640, and maps each device pixel centre into the world
 through the zoom times the ratio. The outline and the band stay in device
 pixels. The check runs with two controls: the shape control, one shape shifted
 1/3 of a device pixel (1/6 of a world unit), which must fail on the interior,
@@ -1073,6 +1073,8 @@ control fails with 4,234 interior pixels differing by up to 7, and the ratio
 control with 3,966 of 5,948 expected fill pixels holding it. The band, fill
 and control counts are zoom 2's at ratio 1, as they should be: a device pixel
 is half a world unit in both, and only the frame around the shapes is larger.
+The browser's own device scale factor stays 1, so the renderer's default of
+reading `window.devicePixelRatio` is not what this exercises.
 
 The two solid straight ribbons alone were compared at zoom 0.5 and 1.5 on
 2026-11-24 UTC, on the same Apple M4 in Chrome 158.0.8127.37 (`apple`
