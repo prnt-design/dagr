@@ -30,7 +30,7 @@
  * Chrome instead of launching one. The output
  * records the browser, mode and flags, because a backend result without them
  * cannot be reproduced. `--parity` adds M4.9b's backend comparison and exits
- * non-zero unless it passes and all forty-seven of its controls fail on
+ * non-zero unless it passes and all fifty-three of its controls fail on
  * what they change. It also exits non-zero when the adapter reports `isFallbackAdapter`: a software
  * adapter such as
  * SwiftShader still comes up on `webgpu`, so its side of the comparison would
@@ -58,7 +58,9 @@
  * that shifts it, one that expects zoom 1's curve and one that draws one
  * side's as a polyline, and the smooth dashed ribbon alone at zoom 0.5 and
  * 1.2, each with the dashed zooms' two controls and one that draws one side's
- * as a polyline.
+ * as a polyline, and the above-nodes ribbon with the circle alone at zoom 0.5
+ * and 2, each with a control that shifts it, one that expects zoom 1's circle
+ * and ribbon and one that draws one side's below the nodes.
  * The tiers are checked again at zoom 0.5 and 2, each with a bounds control,
  * a placement control, and a control that expects zoom 1's tiers, and the
  * outline at zoom 0.5 and 1.5, each with a padding control, a
@@ -112,6 +114,9 @@ const SMOOTH_ZOOMS = [0.5, 1.2];
 // about 1.08 its first cap starts to leave it, and at 1.2 so does about two
 // thirds of the way to its first turn.
 const SMOOTH_DASH_ZOOMS = [0.5, 1.2];
+// Either side of zoom 1, with the circle, its glow and the whole ribbon inside
+// the frame; above about 2.18 the ribbon's end leaves it.
+const ABOVE_ZOOMS = [0.5, 2];
 
 /**
  * The page's import map, filled in from this process's own module resolution.
@@ -219,6 +224,45 @@ function ribbonControlFailure(control, aimedAt) {
     onAim
     ? undefined
     : `failed, but not on what it changes: ${ribbonFailure(control)}`;
+}
+
+function aboveFailure(check) {
+  if (check.error !== undefined) return check.error;
+  const reasons = [];
+  if (check.backends.webgpu !== 'webgpu' || check.backends.webgl2 !== 'webgl2') {
+    reasons.push(`the frames drew on ${check.backends.webgpu} and ${check.backends.webgl2}, not webgpu and webgl2`);
+  }
+  if (!check.sameSize) reasons.push("the two backends' frames are different sizes");
+  if (!check.aboveDrawn) {
+    reasons.push(
+      `${check.ribbon.edgeColored} of ${check.ribbon.pixels} pixels inside the above-nodes ribbon hold the edge colour on webgpu, ${check.over.pixels} of them over the circle's fill`,
+      `${check.fill.filled} of ${check.fill.pixels} pixels inside the circle's fill clear of the ribbon hold the fill colour on webgpu`,
+    );
+  }
+  if (check.interior.maxDelta > check.tolerance.interiorMaxDelta) {
+    reasons.push(
+      `${check.interior.differing} interior pixels differ, by up to ${check.interior.maxDelta} against a tolerance of ${check.tolerance.interiorMaxDelta}`,
+    );
+  }
+  return reasons.join('; ');
+}
+
+/**
+ * Why an above-nodes control at another zoom did not fail on the check it is
+ * aimed at: the shift and the layer only on the interior, the expected zoom
+ * only on the colours.
+ */
+function aboveControlFailure(control, aimedAt) {
+  if (control.pass) return 'passed, so the check cannot see what it changes';
+  const shifted = control.interior?.maxDelta > control.tolerance?.interiorMaxDelta;
+  const onAim = aimedAt === 'interior' ? shifted && control.aboveDrawn : !shifted && control.aboveDrawn === false;
+  return control.error === undefined &&
+    control.backends.webgpu === 'webgpu' &&
+    control.backends.webgl2 === 'webgl2' &&
+    control.sameSize &&
+    onAim
+    ? undefined
+    : `failed, but not on what it changes: ${aboveFailure(control)}`;
 }
 
 function dashFailure(check) {
@@ -552,6 +596,16 @@ if (cliArgs.includes('--parity')) {
       curveControl: await page.evaluate((at) => window.dashParity(at, 0, at, true, 'polyline'), zoom),
     });
   }
+  parity.aboveZooms = [];
+  for (const zoom of ABOVE_ZOOMS) {
+    parity.aboveZooms.push({
+      zoom,
+      check: await page.evaluate((at) => window.aboveParity(at), zoom),
+      control: await page.evaluate(([at, shift]) => window.aboveParity(at, shift), [zoom, EDGE_CONTROL_SHIFT_PX / zoom]),
+      zoomControl: await page.evaluate((at) => window.aboveParity(at, 0, 1), zoom),
+      layerControl: await page.evaluate((at) => window.aboveParity(at, 0, at, 'below-nodes'), zoom),
+    });
+  }
   // The page keeps only the latest draw's canvas read back, so every check
   // that reuses a set of screenshots runs before the next draw.
   const shots = await composedShots('groupFrame', 0);
@@ -715,6 +769,23 @@ if (cliArgs.includes('--parity')) {
       const failure = dashControlFailure(run, aimedAt);
       if (failure !== undefined) {
         console.error(`the smooth dash control at zoom ${zoom}, with ${what}, ${failure}`);
+        process.exitCode = 1;
+      }
+    }
+  }
+  for (const { zoom, check, control, zoomControl, layerControl } of parity.aboveZooms) {
+    if (!check.pass) {
+      console.error(`the above-nodes check at zoom ${zoom} failed: ${aboveFailure(check)}`);
+      process.exitCode = 1;
+    }
+    for (const [run, aimedAt, what] of [
+      [control, 'interior', `the ribbon shifted by ${EDGE_CONTROL_SHIFT_PX} px`],
+      [zoomControl, 'colours', "zoom 1's circle and ribbon expected"],
+      [layerControl, 'interior', "one side's ribbon drawn below the nodes"],
+    ]) {
+      const failure = aboveControlFailure(run, aimedAt);
+      if (failure !== undefined) {
+        console.error(`the above-nodes control at zoom ${zoom}, with ${what}, ${failure}`);
         process.exitCode = 1;
       }
     }

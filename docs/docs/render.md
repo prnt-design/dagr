@@ -623,7 +623,7 @@ checks:
   2026-11-24, the solid straight ribbons named next alone at 0.5 and 1.5
   and the three dashed ones, the joined one included, and the smooth one
   alone at 0.5 and 1.2, and since 2026-11-25 the smooth dashed one alone at
-  0.5 and 1.2),
+  0.5 and 1.2 and the above-nodes one with the circle at 0.5 and 2),
   device pixel ratio 1, with two solid straight edge ribbons added to that
   scene on 2026-11-17, and two dashed straight ones, a dashed one through two
   joins and a smooth one on 2026-11-21 (Chrome 157), the dashes flowed by
@@ -631,8 +631,7 @@ checks:
   over three frames and a ribbon on the above-nodes layer since that day.
   A group outline and rich-node tiers, drawn by the browser rather than by
   either backend, are composed over the first frame since 2026-11-23 and add
-  no difference. Other GPUs, the above-nodes ribbon at other zooms, and DPR 2
-  are unchecked.
+  no difference. Other GPUs and DPR 2 are unchecked.
   See
   [What is verified, and on which backend](#what-is-verified-and-on-which-backend).
 - That a browser composes the overlay's two transforms the way the algebra says,
@@ -1023,7 +1022,13 @@ edge-band pixels differing and no interior pixel, with every pixel more than
 a device pixel inside a dash in the edge colour and inside a gap in the
 clear colour, against controls at each zoom that flow one side's dashes 3
 pixels further, draw one side's as a polyline and expect a period in world
-units, all three of which must fail.
+units, all three of which must fail. The above-nodes ribbon and the circle
+alone were compared at zoom 0.5 and 2 the same day, byte-identical on both,
+with every pixel inside the ribbon in the edge colour, over the circle's
+fill and glow alike, and the fill clear of it in the fill colour, against
+controls at each zoom that shift it by 2 device pixels, draw one side's
+below the nodes and expect zoom 1's circle and ribbon, all three of which
+must fail.
 
 ## Usage
 
@@ -2139,10 +2144,10 @@ complete, and `<DagrCanvas animate>` drives them from a graph a user is editing
   `DagrCanvas` picks through
   `pickNode` only behind its opt-in `hitTesting="gpu"`. See [Picking](#picking).
 - Backend parity beyond the probe scene and the one machine M4.9b compared on:
-  other GPUs, zooms other than 1 for the above-nodes ribbon (the shapes
-  alone and the rich-node tiers are also compared at 0.5 and 2, the solid
-  straight ribbons and the group outline at 0.5 and 1.5, the three dashed
-  ribbons, the solid smooth one and the smooth dashed one at 0.5 and 1.2),
-  and DPR 2.
+  other GPUs and DPR 2 (beyond zoom 1, the shapes alone, the above-nodes
+  ribbon with the circle and the rich-node tiers are compared at 0.5 and 2,
+  the solid straight ribbons and the group outline at 0.5 and 1.5, and the
+  three dashed ribbons, the solid smooth one and the smooth dashed one at
+  0.5 and 1.2).
 - Ten thousand nodes at sixty frames a second, measured rather than hoped for
   (M4.10).
