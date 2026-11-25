@@ -217,9 +217,9 @@ function ribbonFailure(check) {
 }
 
 /**
- * Why a ribbon control at another zoom did not fail on the check it is aimed
- * at: the shift only on the interior, the expected zoom only on the edge
- * colour.
+ * Why a ribbon control at another zoom or ratio did not fail on the check it
+ * is aimed at: the shift only on the interior, the expected zoom or ratio only
+ * on the edge colour.
  */
 function ribbonControlFailure(control, aimedAt) {
   if (control.pass) return 'passed, so the check cannot see what it changes';
