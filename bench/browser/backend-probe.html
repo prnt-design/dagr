@@ -946,9 +946,22 @@
        * bow tie, and the check sees no hole there, but below 0.5 more of them
        * fold and the inside check may fail on both backends. `curve` is the
        * WebGL2 side's curve, `parity`'s curve control when `'polyline'`.
+       *
+       * `dpr` draws at that device pixel ratio, where the routes scale into
+       * device pixels by `zoom * dpr` and the width and the band stay in
+       * device pixels. `expectedDpr` places the expected ribbons at that ratio
+       * the way `expectedZoom` does at its zoom.
        */
       const BESIDE_DEVICE_PX = 3;
-      window.ribbonParity = async (zoom, edgeShift = 0, expectedZoom = zoom, smooth = false, curve = 'smooth') => {
+      window.ribbonParity = async (
+        zoom,
+        edgeShift = 0,
+        expectedZoom = zoom,
+        smooth = false,
+        curve = 'smooth',
+        dpr = 1,
+        expectedDpr = dpr,
+      ) => {
         const source = smooth ? SMOOTH : EDGES;
         const routes = smooth ? SMOOTH_DRAWN : EDGES;
         const shifted = source.map((edge) => ({
@@ -957,8 +970,8 @@
         }));
         const ribbons = (backend, edges, drawnCurve) =>
           smooth
-            ? draw(backend, [], [], [], [FLOWS[0]], edges, [], drawnCurve, [], 'above-nodes', false, zoom)
-            : draw(backend, [], edges, [], [FLOWS[0]], [], [], 'smooth', [], 'above-nodes', false, zoom);
+            ? draw(backend, [], [], [], [FLOWS[0]], edges, [], drawnCurve, [], 'above-nodes', false, zoom, dpr)
+            : draw(backend, [], edges, [], [FLOWS[0]], [], [], 'smooth', [], 'above-nodes', false, zoom, dpr);
         let gpu;
         let gl;
         try {
@@ -972,8 +985,8 @@
             const points = edge.points.map((p) => ({ x: p.x * scale, y: p.y * scale }));
             return { ...edge, points, corners: smooth ? [points[0], points[points.length - 1]] : points };
           });
-        const drawn = inDevice(zoom);
-        const expected = inDevice(expectedZoom);
+        const drawn = inDevice(zoom * dpr);
+        const expected = inDevice(expectedZoom * expectedDpr);
         const hw = EDGE_STYLE.halfWidthPixels;
         const [gpuData] = gpu.frames;
         const [glData] = gl.frames;
@@ -1039,6 +1052,9 @@
           expectedZoom,
           smooth,
           curve,
+          dpr,
+          expectedDpr,
+          size: { width: gpu.width, height: gpu.height },
           band,
           interior,
           ribbon,
