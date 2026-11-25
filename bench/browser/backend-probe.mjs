@@ -30,7 +30,7 @@
  * Chrome instead of launching one. The output
  * records the browser, mode and flags, because a backend result without them
  * cannot be reproduced. `--parity` adds M4.9b's backend comparison and exits
- * non-zero unless it passes and all forty-one of its controls fail on
+ * non-zero unless it passes and all forty-seven of its controls fail on
  * what they change. It also exits non-zero when the adapter reports `isFallbackAdapter`: a software
  * adapter such as
  * SwiftShader still comes up on `webgpu`, so its side of the comparison would
@@ -54,9 +54,11 @@
  * control that shifts them and one that expects zoom 1's ribbons, and the
  * three dashed ribbons alone at zoom 0.5 and 1.2, each with a control that
  * flows one side's dashes further and one that expects a period in world units,
- * and the solid smooth ribbon alone at zoom 0.5 and 1.2, each with a control
+ * the solid smooth ribbon alone at zoom 0.5 and 1.2, each with a control
  * that shifts it, one that expects zoom 1's curve and one that draws one
- * side's as a polyline.
+ * side's as a polyline, and the smooth dashed ribbon alone at zoom 0.5 and
+ * 1.2, each with the dashed zooms' two controls and one that draws one side's
+ * as a polyline.
  * The tiers are checked again at zoom 0.5 and 2, each with a bounds control,
  * a placement control, and a control that expects zoom 1's tiers, and the
  * outline at zoom 0.5 and 1.5, each with a padding control, a
@@ -106,6 +108,10 @@ const DASH_ZOOMS = [0.5, 1.2];
 // Either side of zoom 1, with the whole curve inside the frame; above about
 // 1.21 its top leaves it.
 const SMOOTH_ZOOMS = [0.5, 1.2];
+// Either side of zoom 1, with both of the curve's turns inside the frame. Above
+// about 1.08 its first cap starts to leave it, and at 1.2 so does about two
+// thirds of the way to its first turn.
+const SMOOTH_DASH_ZOOMS = [0.5, 1.2];
 
 /**
  * The page's import map, filled in from this process's own module resolution.
@@ -533,6 +539,19 @@ if (cliArgs.includes('--parity')) {
       zoomControl: await page.evaluate((at) => window.dashParity(at, 0, 1), zoom),
     });
   }
+  parity.smoothDashZooms = [];
+  for (const zoom of SMOOTH_DASH_ZOOMS) {
+    parity.smoothDashZooms.push({
+      zoom,
+      check: await page.evaluate((at) => window.dashParity(at, 0, at, true), zoom),
+      control: await page.evaluate(
+        ([at, shift]) => window.dashParity(at, shift, at, true),
+        [zoom, DASH_CONTROL_SHIFT_PX],
+      ),
+      zoomControl: await page.evaluate((at) => window.dashParity(at, 0, 1, true), zoom),
+      curveControl: await page.evaluate((at) => window.dashParity(at, 0, at, true, 'polyline'), zoom),
+    });
+  }
   // The page keeps only the latest draw's canvas read back, so every check
   // that reuses a set of screenshots runs before the next draw.
   const shots = await composedShots('groupFrame', 0);
@@ -679,6 +698,23 @@ if (cliArgs.includes('--parity')) {
       const failure = dashControlFailure(run, aimedAt);
       if (failure !== undefined) {
         console.error(`the dash control at zoom ${zoom}, with ${what}, ${failure}`);
+        process.exitCode = 1;
+      }
+    }
+  }
+  for (const { zoom, check, control, zoomControl, curveControl } of parity.smoothDashZooms) {
+    if (!check.pass) {
+      console.error(`the smooth dash check at zoom ${zoom} failed: ${dashFailure(check)}`);
+      process.exitCode = 1;
+    }
+    for (const [run, aimedAt, what] of [
+      [control, 'interior', `the dashes flowed ${DASH_CONTROL_SHIFT_PX} px further`],
+      [zoomControl, 'dash colours', 'a period in world units expected'],
+      [curveControl, 'interior', "one side's ribbon drawn as a polyline"],
+    ]) {
+      const failure = dashControlFailure(run, aimedAt);
+      if (failure !== undefined) {
+        console.error(`the smooth dash control at zoom ${zoom}, with ${what}, ${failure}`);
         process.exitCode = 1;
       }
     }
