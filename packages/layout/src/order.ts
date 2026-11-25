@@ -346,7 +346,7 @@ function resolveTransposeBudget(maxTransposePasses: number | undefined): number 
 interface OrderIndex {
   /** Node number to id, in roster order: graph nodes, then virtual ids. */
   readonly ids: readonly NodeId[];
-  /** The same map the other way, which the warm-start constraint reads. */
+  /** The same numbering the other way, which the warm-start constraint reads. */
   readonly numberOf: Numbering;
   /** Node number to layer index, layers being the distinct ranks sorted. */
   readonly layerOf: Int32Array;
@@ -430,7 +430,7 @@ function sameIds(ids: readonly NodeId[], declared: ReadonlySet<NodeId>): boolean
     if (ids[index] !== id) return false;
     index += 1;
   }
-  return true;
+  return index === ids.length;
 }
 
 /** Graph nodes numbered first, then the virtual roster after them. */
@@ -868,7 +868,7 @@ interface Cohorts {
 /**
  * The constraint a hint imposes, or a free one when the hint says nothing.
  *
- * `numberOf` is the index's own map rather than one built here, which matters
+ * `numberOf` is the index's own numbering rather than one built here, which matters
  * because this runs on every run including the cold ones: rebuilding it would
  * be a second walk over 184,222 ids on the 10k corpus to answer a question the
  * index has already answered.
