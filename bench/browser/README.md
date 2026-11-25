@@ -1155,10 +1155,11 @@ triangles tessellated with `curve: 'smooth'`, so the flattened curve's
 short joins place their dash ends as drawn and a chord that folds at the
 zoom is skipped as the renderer skips it. Zoom 1.2 keeps both of the
 curve's turns in the frame; above about 1.08 its first cap starts to leave
-it, and at 1.2 so does about two thirds of the way to its first turn. Each zoom runs the check and three
-controls: the dash control and the zoom control of the three dashed ribbons,
-and the curve control, the WebGL2 side's ribbon drawn as a polyline through
-its four points, which must fail on the interior.
+it, and at 1.2 so does about two thirds of the way to its first turn. Each
+zoom runs the check and three controls: the dash control and the zoom
+control of the three dashed ribbons, and the curve control, the WebGL2
+side's ribbon drawn as a polyline through its four points, which must fail
+on the interior.
 
 At zoom 0.5 the check passes with 31 of 518 band pixels differing, by up to
 43, and none of 153,082 interior pixels; all 51 pixels inside the dashes
