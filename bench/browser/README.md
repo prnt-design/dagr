@@ -1245,7 +1245,7 @@ alone at zoom 0.5 and 1.5 and the three dashed ones and the solid smooth
 one at 0.5 and 1.2 since 2026-11-24, the smooth dashed one at 0.5 and 1.2
 since 2026-11-25, the above-nodes one with the circle at 0.5 and 2 since
 that day, the outline at zoom 0.5, 1 and 1.5, and the tiers at zoom 0.5, 1
-and 2. At DPR 2 the ribbons, the outline and the tiers are not compared.
+and 2. At DPR 2 only the shapes alone at zoom 1 are compared.
 
 ## Node picking (M4.8b)
 
