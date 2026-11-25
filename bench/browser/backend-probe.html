@@ -1137,6 +1137,127 @@
       };
 
       /**
+       * The above-nodes ribbon and the circle alone at a zoom other than 1,
+       * compared the way `parity` compares them at zoom 1.
+       *
+       * The band is the shapes' band and the straight ribbons' band, both in
+       * device pixels through the zoom, with the ribbon's butt caps in it
+       * whole. On WebGPU, every pixel inside the ribbon must hold the edge
+       * colour, over the circle's fill, outline and glow alike, and every
+       * pixel further inside the fill than the band and clear of the ribbon
+       * by the band must hold the fill colour, so a ribbon drawn under the
+       * circle, or at zoom 2 one whose width followed the zoom, cannot pass.
+       *
+       * `edgeShift` is `parity`'s edge control, given in world units.
+       * `expectedZoom` places the circle and ribbon the page expects at that
+       * zoom while the canvas and the band stay at `zoom`, so it fails only
+       * if the colour checks can see that both follow the zoom. `layer` is the
+       * WebGL2 side's layer, `parity`'s layer control when `'below-nodes'`.
+       */
+      const CIRCLE = NODES.filter((node) => node.id === 'circle');
+      window.aboveParity = async (zoom, edgeShift = 0, expectedZoom = zoom, layer = 'above-nodes') => {
+        const shifted = ABOVE.map((edge) => ({
+          ...edge,
+          points: edge.points.map((p) => ({ x: p.x + edgeShift, y: p.y + edgeShift })),
+        }));
+        const scene = (backend, edges, drawnLayer) =>
+          draw(backend, CIRCLE, [], [], [FLOWS[0]], [], [], 'smooth', edges, drawnLayer, false, zoom);
+        let gpu;
+        let gl;
+        try {
+          gpu = await scene('webgpu', ABOVE, 'above-nodes');
+          gl = await scene('webgl2', shifted, layer);
+        } catch (error) {
+          return { pass: false, error: String(error), code: error && error.code };
+        }
+        const inDevice = (scale) =>
+          ABOVE.map((edge) => ({ ...edge, points: edge.points.map((p) => ({ x: p.x * scale, y: p.y * scale })) }));
+        const drawn = inDevice(zoom);
+        const expected = inDevice(expectedZoom);
+        const [circle] = CIRCLE;
+        const hw = EDGE_STYLE.halfWidthPixels;
+        const [gpuData] = gpu.frames;
+        const [glData] = gl.frames;
+        const band = { pixels: 0, differing: 0, maxDelta: 0 };
+        const interior = { pixels: 0, differing: 0, maxDelta: 0 };
+        const ribbon = { pixels: 0, edgeColored: 0 };
+        const over = { pixels: 0, edgeColored: 0 };
+        const fill = { pixels: 0, filled: 0 };
+        const near = (data, i, color) =>
+          [16, 8, 0].every((s, c) => Math.abs(data[i + c] - ((color >> s) & 0xff)) <= ROUNDING);
+        for (let row = 0; row < gpu.height; row += 1) {
+          for (let col = 0; col < gpu.width; col += 1) {
+            const x = col + 0.5 - gpu.width / 2;
+            const y = gpu.height / 2 - (row + 0.5);
+            const i = (row * gpu.width + col) * 4;
+            const d = signedDistance(circle, x / zoom, y / zoom) * zoom;
+            let nearest = Math.min(Math.abs(d), Math.abs(d + OUTLINE_DEVICE_PX));
+            for (const edge of drawn) {
+              const { centreline, point } = ribbonDistances(edge, x, y);
+              if (point < hw + 2) nearest = 0;
+              nearest = Math.min(nearest, Math.abs(centreline - hw));
+            }
+            let onRibbon = false;
+            let toRibbon = Infinity;
+            for (const edge of expected) {
+              const { centreline, point } = ribbonDistances(edge, x, y);
+              if (centreline < hw - EDGE_BAND_DEVICE_PX && point >= hw + 2) onRibbon = true;
+              toRibbon = Math.min(toRibbon, centreline);
+            }
+            const inFill =
+              signedDistance(circle, x / expectedZoom, y / expectedZoom) * expectedZoom <
+              -(OUTLINE_DEVICE_PX + EDGE_BAND_DEVICE_PX);
+            if (onRibbon) {
+              ribbon.pixels += 1;
+              if (near(gpuData, i, EDGE_COLOR)) ribbon.edgeColored += 1;
+              if (inFill) {
+                over.pixels += 1;
+                if (near(gpuData, i, EDGE_COLOR)) over.edgeColored += 1;
+              }
+            }
+            if (inFill && toRibbon > hw + EDGE_BAND_DEVICE_PX) {
+              fill.pixels += 1;
+              if (near(gpuData, i, circle.fillColor)) fill.filled += 1;
+            }
+            const bucket = nearest < EDGE_BAND_DEVICE_PX ? band : interior;
+            const delta = pixelDelta(gpuData, glData, i);
+            bucket.pixels += 1;
+            if (delta > 0) bucket.differing += 1;
+            bucket.maxDelta = Math.max(bucket.maxDelta, delta);
+          }
+        }
+        const backends = { webgpu: gpu.reported, webgl2: gl.reported };
+        const sameSize = gl.width === gpu.width && gl.height === gpu.height;
+        const aboveDrawn =
+          ribbon.pixels > 0 &&
+          ribbon.edgeColored === ribbon.pixels &&
+          over.pixels > 0 &&
+          fill.pixels > 0 &&
+          fill.filled === fill.pixels;
+        return {
+          pass:
+            backends.webgpu === 'webgpu' &&
+            backends.webgl2 === 'webgl2' &&
+            sameSize &&
+            aboveDrawn &&
+            interior.maxDelta <= ROUNDING,
+          backends,
+          sameSize,
+          tolerance: { edgeBandDevicePx: EDGE_BAND_DEVICE_PX, interiorMaxDelta: ROUNDING },
+          zoom,
+          edgeShift,
+          expectedZoom,
+          layer,
+          band,
+          interior,
+          ribbon,
+          over,
+          fill,
+          aboveDrawn,
+        };
+      };
+
+      /**
        * A group outline over the parity scene's first frame, composed with
        * the canvas on each backend.
        *

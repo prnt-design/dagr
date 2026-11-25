@@ -119,9 +119,10 @@ zoom 0.5 and 1.5 (2026-11-24). The three dashed ribbons alone, the joined
 one included, pass at zoom 0.5 and 1.2 that day, with 7 and 15 edge-band
 pixels differing, and the solid smooth ribbon alone passes at the same
 zooms with 15 and 27. The smooth dashed one alone passes at the same
-zooms on 2026-11-25 with 31 and 25. The original probe also passed on AMD RDNA 2 in Chrome 156, with
-four edge-band pixels differing by one. Other GPUs, other zooms for the
-above-nodes ribbon, and DPR 2 remain uncovered. A performance profile is published, and GPU node picking ships
+zooms on 2026-11-25 with 31 and 25, and the above-nodes ribbon with the
+circle is byte-identical at zoom 0.5 and 2 that day. The original probe also passed on AMD RDNA 2 in Chrome 156, with
+four edge-band pixels differing by one. Other GPUs and DPR 2 remain
+uncovered. A performance profile is published, and GPU node picking ships
 behind an opt-in `hitTesting="gpu"` on `DagrCanvas`, with edge hits on the CPU. The large-graph
 target, 10,000 nodes animating at 60 fps, is still open: it held with a tenth
 of the nodes moving on two devices, and with every node moving along smooth
