@@ -1182,14 +1182,14 @@ circle alone and the ribbon on `layer: 'above-nodes'` at that zoom on each
 backend. The band is the shapes' band and the straight ribbons' band through
 the zoom, with the ribbon's butt caps in it whole. On WebGPU every pixel
 inside the ribbon, over the circle's fill, outline and glow alike, must hold
-the edge colour, and every pixel inside the fill and clear of the ribbon by
-the band the fill colour, so a ribbon drawn under the circle, or one whose
-width followed the zoom, cannot pass. Zoom 2 keeps the circle, its glow and
+the edge colour, and every pixel further inside the fill than the band, and
+clear of the ribbon by it, must hold the fill colour, so a ribbon drawn under
+the circle, or at zoom 2 one whose width followed the zoom, cannot pass. Zoom 2 keeps the circle, its glow and
 the whole ribbon in the frame; above about 2.18 the ribbon's end leaves it.
 Each zoom runs the check and three controls: the edge control, the WebGL2
-side's ribbon moved 2 device pixels, which must fail on the interior; a zoom
-control expecting zoom 1's circle and ribbon, which must fail on the colours
-alone; and the layer control, the WebGL2 side's ribbon declared on
+side's ribbon moved 2 device pixels along each axis, which must fail on the
+interior; a zoom control expecting zoom 1's circle and ribbon, which must
+fail on the ribbon's colour alone; and the layer control, the WebGL2 side's ribbon declared on
 `below-nodes`, which must fail on the interior.
 
 Both zooms are byte-identical: no pixel differs in the band (586 pixels at
@@ -1200,8 +1200,8 @@ pixels differing by up to 158, the layer control with 50 by up to 56, and
 the zoom control with none of 164 expected ribbon pixels in the edge colour
 and 95 of 1,984 fill pixels in the fill colour. At zoom 2 all 344 ribbon
 pixels, 220 of them over the fill, and all 9,560 fill pixels hold their
-colours; the edge control fails with 332 interior pixels differing, the
-layer control with 276, and the zoom control with none of 164 and 702 of
+colours; the edge control fails with 332 interior pixels differing by up to
+158, the layer control with 276 by up to 56, and the zoom control with none of 164 and 702 of
 1,984.
 
 **Not a gate.** `bench/README.md`'s argument against a browser measurement in

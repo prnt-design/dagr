@@ -250,12 +250,13 @@ function aboveFailure(check) {
 /**
  * Why an above-nodes control at another zoom did not fail on the check it is
  * aimed at: the shift and the layer only on the interior, the expected zoom
- * only on the colours.
+ * only on the ribbon's colour.
  */
 function aboveControlFailure(control, aimedAt) {
   if (control.pass) return 'passed, so the check cannot see what it changes';
   const shifted = control.interior?.maxDelta > control.tolerance?.interiorMaxDelta;
-  const onAim = aimedAt === 'interior' ? shifted && control.aboveDrawn : !shifted && control.aboveDrawn === false;
+  const unlit = control.ribbon?.edgeColored < control.ribbon?.pixels;
+  const onAim = aimedAt === 'interior' ? shifted && control.aboveDrawn : !shifted && unlit;
   return control.error === undefined &&
     control.backends.webgpu === 'webgpu' &&
     control.backends.webgl2 === 'webgl2' &&

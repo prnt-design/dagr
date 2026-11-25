@@ -1023,12 +1023,13 @@ a device pixel inside a dash in the edge colour and inside a gap in the
 clear colour, against controls at each zoom that flow one side's dashes 3
 pixels further, draw one side's as a polyline and expect a period in world
 units, all three of which must fail. The above-nodes ribbon and the circle
-alone were compared at zoom 0.5 and 2 the same day, byte-identical on both,
-with every pixel inside the ribbon in the edge colour, over the circle's
-fill and glow alike, and the fill clear of it in the fill colour, against
-controls at each zoom that shift it by 2 device pixels, draw one side's
-below the nodes and expect zoom 1's circle and ribbon, all three of which
-must fail.
+alone were compared at zoom 0.5 and 2 (Chrome 158, the same day),
+byte-identical on both, with every pixel inside the ribbon in the edge
+colour, over the circle's fill and glow alike, and the fill clear of it in
+the fill colour, against
+controls at each zoom that shift it by 2 device pixels along each axis,
+expect zoom 1's circle and ribbon and draw one side's below the nodes, all
+three of which must fail.
 
 ## Usage
 
