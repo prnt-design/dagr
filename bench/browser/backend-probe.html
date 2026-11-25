@@ -1050,20 +1050,28 @@
        * the canvas, the routes and the band stay at `zoom`; at 1 it expects a
        * period in world units, and fails only if the dash and gap checks can
        * see that the pattern does not follow the zoom.
+       *
+       * `smooth` compares the smooth dashed ribbon alone instead, classed from
+       * its own triangles tessellated with `curve: 'smooth'`. `curve` is the
+       * WebGL2 side's curve, `parity`'s curve control when `'polyline'`.
        */
-      window.dashParity = async (zoom, dashShift = 0, expectedArcZoom = zoom) => {
-        const dashes = (backend, flow) =>
-          draw(backend, [], [], DASHED, [flow], [], [], 'smooth', [], 'above-nodes', false, zoom);
+      window.dashParity = async (zoom, dashShift = 0, expectedArcZoom = zoom, smooth = false, curve = 'smooth') => {
+        const routes = smooth ? SMOOTH_DASHED : DASHED;
+        const options = smooth ? { curve: 'smooth' } : undefined;
+        const dashes = (backend, flow, drawnCurve) =>
+          smooth
+            ? draw(backend, [], [], [], [flow], [], routes, drawnCurve, [], 'above-nodes', false, zoom)
+            : draw(backend, [], [], routes, [flow], [], [], 'smooth', [], 'above-nodes', false, zoom);
         let gpu;
         let gl;
         try {
-          gpu = await dashes('webgpu', FLOWS[0]);
-          gl = await dashes('webgl2', FLOWS[0] + dashShift);
+          gpu = await dashes('webgpu', FLOWS[0], 'smooth');
+          gl = await dashes('webgl2', FLOWS[0] + dashShift, curve);
         } catch (error) {
           return { pass: false, error: String(error), code: error && error.code };
         }
-        const drawnAt = dashedClasses(DASHED, undefined, FLOWS[0], gpu.width, gpu.height, zoom);
-        const expectedAt = dashedClasses(DASHED, undefined, FLOWS[0], gpu.width, gpu.height, zoom, expectedArcZoom);
+        const drawnAt = dashedClasses(routes, options, FLOWS[0], gpu.width, gpu.height, zoom);
+        const expectedAt = dashedClasses(routes, options, FLOWS[0], gpu.width, gpu.height, zoom, expectedArcZoom);
         const hw = DASHED_STYLE.halfWidthPixels;
         const [gpuData] = gpu.frames;
         const [glData] = gl.frames;
@@ -1079,7 +1087,7 @@
             const y = gpu.height / 2 - (row + 0.5);
             const i = (row * gpu.width + col) * 4;
             let capped = false;
-            for (const edge of DASHED) {
+            for (const edge of routes) {
               for (const p of [edge.points[0], edge.points[edge.points.length - 1]]) {
                 if (Math.hypot(x - p.x * zoom, y - p.y * zoom) < hw + 2) capped = true;
               }
@@ -1117,6 +1125,8 @@
           zoom,
           dashShift,
           expectedArcZoom,
+          smooth,
+          curve,
           band,
           interior,
           dash,

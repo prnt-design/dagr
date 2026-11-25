@@ -554,7 +554,9 @@ colour just outside, the three dashed ribbons alone at zoom 0.5 and 1.2
 compare within tolerance with the edge colour inside the dashes and the clear
 colour inside the gaps, the solid smooth ribbon alone at zoom 0.5 and 1.2
 compares within tolerance with the edge colour inside it and the clear colour
-just outside, and all forty-one controls (one moves a shape, one every ribbon, the curves included,
+just outside, the smooth dashed ribbon alone at zoom 0.5 and 1.2 compares
+within tolerance with the edge colour inside its dashes and the clear colour
+inside its gaps, and all forty-seven controls (one moves a shape, one every ribbon, the curves included,
 one the dash pattern, one draws the curves as polylines, one holds the flow,
 one draws the above-nodes ribbon below the nodes, one widens one side's
 outline, one the outline the page expects, one moves one side's tier boxes,
@@ -568,6 +570,8 @@ zoom 1.5 one moves the ribbons and one expects zoom 1's ribbons, and at
 zoom 0.5 and at zoom 1.2 one flows one side's dashes further and one expects
 a period in world units, and at zoom 0.5 and at zoom 1.2 one moves the
 smooth ribbon, one expects zoom 1's curve and one draws one side's as a
+polyline, and at zoom 0.5 and at zoom 1.2 one flows one side's smooth dashes
+further, one expects a period in world units and one draws one side's as a
 polyline)
 fail on what they change, and says on stderr which of these did not hold. It also exits non-zero, saying why on
 stderr before it compares, when the adapter reports `isFallbackAdapter`,
@@ -1141,6 +1145,32 @@ all 527 inside and all 1,049 beside in their colours; the edge control fails
 with 559 interior pixels differing by up to 158, the curve control with 971,
 and the zoom control with 71 of 436.
 
+The smooth dashed ribbon alone was compared at zoom 0.5 and 1.2 on
+2026-11-25 UTC, on the same Apple M4 in Chrome 158.0.8127.37 (`apple`
+`metal-3`, not a fallback adapter), headless and headed with the same
+counts. `dashParity` with `smooth` draws it with no shapes at that zoom on
+the first frame's flow of 4.5 pixels on each backend, and classes it as the
+three dashed ribbons are classed at a zoom, from the renderer's own
+triangles tessellated with `curve: 'smooth'`, so the flattened curve's
+short joins place their dash ends as drawn and a chord that folds at the
+zoom is skipped as the renderer skips it. Zoom 1.2 keeps both of the
+curve's turns in the frame; above about 1.09 its first cap leaves it, and at
+1.2 so does the start of its first run. Each zoom runs the check and three
+controls: the dash control and the zoom control of the three dashed ribbons,
+and the curve control, the WebGL2 side's ribbon drawn as a polyline through
+its four points, which must fail on the interior.
+
+At zoom 0.5 the check passes with 31 of 518 band pixels differing, by up to
+43, and none of 153,082 interior pixels; all 51 pixels inside the dashes
+hold the edge colour and all 58 inside the gaps the clear colour. The dash
+control fails with 65 interior pixels differing by up to 158, the curve
+control with 66, and the zoom control with 25 of 57 expected dash pixels in
+the edge colour and 19 of 52 gap pixels clear. At zoom 1.2 it passes with 25
+of 876 band pixels differing, by up to 13, and none of 152,724 interior
+pixels, with all 113 dash and all 120 gap pixels in their colours; the dash
+control fails with 145 interior pixels differing by up to 158, the curve
+control with 368, and the zoom control with 58 of 118 and 58 of 123.
+
 **Not a gate.** `bench/README.md`'s argument against a browser measurement in
 `bench:ci` is about timings, and a parity check is not a timing, so that
 argument does not carry. What does is the runner: the check needs a full Chrome
@@ -1155,9 +1185,10 @@ layer since that day, and a group outline and rich-node tiers composed over
 the first frame since 2026-11-23, DPR 1. The canvas comparison is at zoom
 1, the shapes alone also at zoom 0.5 and 2, the solid straight ribbons
 alone at zoom 0.5 and 1.5 and the three dashed ones and the solid smooth
-one at 0.5 and 1.2 since 2026-11-24, the outline at zoom 0.5, 1 and 1.5,
-and the tiers at zoom 0.5, 1 and 2. The smooth dashed and above-nodes
-ribbons at other zooms, and DPR 2, are not compared.
+one at 0.5 and 1.2 since 2026-11-24, the smooth dashed one at 0.5 and 1.2
+since 2026-11-25, the outline at zoom 0.5, 1 and 1.5, and the tiers at zoom
+0.5, 1 and 2. The above-nodes ribbon at other zooms, and DPR 2, are not
+compared.
 
 ## Node picking (M4.8b)
 
