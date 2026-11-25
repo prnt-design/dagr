@@ -30,7 +30,7 @@
  * Chrome instead of launching one. The output
  * records the browser, mode and flags, because a backend result without them
  * cannot be reproduced. `--parity` adds M4.9b's backend comparison and exits
- * non-zero unless it passes and all fifty-five of its controls fail on
+ * non-zero unless it passes and all fifty-seven of its controls fail on
  * what they change. It also exits non-zero when the adapter reports `isFallbackAdapter`: a software
  * adapter such as
  * SwiftShader still comes up on `webgpu`, so its side of the comparison would
@@ -62,7 +62,9 @@
  * and 2, each with a control that shifts it, one that expects zoom 1's circle
  * and ribbon and one that draws one side's below the nodes. The shapes alone
  * are compared at device pixel ratio 2 too, with a control that shifts one
- * shape and one that expects ratio 1's shapes.
+ * shape and one that expects ratio 1's shapes, and so are the solid straight
+ * ribbons alone, with a control that shifts them and one that expects ratio
+ * 1's ribbons.
  * The tiers are checked again at zoom 0.5 and 2, each with a bounds control,
  * a placement control, and a control that expects zoom 1's tiers, and the
  * outline at zoom 0.5 and 1.5, each with a padding control, a
@@ -108,6 +110,8 @@ const SHAPE_DPRS = [2];
 // Either side of zoom 1, with both of the elbow's joins inside the frame; at 2
 // its middle run leaves it. At 1.5 the diagonal's first cap is outside it.
 const RIBBON_ZOOMS = [0.5, 1.5];
+// At zoom 1, where the frame covers the same world as at ratio 1.
+const RIBBON_DPRS = [2];
 // Either side of zoom 1, with the dashed joins' right angle and fanned turn
 // inside the frame; above about 1.21 the horizontal's lower edge leaves it. At
 // 1.2 the diagonal's first cap and the joined route's last run are outside it.
@@ -213,9 +217,9 @@ function ribbonFailure(check) {
 }
 
 /**
- * Why a ribbon control at another zoom did not fail on the check it is aimed
- * at: the shift only on the interior, the expected zoom only on the edge
- * colour.
+ * Why a ribbon control at another zoom or ratio did not fail on the check it
+ * is aimed at: the shift only on the interior, the expected zoom or ratio only
+ * on the edge colour.
  */
 function ribbonControlFailure(control, aimedAt) {
   if (control.pass) return 'passed, so the check cannot see what it changes';
@@ -576,6 +580,18 @@ if (cliArgs.includes('--parity')) {
       zoomControl: await page.evaluate((at) => window.ribbonParity(at, 0, 1), zoom),
     });
   }
+  for (const dpr of RIBBON_DPRS) {
+    parity.ribbonZooms.push({
+      zoom: 1,
+      dpr,
+      check: await page.evaluate((ratio) => window.ribbonParity(1, 0, 1, false, 'smooth', ratio), dpr),
+      control: await page.evaluate(
+        ([ratio, shift]) => window.ribbonParity(1, shift, 1, false, 'smooth', ratio),
+        [dpr, EDGE_CONTROL_SHIFT_PX / dpr],
+      ),
+      zoomControl: await page.evaluate((ratio) => window.ribbonParity(1, 0, 1, false, 'smooth', ratio, 1), dpr),
+    });
+  }
   parity.smoothZooms = [];
   for (const zoom of SMOOTH_ZOOMS) {
     parity.smoothZooms.push({
@@ -723,18 +739,19 @@ if (cliArgs.includes('--parity')) {
       }
     }
   }
-  for (const { zoom, check, control, zoomControl } of parity.ribbonZooms) {
+  for (const { zoom, dpr, check, control, zoomControl } of parity.ribbonZooms) {
+    const at = dpr === undefined ? `zoom ${zoom}` : `zoom ${zoom} and device pixel ratio ${dpr}`;
     if (!check.pass) {
-      console.error(`the ribbon check at zoom ${zoom} failed: ${ribbonFailure(check)}`);
+      console.error(`the ribbon check at ${at} failed: ${ribbonFailure(check)}`);
       process.exitCode = 1;
     }
     for (const [run, aimedAt, what] of [
       [control, 'interior', `the ribbons shifted by ${EDGE_CONTROL_SHIFT_PX} px`],
-      [zoomControl, 'edge colour', "zoom 1's ribbons expected"],
+      [zoomControl, 'edge colour', dpr === undefined ? "zoom 1's ribbons expected" : "device pixel ratio 1's ribbons expected"],
     ]) {
       const failure = ribbonControlFailure(run, aimedAt);
       if (failure !== undefined) {
-        console.error(`the ribbon control at zoom ${zoom}, with ${what}, ${failure}`);
+        console.error(`the ribbon control at ${at}, with ${what}, ${failure}`);
         process.exitCode = 1;
       }
     }
