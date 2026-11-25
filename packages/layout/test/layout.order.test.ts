@@ -186,6 +186,24 @@ describe('barycenterOrder, the seed permutation', () => {
       ['e', 'd', 'c'],
     ]);
   });
+
+  /** The stage holds a numbering per declared set, so the set changing has to reach it. */
+  it('appends virtual ids in the order their set iterates now, after the set changes', () => {
+    const declared = new Set<NodeId>(['v', 'w']);
+    const state = { ...stateOf(build(['a'], []), [['a', 'v', 'w']]), virtualNodes: declared };
+    expect(ordered(state, { maxSweeps: 0 })).toEqual([['a', 'v', 'w']]);
+    declared.delete('v');
+    declared.add('v');
+    expect(ordered(state, { maxSweeps: 0 })).toEqual([['a', 'w', 'v']]);
+  });
+
+  it('numbers a declared id the graph already holds once, in its graph place', () => {
+    const state = {
+      ...stateOf(build(['a', 'b'], []), [['a', 'v', 'b']]),
+      virtualNodes: new Set<NodeId>(['b', 'v']),
+    };
+    expect(ordered(state, { maxSweeps: 0 })).toEqual([['a', 'b', 'v']]);
+  });
 });
 
 describe('barycenterOrder, the initialOrder hint', () => {
