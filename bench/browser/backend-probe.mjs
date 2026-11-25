@@ -30,7 +30,7 @@
  * Chrome instead of launching one. The output
  * records the browser, mode and flags, because a backend result without them
  * cannot be reproduced. `--parity` adds M4.9b's backend comparison and exits
- * non-zero unless it passes and all fifty-three of its controls fail on
+ * non-zero unless it passes and all fifty-five of its controls fail on
  * what they change. It also exits non-zero when the adapter reports `isFallbackAdapter`: a software
  * adapter such as
  * SwiftShader still comes up on `webgpu`, so its side of the comparison would
@@ -60,7 +60,9 @@
  * 1.2, each with the dashed zooms' two controls and one that draws one side's
  * as a polyline, and the above-nodes ribbon with the circle alone at zoom 0.5
  * and 2, each with a control that shifts it, one that expects zoom 1's circle
- * and ribbon and one that draws one side's below the nodes.
+ * and ribbon and one that draws one side's below the nodes. The shapes alone
+ * are compared at device pixel ratio 2 too, with a control that shifts one
+ * shape and one that expects ratio 1's shapes.
  * The tiers are checked again at zoom 0.5 and 2, each with a bounds control,
  * a placement control, and a control that expects zoom 1's tiers, and the
  * outline at zoom 0.5 and 1.5, each with a padding control, a
@@ -100,6 +102,9 @@ const RICH_ZOOMS = [0.5, 2];
 const GROUP_ZOOMS = [0.5, 1.5];
 // Either side of zoom 1, with both shapes and their glow inside the frame.
 const SHAPE_ZOOMS = [0.5, 2];
+// At zoom 1, where a device pixel is half a world unit and the frame is twice
+// as many device pixels across.
+const SHAPE_DPRS = [2];
 // Either side of zoom 1, with both of the elbow's joins inside the frame; at 2
 // its middle run leaves it. At 1.5 the diagonal's first cap is outside it.
 const RIBBON_ZOOMS = [0.5, 1.5];
@@ -553,6 +558,15 @@ if (cliArgs.includes('--parity')) {
       zoomControl: await page.evaluate((at) => window.shapeParity(at, 0, 1), zoom),
     });
   }
+  for (const dpr of SHAPE_DPRS) {
+    parity.shapeZooms.push({
+      zoom: 1,
+      dpr,
+      check: await page.evaluate((ratio) => window.shapeParity(1, 0, 1, ratio), dpr),
+      control: await page.evaluate(([ratio, shift]) => window.shapeParity(1, shift, 1, ratio), [dpr, CONTROL_SHIFT_PX / dpr]),
+      zoomControl: await page.evaluate((ratio) => window.shapeParity(1, 0, 1, ratio, 1), dpr),
+    });
+  }
   parity.ribbonZooms = [];
   for (const zoom of RIBBON_ZOOMS) {
     parity.ribbonZooms.push({
@@ -692,18 +706,19 @@ if (cliArgs.includes('--parity')) {
     console.error(`the layer control, with one side's above-nodes ribbon drawn below the nodes, ${layerControl}`);
     process.exitCode = 1;
   }
-  for (const { zoom, check, control, zoomControl } of parity.shapeZooms) {
+  for (const { zoom, dpr, check, control, zoomControl } of parity.shapeZooms) {
+    const at = dpr === undefined ? `zoom ${zoom}` : `zoom ${zoom} and device pixel ratio ${dpr}`;
     if (!check.pass) {
-      console.error(`the shape check at zoom ${zoom} failed: ${shapeFailure(check)}`);
+      console.error(`the shape check at ${at} failed: ${shapeFailure(check)}`);
       process.exitCode = 1;
     }
     for (const [run, aimedAt, what] of [
       [control, 'interior', `one shape shifted by ${Number(CONTROL_SHIFT_PX.toPrecision(3))} px`],
-      [zoomControl, 'fill', "zoom 1's shapes expected"],
+      [zoomControl, 'fill', dpr === undefined ? "zoom 1's shapes expected" : "device pixel ratio 1's shapes expected"],
     ]) {
       const failure = shapeControlFailure(run, aimedAt);
       if (failure !== undefined) {
-        console.error(`the shape control at zoom ${zoom}, with ${what}, ${failure}`);
+        console.error(`the shape control at ${at}, with ${what}, ${failure}`);
         process.exitCode = 1;
       }
     }

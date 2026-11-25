@@ -580,7 +580,7 @@
        * each frame back. `keep` leaves the renderer alive and returns it, for
        * a caller that screenshots its frame afterwards.
        */
-      const draw = async (backend, nodes, edges, dashed, flows, smooth, smoothDashed, curve, above, layer, keep = false, zoom = 1) => {
+      const draw = async (backend, nodes, edges, dashed, flows, smooth, smoothDashed, curve, above, layer, keep = false, zoom = 1, dpr = 1) => {
         const previous = document.getElementById('stage');
         const canvas = document.createElement('canvas');
         canvas.id = 'stage';
@@ -602,7 +602,7 @@
         renderer.setEdges('smooth', smooth);
         renderer.setEdges('smooth-dashed', smoothDashed);
         renderer.setEdges('above', above);
-        renderer.camera.setViewport({ width: 480, height: 320, devicePixelRatio: 1 });
+        renderer.camera.setViewport({ width: 480, height: 320, devicePixelRatio: dpr });
         renderer.camera.setZoom(zoom);
         const frames = [];
         for (const dashFlowPixels of flows) {
@@ -845,13 +845,19 @@
        * places the fills the page expects at that zoom while the canvas and
        * the band stay at `zoom`, so it fails only if the fill check can see
        * that the shapes follow the zoom.
+       *
+       * `dpr` draws at that device pixel ratio, where a device pixel is
+       * `1 / (zoom * dpr)` world units and the frame is `dpr` times as many
+       * device pixels across. The outline and the band stay in device pixels.
+       * `expectedDpr` places the expected fills at that ratio the way
+       * `expectedZoom` does at its zoom.
        */
-      window.shapeParity = async (zoom, shiftX = 0, expectedZoom = zoom) => {
+      window.shapeParity = async (zoom, shiftX = 0, expectedZoom = zoom, dpr = 1, expectedDpr = dpr) => {
         const shifted = NODES.map((node, i) =>
           i === 0 ? { ...node, center: { x: node.center.x + shiftX, y: node.center.y } } : node,
         );
         const shapes = (backend, nodes) =>
-          draw(backend, nodes, [], [], [FLOWS[0]], [], [], 'smooth', [], 'above-nodes', false, zoom);
+          draw(backend, nodes, [], [], [FLOWS[0]], [], [], 'smooth', [], 'above-nodes', false, zoom, dpr);
         let gpu;
         let gl;
         try {
@@ -865,6 +871,8 @@
         const band = { pixels: 0, differing: 0, maxDelta: 0 };
         const interior = { pixels: 0, differing: 0, maxDelta: 0 };
         const fill = { pixels: 0, filled: 0 };
+        const scale = zoom * dpr;
+        const expectedScale = expectedZoom * expectedDpr;
         for (let row = 0; row < gpu.height; row += 1) {
           for (let col = 0; col < gpu.width; col += 1) {
             const x = col + 0.5 - gpu.width / 2;
@@ -872,9 +880,9 @@
             const i = (row * gpu.width + col) * 4;
             let nearest = Infinity;
             for (const node of NODES) {
-              const d = signedDistance(node, x / zoom, y / zoom) * zoom;
+              const d = signedDistance(node, x / scale, y / scale) * scale;
               nearest = Math.min(nearest, Math.abs(d), Math.abs(d + OUTLINE_DEVICE_PX));
-              const expected = signedDistance(node, x / expectedZoom, y / expectedZoom) * expectedZoom;
+              const expected = signedDistance(node, x / expectedScale, y / expectedScale) * expectedScale;
               if (expected < -(OUTLINE_DEVICE_PX + EDGE_BAND_DEVICE_PX)) {
                 fill.pixels += 1;
                 if ([16, 8, 0].every((s, c) => Math.abs(gpuData[i + c] - ((node.fillColor >> s) & 0xff)) <= ROUNDING)) {
@@ -901,6 +909,9 @@
           zoom,
           shiftX,
           expectedZoom,
+          dpr,
+          expectedDpr,
+          size: { width: gpu.width, height: gpu.height },
           band,
           interior,
           fill,
