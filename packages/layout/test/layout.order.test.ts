@@ -186,6 +186,48 @@ describe('barycenterOrder, the seed permutation', () => {
       ['e', 'd', 'c'],
     ]);
   });
+
+  it('appends virtual ids in the order their set iterates now, after the set changes', () => {
+    const declared = new Set<NodeId>(['v', 'w']);
+    const state = { ...stateOf(build(['a'], []), [['a', 'v', 'w']]), virtualNodes: declared };
+    expect(ordered(state, { maxSweeps: 0 })).toEqual([['a', 'v', 'w']]);
+    declared.delete('v');
+    declared.add('v');
+    expect(ordered(state, { maxSweeps: 0 })).toEqual([['a', 'w', 'v']]);
+  });
+
+  it('numbers a declared id the graph already holds once, in its graph place', () => {
+    const state = {
+      ...stateOf(build(['a', 'b'], []), [['a', 'v', 'b']]),
+      virtualNodes: new Set<NodeId>(['b', 'v']),
+    };
+    expect(ordered(state, { maxSweeps: 0 })).toEqual([['a', 'b', 'v']]);
+  });
+
+  it('numbers a reused declared set after the graph gains a node, or comes to hold a declared id', () => {
+    const declared = new Set<NodeId>(['v', 'w']);
+    const fresh = (graph: Graph, layer: readonly NodeId[]): NodeId[][] =>
+      ordered({ ...stateOf(graph, [layer]), virtualNodes: new Set(declared) }, { maxSweeps: 0 });
+    const reused = (graph: Graph, layer: readonly NodeId[]): NodeId[][] =>
+      ordered({ ...stateOf(graph, [layer]), virtualNodes: declared }, { maxSweeps: 0 });
+    expect(reused(build(['a'], []), ['a', 'v', 'w'])).toEqual([['a', 'v', 'w']]);
+    const grown = build(['a', 'b'], []);
+    expect(reused(grown, ['a', 'b', 'v', 'w'])).toEqual(fresh(grown, ['a', 'b', 'v', 'w']));
+    expect(reused(grown, ['a', 'b', 'v', 'w'])).toEqual([['a', 'b', 'v', 'w']]);
+    const holding = build(['a', 'w'], []);
+    expect(reused(holding, ['a', 'w', 'v'])).toEqual([['a', 'w', 'v']]);
+  });
+
+  it('numbers an id a declared roster repeats once', () => {
+    const repeating: ReadonlySet<NodeId> = Object.assign(new Set<NodeId>(['v']), {
+      *[Symbol.iterator](): SetIterator<NodeId> {
+        yield 'v';
+        yield 'v';
+      },
+    });
+    const state = { ...stateOf(build(['a'], []), [['a', 'v']]), virtualNodes: repeating };
+    expect(ordered(state, { maxSweeps: 0 })).toEqual([['a', 'v']]);
+  });
 });
 
 describe('barycenterOrder, the initialOrder hint', () => {

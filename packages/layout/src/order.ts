@@ -346,8 +346,8 @@ function resolveTransposeBudget(maxTransposePasses: number | undefined): number 
 interface OrderIndex {
   /** Node number to id, in roster order: graph nodes, then virtual ids. */
   readonly ids: readonly NodeId[];
-  /** The same map the other way, which the warm-start constraint reads. */
-  readonly numberOf: ReadonlyMap<NodeId, number>;
+  /** The same numbering the other way, which the warm-start constraint reads. */
+  readonly numberOf: Numbering;
   /** Node number to layer index, layers being the distinct ranks sorted. */
   readonly layerOf: Int32Array;
   readonly layerCount: number;
@@ -388,18 +388,101 @@ function compress(
   return { start, next };
 }
 
-function buildIndex(input: RankedState): OrderIndex {
+/** Node numbers by id, the one question {@link OrderIndex.numberOf} answers. */
+interface Numbering {
+  get(id: NodeId): number | undefined;
+}
+
+/** Virtual ids in roster order, and each one's place among them. */
+interface VirtualRoster {
+  readonly ids: readonly NodeId[];
+  readonly offsetOf: ReadonlyMap<NodeId, number>;
+}
+
+/**
+ * Held per declared set, because a fast path hands the order stage the set the
+ * last full run declared, and numbering its dummies (174,222 of them on the
+ * 10k corpus) was most of what numbering the roster cost. A set is only reused
+ * when it still iterates the same ids in the same order, since a caller may
+ * mutate a set it passed.
+ */
+const virtualRosters = new WeakMap<ReadonlySet<NodeId>, VirtualRoster>();
+
+function virtualRoster(declared: ReadonlySet<NodeId>): VirtualRoster {
+  const held = virtualRosters.get(declared);
+  if (held !== undefined && sameIds(held.ids, declared)) return held;
   const ids: NodeId[] = [];
-  const numberOf = new Map<NodeId, number>();
-  for (const node of input.graph.nodes()) {
-    numberOf.set(node.id, ids.length);
-    ids.push(node.id);
+  const offsetOf = new Map<NodeId, number>();
+  for (const id of declared) {
+    if (offsetOf.has(id)) continue;
+    offsetOf.set(id, ids.length);
+    ids.push(id);
   }
+  const roster = { ids, offsetOf };
+  virtualRosters.set(declared, roster);
+  return roster;
+}
+
+function sameIds(ids: readonly NodeId[], declared: ReadonlySet<NodeId>): boolean {
+  if (ids.length !== declared.size) return false;
+  let index = 0;
+  for (const id of declared) {
+    if (ids[index] !== id) return false;
+    index += 1;
+  }
+  return index === ids.length;
+}
+
+/** Graph nodes numbered first, then the virtual roster after them. */
+class RosterNumbering implements Numbering {
+  readonly graph: ReadonlyMap<NodeId, number>;
+  readonly virtual: ReadonlyMap<NodeId, number>;
+  readonly offset: number;
+
+  constructor(graph: ReadonlyMap<NodeId, number>, virtual: ReadonlyMap<NodeId, number>, offset: number) {
+    this.graph = graph;
+    this.virtual = virtual;
+    this.offset = offset;
+  }
+
+  get(id: NodeId): number | undefined {
+    const offset = this.virtual.get(id);
+    return offset === undefined ? this.graph.get(id) : offset + this.offset;
+  }
+}
+
+/**
+ * Graph nodes in graph order, then virtual ids in declared order, an id the
+ * graph already holds keeping its graph number. The pipeline refuses such an
+ * id, but a caller running the stage directly may pass one, and it then gets
+ * one map built from scratch.
+ */
+function numberRoster(input: RankedState): { ids: readonly NodeId[]; numberOf: Numbering } {
+  const graphIds: NodeId[] = [];
+  const graphNumberOf = new Map<NodeId, number>();
+  for (const node of input.graph.nodes()) {
+    graphNumberOf.set(node.id, graphIds.length);
+    graphIds.push(node.id);
+  }
+  const virtual = virtualRoster(input.virtualNodes);
+  if (!graphIds.some((id) => virtual.offsetOf.has(id))) {
+    return {
+      ids: graphIds.concat(virtual.ids),
+      numberOf: new RosterNumbering(graphNumberOf, virtual.offsetOf, graphIds.length),
+    };
+  }
+  const ids = graphIds;
+  const numberOf = graphNumberOf;
   for (const id of input.virtualNodes) {
     if (numberOf.has(id)) continue;
     numberOf.set(id, ids.length);
     ids.push(id);
   }
+  return { ids, numberOf };
+}
+
+function buildIndex(input: RankedState): OrderIndex {
+  const { ids, numberOf } = numberRoster(input);
   const count = ids.length;
 
   // Layers are the DISTINCT RANKS SORTED, not the ranks themselves. A ranker is
@@ -785,14 +868,14 @@ interface Cohorts {
 /**
  * The constraint a hint imposes, or a free one when the hint says nothing.
  *
- * `numberOf` is the index's own map rather than one built here, which matters
+ * `numberOf` is the index's own numbering rather than one built here, which matters
  * because this runs on every run including the cold ones: rebuilding it would
  * be a second walk over 184,222 ids on the 10k corpus to answer a question the
  * index has already answered.
  */
 function cohortsOf(
   ids: readonly NodeId[],
-  numberOf: ReadonlyMap<NodeId, number>,
+  numberOf: Numbering,
   hint: readonly (readonly NodeId[])[],
 ): Cohorts {
   const cohortOf = new Int32Array(ids.length).fill(-1);
