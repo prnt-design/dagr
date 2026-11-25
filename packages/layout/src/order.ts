@@ -411,9 +411,13 @@ const virtualRosters = new WeakMap<ReadonlySet<NodeId>, VirtualRoster>();
 function virtualRoster(declared: ReadonlySet<NodeId>): VirtualRoster {
   const held = virtualRosters.get(declared);
   if (held !== undefined && sameIds(held.ids, declared)) return held;
-  const ids = [...declared];
+  const ids: NodeId[] = [];
   const offsetOf = new Map<NodeId, number>();
-  for (const [offset, id] of ids.entries()) offsetOf.set(id, offset);
+  for (const id of declared) {
+    if (offsetOf.has(id)) continue;
+    offsetOf.set(id, ids.length);
+    ids.push(id);
+  }
   const roster = { ids, offsetOf };
   virtualRosters.set(declared, roster);
   return roster;

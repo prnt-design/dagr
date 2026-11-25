@@ -189,13 +189,17 @@ numbering the dummies from scratch on every run. A fast path hands the order
 stage the set of dummies the last full run declared, so the index numbers that
 set once and reuses the numbering while the set still iterates the same ids in
 the same order. Instrumented, numbering an added leaf's roster went from 20.2ms
-to 3.0ms, with segments about 1ms slower through the two-part lookup. Two
+to 3.0ms, with segments about 1ms slower through the two-part lookup (19.1ms
+to 20.4ms) and the rank reads 12.4ms after it. The numbering is held beside
+the set for as long as the engine holds that set, and a full run that declares
+a new set replaces it. Two
 alternating pairs of the same `MEASURE_COST=1` command, each inside an
 exclusive compute window at load averages 0.40 to 0.95, put the added leaf's
 order stage at 116.7ms and 103.7ms before and 92.2ms and 88.6ms after, and its
 whole relayout at 291.9ms and 265.9ms before and 267.7ms and 248.6ms after. A
 cold run, which builds the numbering the fast paths reuse, measured 803ms and
-806ms before and 816ms and 813ms after.
+806ms before and 816ms and 813ms after. These timings include run-to-run
+variation and do not replace the Apple M4 table above.
 
 **A resize runs only position and route.** Neither the rank stage nor the order
 stage reads a size, and run again over an unchanged graph both would land where
