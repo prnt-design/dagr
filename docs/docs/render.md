@@ -624,14 +624,16 @@ checks:
   and the three dashed ones, the joined one included, and the smooth one
   alone at 0.5 and 1.2, and since 2026-11-25 the smooth dashed one alone at
   0.5 and 1.2 and the above-nodes one with the circle at 0.5 and 2),
-  device pixel ratio 1, with two solid straight edge ribbons added to that
-  scene on 2026-11-17, and two dashed straight ones, a dashed one through two
+  device pixel ratio 1 (the shapes alone also at 2 and zoom 1 since
+  2026-11-25), with two solid straight edge ribbons added to that scene on
+  2026-11-17, and two dashed straight ones, a dashed one through two
   joins and a smooth one on 2026-11-21 (Chrome 157), the dashes flowed by
   4.5 pixels since 2026-11-22, and a smooth dashed one, the flow advancing
   over three frames and a ribbon on the above-nodes layer since that day.
   A group outline and rich-node tiers, drawn by the browser rather than by
   either backend, are composed over the first frame since 2026-11-23 and add
-  no difference. Other GPUs and DPR 2 are unchecked.
+  no difference. Other GPUs, and at DPR 2 everything but the shapes alone at
+  zoom 1, are unchecked.
   See
   [What is verified, and on which backend](#what-is-verified-and-on-which-backend).
 - That a browser composes the overlay's two transforms the way the algebra says,
@@ -2145,10 +2147,10 @@ complete, and `<DagrCanvas animate>` drives them from a graph a user is editing
   `DagrCanvas` picks through
   `pickNode` only behind its opt-in `hitTesting="gpu"`. See [Picking](#picking).
 - Backend parity beyond the probe scene and the one machine M4.9b compared on:
-  other GPUs and DPR 2 (beyond zoom 1, the shapes alone, the above-nodes
-  ribbon with the circle and the rich-node tiers are compared at 0.5 and 2,
-  the solid straight ribbons and the group outline at 0.5 and 1.5, and the
-  three dashed ribbons, the solid smooth one and the smooth dashed one at
-  0.5 and 1.2).
+  other GPUs, and DPR 2 for everything but the shapes alone at zoom 1.
+  Beyond zoom 1, the shapes alone, the above-nodes ribbon with the circle
+  and the rich-node tiers are compared at 0.5 and 2, the solid straight
+  ribbons and the group outline at 0.5 and 1.5, and the three dashed
+  ribbons, the solid smooth one and the smooth dashed one at 0.5 and 1.2.
 - Ten thousand nodes at sixty frames a second, measured rather than hoped for
   (M4.10).
