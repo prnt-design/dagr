@@ -30,7 +30,7 @@
  * Chrome instead of launching one. The output
  * records the browser, mode and flags, because a backend result without them
  * cannot be reproduced. `--parity` adds M4.9b's backend comparison and exits
- * non-zero unless it passes and all sixty-five of its controls fail on
+ * non-zero unless it passes and all sixty-eight of its controls fail on
  * what they change. It also exits non-zero when the adapter reports `isFallbackAdapter`: a software
  * adapter such as
  * SwiftShader still comes up on `webgpu`, so its side of the comparison would
@@ -68,9 +68,12 @@
  * one side's dashes further and one that expects a period that doubles with
  * the ratio, the solid smooth ribbon alone, with a control that shifts it,
  * one that expects ratio 1's curve and one that draws one side's as a
- * polyline, and the smooth dashed ribbon alone, with a control that flows one
+ * polyline, the smooth dashed ribbon alone, with a control that flows one
  * side's dashes further, one that expects a period that doubles with the
- * ratio and one that draws one side's as a polyline.
+ * ratio and one that draws one side's as a polyline, and the above-nodes
+ * ribbon with the circle alone, with a control that shifts it, one that
+ * expects ratio 1's circle and ribbon and one that draws one side's below the
+ * nodes.
  * The tiers are checked again at zoom 0.5 and 2, each with a bounds control,
  * a placement control, and a control that expects zoom 1's tiers, and the
  * outline at zoom 0.5 and 1.5, each with a padding control, a
@@ -138,6 +141,8 @@ const SMOOTH_DASH_DPRS = [2];
 // Either side of zoom 1, with the circle, its glow and the whole ribbon inside
 // the frame; above about 2.18 the ribbon's end leaves it.
 const ABOVE_ZOOMS = [0.5, 2];
+// At zoom 1, where the frame covers the same world as at ratio 1.
+const ABOVE_DPRS = [2];
 
 /**
  * The page's import map, filled in from this process's own module resolution.
@@ -687,6 +692,19 @@ if (cliArgs.includes('--parity')) {
       layerControl: await page.evaluate((at) => window.aboveParity(at, 0, at, 'below-nodes'), zoom),
     });
   }
+  for (const dpr of ABOVE_DPRS) {
+    parity.aboveZooms.push({
+      zoom: 1,
+      dpr,
+      check: await page.evaluate((ratio) => window.aboveParity(1, 0, 1, 'above-nodes', ratio), dpr),
+      control: await page.evaluate(
+        ([ratio, shift]) => window.aboveParity(1, shift, 1, 'above-nodes', ratio),
+        [dpr, EDGE_CONTROL_SHIFT_PX / dpr],
+      ),
+      zoomControl: await page.evaluate((ratio) => window.aboveParity(1, 0, 1, 'above-nodes', ratio, 1), dpr),
+      layerControl: await page.evaluate((ratio) => window.aboveParity(1, 0, 1, 'below-nodes', ratio), dpr),
+    });
+  }
   // The page keeps only the latest draw's canvas read back, so every check
   // that reuses a set of screenshots runs before the next draw.
   const shots = await composedShots('groupFrame', 0);
@@ -867,19 +885,24 @@ if (cliArgs.includes('--parity')) {
       }
     }
   }
-  for (const { zoom, check, control, zoomControl, layerControl } of parity.aboveZooms) {
+  for (const { zoom, dpr, check, control, zoomControl, layerControl } of parity.aboveZooms) {
+    const at = dpr === undefined ? `zoom ${zoom}` : `zoom ${zoom} and device pixel ratio ${dpr}`;
     if (!check.pass) {
-      console.error(`the above-nodes check at zoom ${zoom} failed: ${aboveFailure(check)}`);
+      console.error(`the above-nodes check at ${at} failed: ${aboveFailure(check)}`);
       process.exitCode = 1;
     }
     for (const [run, aimedAt, what] of [
       [control, 'interior', `the ribbon shifted by ${EDGE_CONTROL_SHIFT_PX} px`],
-      [zoomControl, 'colours', "zoom 1's circle and ribbon expected"],
+      [
+        zoomControl,
+        'colours',
+        dpr === undefined ? "zoom 1's circle and ribbon expected" : "device pixel ratio 1's circle and ribbon expected",
+      ],
       [layerControl, 'interior', "one side's ribbon drawn below the nodes"],
     ]) {
       const failure = aboveControlFailure(run, aimedAt);
       if (failure !== undefined) {
-        console.error(`the above-nodes control at zoom ${zoom}, with ${what}, ${failure}`);
+        console.error(`the above-nodes control at ${at}, with ${what}, ${failure}`);
         process.exitCode = 1;
       }
     }

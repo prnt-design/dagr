@@ -568,7 +568,10 @@ colour inside their gaps, the solid smooth ribbon alone at device pixel
 ratio 2 compares within tolerance with the edge colour inside it and the
 clear colour just outside, the smooth dashed ribbon alone at device pixel
 ratio 2 compares within tolerance with the edge colour inside its dashes and
-the clear colour inside its gaps, and all sixty-five controls (one moves a shape, one every ribbon, the curves included,
+the clear colour inside its gaps, the above-nodes ribbon with the circle
+alone at device pixel ratio 2 compares within tolerance with the edge colour
+inside the ribbon and the fill colour inside the circle's fill clear of it,
+and all sixty-eight controls (one moves a shape, one every ribbon, the curves included,
 one the dash pattern, one draws the curves as polylines, one holds the flow,
 one draws the above-nodes ribbon below the nodes, one widens one side's
 outline, one the outline the page expects, one moves one side's tier boxes,
@@ -591,8 +594,9 @@ shapes, one moves the ribbons, one expects ratio 1's ribbons, one flows one
 side's dashes further, one expects a period that doubles with the ratio,
 one moves the smooth ribbon, one expects ratio 1's curve, one draws one
 side's as a polyline, one flows one side's smooth dashes further, one
-expects a period that doubles with the ratio and one draws one side's smooth
-dashed ribbon as a polyline) fail on what they change, and says on stderr which of these did not hold. It also exits non-zero, saying why on
+expects a period that doubles with the ratio, one draws one side's smooth
+dashed ribbon as a polyline, one moves the above-nodes ribbon, one expects
+ratio 1's circle and ribbon and one draws one side's below the nodes) fail on what they change, and says on stderr which of these did not hold. It also exits non-zero, saying why on
 stderr before it compares, when the adapter reports `isFallbackAdapter`,
 because a software adapter such as SwiftShader comes up on `'webgpu'` too and
 its frame is not a GPU's.
@@ -1323,6 +1327,26 @@ colours; the edge control fails with 332 interior pixels differing by up to
 158, the layer control with 276 by up to 56, and the zoom control with none of 164 and 702 of
 1,984.
 
+The same circle and ribbon alone were compared at device pixel ratio 2 and
+zoom 1 on 2026-11-26 UTC, on the same Apple M4 in Chrome 158.0.8127.37
+(`apple` `metal-3`, not a fallback adapter), headless and headed with the
+same counts. `aboveParity` passes the ratio to the camera's `setViewport` as
+`shapeParity` and `ribbonParity` do, so each drawing buffer is 960 by 640,
+and scales the circle and the route into device pixels by the zoom times the
+ratio while the outline, the ribbon's width and the band stay in device
+pixels. The edge control moves the WebGL2 side's ribbon by 2 device pixels,
+1 world unit at this ratio, and the ratio control expects ratio 1's circle
+and ribbon; the layer control is unchanged.
+
+The ratio is byte-identical: no pixel differs in the 2,232 band pixels or
+the 612,168 interior ones. All 344 pixels inside the ribbon hold the edge
+colour, 220 of them over the fill, and all 9,560 fill pixels clear of it the
+fill colour, the same counts as at zoom 2, which draws the circle and
+ribbon at the same size in device pixels into a frame a quarter as large. The edge control fails with 332 interior pixels
+differing by up to 158, the layer control with 276 by up to 56, and the
+ratio control with none of 164 expected ribbon pixels in the edge colour and
+702 of 1,984 fill pixels in the fill colour.
+
 **Not a gate.** `bench/README.md`'s argument against a browser measurement in
 `bench:ci` is about timings, and a parity check is not a timing, so that
 argument does not carry. What does is the runner: the check needs a full Chrome
@@ -1336,8 +1360,8 @@ one, the flow advancing over three frames and a ribbon on the above-nodes
 layer since that day, and a group outline and rich-node tiers composed over
 the first frame since 2026-11-23, DPR 1 (the shapes alone and the solid
 straight ribbons alone also at DPR 2 and zoom 1 since 2026-11-25, and the
-three dashed ones alone, the solid smooth one alone and the smooth dashed
-one alone since 2026-11-26).
+three dashed ones alone, the solid smooth one alone, the smooth dashed
+one alone and the above-nodes one with the circle since 2026-11-26).
 The canvas comparison is at zoom
 1, the shapes alone also at zoom 0.5 and 2, the solid straight ribbons
 alone at zoom 0.5 and 1.5 and the three dashed ones and the solid smooth
@@ -1345,8 +1369,9 @@ one at 0.5 and 1.2 since 2026-11-24, the smooth dashed one at 0.5 and 1.2
 since 2026-11-25, the above-nodes one with the circle at 0.5 and 2 since
 that day, the outline at zoom 0.5, 1 and 1.5, and the tiers at zoom 0.5, 1
 and 2. At DPR 2 only the shapes alone, the solid straight ribbons alone,
-the three dashed ones alone, the solid smooth one alone and the smooth
-dashed one alone, at zoom 1, are compared.
+the three dashed ones alone, the solid smooth one alone, the smooth
+dashed one alone and the above-nodes one with the circle, at zoom 1, are
+compared.
 
 ## Node picking (M4.8b)
 
