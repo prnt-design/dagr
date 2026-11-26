@@ -30,7 +30,7 @@
  * Chrome instead of launching one. The output
  * records the browser, mode and flags, because a backend result without them
  * cannot be reproduced. `--parity` adds M4.9b's backend comparison and exits
- * non-zero unless it passes and all sixty-two of its controls fail on
+ * non-zero unless it passes and all sixty-five of its controls fail on
  * what they change. It also exits non-zero when the adapter reports `isFallbackAdapter`: a software
  * adapter such as
  * SwiftShader still comes up on `webgpu`, so its side of the comparison would
@@ -66,9 +66,11 @@
  * ribbons alone, with a control that shifts them and one that expects ratio
  * 1's ribbons, the three dashed ribbons alone, with a control that flows
  * one side's dashes further and one that expects a period that doubles with
- * the ratio, and the solid smooth ribbon alone, with a control that shifts
- * it, one that expects ratio 1's curve and one that draws one side's as a
- * polyline.
+ * the ratio, the solid smooth ribbon alone, with a control that shifts it,
+ * one that expects ratio 1's curve and one that draws one side's as a
+ * polyline, and the smooth dashed ribbon alone, with a control that flows one
+ * side's dashes further, one that expects a period that doubles with the
+ * ratio and one that draws one side's as a polyline.
  * The tiers are checked again at zoom 0.5 and 2, each with a bounds control,
  * a placement control, and a control that expects zoom 1's tiers, and the
  * outline at zoom 0.5 and 1.5, each with a padding control, a
@@ -131,6 +133,8 @@ const SMOOTH_DPRS = [2];
 // about 1.08 its first cap starts to leave it, and at 1.2 so does about two
 // thirds of the way to its first turn.
 const SMOOTH_DASH_ZOOMS = [0.5, 1.2];
+// At zoom 1, where the frame covers the same world as at ratio 1.
+const SMOOTH_DASH_DPRS = [2];
 // Either side of zoom 1, with the circle, its glow and the whole ribbon inside
 // the frame; above about 2.18 the ribbon's end leaves it.
 const ABOVE_ZOOMS = [0.5, 2];
@@ -660,6 +664,19 @@ if (cliArgs.includes('--parity')) {
       curveControl: await page.evaluate((at) => window.dashParity(at, 0, at, true, 'polyline'), zoom),
     });
   }
+  for (const dpr of SMOOTH_DASH_DPRS) {
+    parity.smoothDashZooms.push({
+      zoom: 1,
+      dpr,
+      check: await page.evaluate((ratio) => window.dashParity(1, 0, 1, true, 'smooth', ratio), dpr),
+      control: await page.evaluate(
+        ([ratio, shift]) => window.dashParity(1, shift, 1, true, 'smooth', ratio),
+        [dpr, DASH_CONTROL_SHIFT_PX],
+      ),
+      zoomControl: await page.evaluate((ratio) => window.dashParity(1, 0, 1, true, 'smooth', ratio, 1), dpr),
+      curveControl: await page.evaluate((ratio) => window.dashParity(1, 0, 1, true, 'polyline', ratio), dpr),
+    });
+  }
   parity.aboveZooms = [];
   for (const zoom of ABOVE_ZOOMS) {
     parity.aboveZooms.push({
@@ -828,19 +845,24 @@ if (cliArgs.includes('--parity')) {
       }
     }
   }
-  for (const { zoom, check, control, zoomControl, curveControl } of parity.smoothDashZooms) {
+  for (const { zoom, dpr, check, control, zoomControl, curveControl } of parity.smoothDashZooms) {
+    const at = dpr === undefined ? `zoom ${zoom}` : `zoom ${zoom} and device pixel ratio ${dpr}`;
     if (!check.pass) {
-      console.error(`the smooth dash check at zoom ${zoom} failed: ${dashFailure(check)}`);
+      console.error(`the smooth dash check at ${at} failed: ${dashFailure(check)}`);
       process.exitCode = 1;
     }
     for (const [run, aimedAt, what] of [
       [control, 'interior', `the dashes flowed ${DASH_CONTROL_SHIFT_PX} px further`],
-      [zoomControl, 'dash colours', 'a period in world units expected'],
+      [
+        zoomControl,
+        'dash colours',
+        dpr === undefined ? 'a period in world units expected' : 'a period that doubles with the ratio expected',
+      ],
       [curveControl, 'interior', "one side's ribbon drawn as a polyline"],
     ]) {
       const failure = dashControlFailure(run, aimedAt);
       if (failure !== undefined) {
-        console.error(`the smooth dash control at zoom ${zoom}, with ${what}, ${failure}`);
+        console.error(`the smooth dash control at ${at}, with ${what}, ${failure}`);
         process.exitCode = 1;
       }
     }

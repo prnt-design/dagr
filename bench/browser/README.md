@@ -566,7 +566,9 @@ outside, the three dashed ribbons alone at device pixel ratio 2 compare
 within tolerance with the edge colour inside their dashes and the clear
 colour inside their gaps, the solid smooth ribbon alone at device pixel
 ratio 2 compares within tolerance with the edge colour inside it and the
-clear colour just outside, and all sixty-two controls (one moves a shape, one every ribbon, the curves included,
+clear colour just outside, the smooth dashed ribbon alone at device pixel
+ratio 2 compares within tolerance with the edge colour inside its dashes and
+the clear colour inside its gaps, and all sixty-five controls (one moves a shape, one every ribbon, the curves included,
 one the dash pattern, one draws the curves as polylines, one holds the flow,
 one draws the above-nodes ribbon below the nodes, one widens one side's
 outline, one the outline the page expects, one moves one side's tier boxes,
@@ -587,8 +589,10 @@ expects zoom 1's circle and ribbon and one draws one side's below the nodes,
 and at device pixel ratio 2 one moves a shape, one expects ratio 1's
 shapes, one moves the ribbons, one expects ratio 1's ribbons, one flows one
 side's dashes further, one expects a period that doubles with the ratio,
-one moves the smooth ribbon, one expects ratio 1's curve and one draws one
-side's as a polyline) fail on what they change, and says on stderr which of these did not hold. It also exits non-zero, saying why on
+one moves the smooth ribbon, one expects ratio 1's curve, one draws one
+side's as a polyline, one flows one side's smooth dashes further, one
+expects a period that doubles with the ratio and one draws one side's smooth
+dashed ribbon as a polyline) fail on what they change, and says on stderr which of these did not hold. It also exits non-zero, saying why on
 stderr before it compares, when the adapter reports `isFallbackAdapter`,
 because a software adapter such as SwiftShader comes up on `'webgpu'` too and
 its frame is not a GPU's.
@@ -1268,6 +1272,28 @@ pixels, with all 113 dash and all 120 gap pixels in their colours; the dash
 control fails with 145 interior pixels differing by up to 158, the curve
 control with 368, and the zoom control with 58 of 118 and 58 of 123.
 
+The same smooth dashed ribbon alone was compared at device pixel ratio 2 and
+zoom 1 on 2026-11-26 UTC, on the same Apple M4 in Chrome 158.0.8127.37
+(`apple` `metal-3`, not a fallback adapter), headless and headed with the
+same counts. `dashParity` with `smooth` passes the ratio to the camera's
+`setViewport` as it does for the three dashed ribbons, so each drawing
+buffer is 960 by 640, and classes the dashes from the renderer's own smooth
+triangles scaled into device pixels by the zoom times the ratio; the
+period, the flow, the width and the band stay in device pixels. The frame
+covers the same world as at ratio 1, so both of the curve's turns and both
+caps are inside it. The check runs with three controls: the dash control
+flows one side's dashes 3 device pixels further and the curve control draws
+the WebGL2 side's ribbon as a polyline, which must both fail on the
+interior, and a ratio control that expects a period that doubles with the
+ratio must fail on the dash and gap colours alone.
+
+The check passes with 50 of 1,846 band pixels differing, by up to 77, and
+none of 612,554 interior pixels; all 246 pixels inside the dashes hold the
+edge colour and all 241 inside the gaps the clear colour. The dash control
+fails with 304 interior pixels differing by up to 158, the curve control
+with 959, and the ratio control with 152 of 243 expected dash pixels in the
+edge colour and 61 of 251 gap pixels clear.
+
 The above-nodes ribbon was compared at zoom 0.5 and 2 on 2026-11-25 UTC, on
 the same Apple M4 in Chrome 158.0.8127.37 (`apple` `metal-3`, not a fallback
 adapter), headless and headed with the same counts. `aboveParity` draws the
@@ -1310,7 +1336,8 @@ one, the flow advancing over three frames and a ribbon on the above-nodes
 layer since that day, and a group outline and rich-node tiers composed over
 the first frame since 2026-11-23, DPR 1 (the shapes alone and the solid
 straight ribbons alone also at DPR 2 and zoom 1 since 2026-11-25, and the
-three dashed ones alone and the solid smooth one alone since 2026-11-26).
+three dashed ones alone, the solid smooth one alone and the smooth dashed
+one alone since 2026-11-26).
 The canvas comparison is at zoom
 1, the shapes alone also at zoom 0.5 and 2, the solid straight ribbons
 alone at zoom 0.5 and 1.5 and the three dashed ones and the solid smooth
@@ -1318,8 +1345,8 @@ one at 0.5 and 1.2 since 2026-11-24, the smooth dashed one at 0.5 and 1.2
 since 2026-11-25, the above-nodes one with the circle at 0.5 and 2 since
 that day, the outline at zoom 0.5, 1 and 1.5, and the tiers at zoom 0.5, 1
 and 2. At DPR 2 only the shapes alone, the solid straight ribbons alone,
-the three dashed ones alone and the solid smooth one alone, at zoom 1, are
-compared.
+the three dashed ones alone, the solid smooth one alone and the smooth
+dashed one alone, at zoom 1, are compared.
 
 ## Node picking (M4.8b)
 
