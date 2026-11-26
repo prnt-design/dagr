@@ -1226,12 +1226,13 @@ counts. `ribbonParity` with `smooth` passes the ratio to the camera's
 buffer is 960 by 640, and scales the flattened curve into device pixels by
 the zoom times the ratio; the width, the band and the strip beside stay in
 device pixels. The frame covers the same world as at ratio 1, so the whole
-curve is inside it, and its chords are twice as long on screen as at zoom
-1, so none folds. The check runs with three controls: the edge control
-shifts the WebGL2 side's ribbon 2 device pixels (1 world unit) along each
-axis and the curve control draws it as a polyline, which must both fail on
-the interior, and a ratio control that expects ratio 1's curve must fail on
-the edge colour alone.
+curve is inside it, and its chords are twice as long on screen as at ratio
+1, so none folds: the one closest to folding clears the bow-tie bound by
+about 2.7 device pixels, against 0.44 at ratio 1. The check runs with three
+controls: the edge control shifts the WebGL2 side's ribbon 2 device pixels
+(1 world unit) along each axis and the curve control draws it as a
+polyline, which must both fail on the interior, and a ratio control that
+expects ratio 1's curve must fail on the edge colour alone.
 
 The check passes with 48 of 1,880 band pixels differing, by up to 35, and
 none of 612,520 interior pixels; all 893 pixels inside the ribbon hold the
