@@ -30,7 +30,7 @@
  * Chrome instead of launching one. The output
  * records the browser, mode and flags, because a backend result without them
  * cannot be reproduced. `--parity` adds M4.9b's backend comparison and exits
- * non-zero unless it passes and all fifty-nine of its controls fail on
+ * non-zero unless it passes and all sixty-two of its controls fail on
  * what they change. It also exits non-zero when the adapter reports `isFallbackAdapter`: a software
  * adapter such as
  * SwiftShader still comes up on `webgpu`, so its side of the comparison would
@@ -64,9 +64,11 @@
  * are compared at device pixel ratio 2 too, with a control that shifts one
  * shape and one that expects ratio 1's shapes, and so are the solid straight
  * ribbons alone, with a control that shifts them and one that expects ratio
- * 1's ribbons, and the three dashed ribbons alone, with a control that flows
+ * 1's ribbons, the three dashed ribbons alone, with a control that flows
  * one side's dashes further and one that expects a period that doubles with
- * the ratio.
+ * the ratio, and the solid smooth ribbon alone, with a control that shifts
+ * it, one that expects ratio 1's curve and one that draws one side's as a
+ * polyline.
  * The tiers are checked again at zoom 0.5 and 2, each with a bounds control,
  * a placement control, and a control that expects zoom 1's tiers, and the
  * outline at zoom 0.5 and 1.5, each with a padding control, a
@@ -123,6 +125,8 @@ const DASH_DPRS = [2];
 // Either side of zoom 1, with the whole curve inside the frame; above about
 // 1.21 its top leaves it.
 const SMOOTH_ZOOMS = [0.5, 1.2];
+// At zoom 1, where the frame covers the same world as at ratio 1.
+const SMOOTH_DPRS = [2];
 // Either side of zoom 1, with both of the curve's turns inside the frame. Above
 // about 1.08 its first cap starts to leave it, and at 1.2 so does about two
 // thirds of the way to its first turn.
@@ -609,6 +613,19 @@ if (cliArgs.includes('--parity')) {
       curveControl: await page.evaluate((at) => window.ribbonParity(at, 0, at, true, 'polyline'), zoom),
     });
   }
+  for (const dpr of SMOOTH_DPRS) {
+    parity.smoothZooms.push({
+      zoom: 1,
+      dpr,
+      check: await page.evaluate((ratio) => window.ribbonParity(1, 0, 1, true, 'smooth', ratio), dpr),
+      control: await page.evaluate(
+        ([ratio, shift]) => window.ribbonParity(1, shift, 1, true, 'smooth', ratio),
+        [dpr, EDGE_CONTROL_SHIFT_PX / dpr],
+      ),
+      zoomControl: await page.evaluate((ratio) => window.ribbonParity(1, 0, 1, true, 'smooth', ratio, 1), dpr),
+      curveControl: await page.evaluate((ratio) => window.ribbonParity(1, 0, 1, true, 'polyline', ratio), dpr),
+    });
+  }
   parity.dashZooms = [];
   for (const zoom of DASH_ZOOMS) {
     parity.dashZooms.push({
@@ -772,19 +789,20 @@ if (cliArgs.includes('--parity')) {
       }
     }
   }
-  for (const { zoom, check, control, zoomControl, curveControl } of parity.smoothZooms) {
+  for (const { zoom, dpr, check, control, zoomControl, curveControl } of parity.smoothZooms) {
+    const at = dpr === undefined ? `zoom ${zoom}` : `zoom ${zoom} and device pixel ratio ${dpr}`;
     if (!check.pass) {
-      console.error(`the smooth ribbon check at zoom ${zoom} failed: ${ribbonFailure(check)}`);
+      console.error(`the smooth ribbon check at ${at} failed: ${ribbonFailure(check)}`);
       process.exitCode = 1;
     }
     for (const [run, aimedAt, what] of [
       [control, 'interior', `the ribbon shifted by ${EDGE_CONTROL_SHIFT_PX} px`],
-      [zoomControl, 'edge colour', "zoom 1's ribbon expected"],
+      [zoomControl, 'edge colour', dpr === undefined ? "zoom 1's ribbon expected" : "device pixel ratio 1's ribbon expected"],
       [curveControl, 'interior', "one side's ribbon drawn as a polyline"],
     ]) {
       const failure = ribbonControlFailure(run, aimedAt);
       if (failure !== undefined) {
-        console.error(`the smooth ribbon control at zoom ${zoom}, with ${what}, ${failure}`);
+        console.error(`the smooth ribbon control at ${at}, with ${what}, ${failure}`);
         process.exitCode = 1;
       }
     }
