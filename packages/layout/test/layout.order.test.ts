@@ -228,6 +228,43 @@ describe('barycenterOrder, the seed permutation', () => {
     const state = { ...stateOf(build(['a'], []), [['a', 'v']]), virtualNodes: repeating };
     expect(ordered(state, { maxSweeps: 0 })).toEqual([['a', 'v']]);
   });
+
+  it('walks the same chains whether the dummies are declared along them or out of order', () => {
+    const graph = build(
+      ['a', 'b', 'c', 'd'],
+      [
+        ['a', 'd'],
+        ['b', 'c'],
+      ],
+    );
+    const [ad, bc] = graph.edges().map((edge) => edge.id);
+    const chained = (declared: readonly NodeId[]): RankedState => ({
+      ...stateOf(graph, [
+        ['a', 'b'],
+        ['p', 'r'],
+        ['q', 's'],
+        ['c', 'd'],
+      ]),
+      virtualNodes: new Set(declared),
+      virtualChains: new Map([
+        [ad ?? '', ['p', 'q']],
+        [bc ?? '', ['r', 's']],
+      ]),
+    });
+    const walked = [
+      ['a', 'b'],
+      ['p', 'r'],
+      ['q', 's'],
+      ['d', 'c'],
+    ];
+    for (const declared of [
+      ['p', 'q', 'r', 's'],
+      ['s', 'p', 'r', 'q'],
+      ['r', 's', 'p', 'q'],
+    ]) {
+      expect(ordered(chained(declared), { maxSweeps: 0 })).toEqual(walked);
+    }
+  });
 });
 
 describe('barycenterOrder, the initialOrder hint', () => {

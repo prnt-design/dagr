@@ -200,6 +200,24 @@ cold run, which builds the numbering the fast paths reuse, measured 803ms and
 806ms before and 816ms and 813ms after. These timings include run-to-run
 variation and do not replace the Apple M4 table above.
 
+On 2026-11-26 UTC, on the same Ryzen 9 9900X and Node, the index stopped
+looking up most dummies while it walks the segments. The default rank stage
+declares its dummies edge by edge along each chain, the order the walk meets
+them, so the index takes the number after the last dummy it numbered and
+checks it against the roster, looking the id up only when the check fails.
+Carrying each chain member's number to its next segment alone, which halves
+the lookups without removing any, left the instrumented segment pass where it
+was, since the cost is reaching each of the 174,222 entries once rather than
+how often. Instrumented over every index build in one exclusive window at load
+averages 1.73 to 2.73, the pass took a median of 19.6ms and 19.5ms before and
+15.0ms and 15.0ms after. Two alternating pairs of the same `MEASURE_COST=1`
+command, in that window at load averages 1.31 to 1.66, put the added leaf's
+order stage at 92.8ms and 92.1ms before and 86.9ms and 87.1ms after, and its
+whole relayout at 258.0ms and 248.1ms before and 249.1ms and 251.4ms after. A
+cold run measured 805ms and 808ms before and 801ms and 812ms after. These
+timings include run-to-run variation and do not replace the Apple M4 table
+above.
+
 **A resize runs only position and route.** Neither the rank stage nor the order
 stage reads a size, and run again over an unchanged graph both would land where
 they are, so the engine positions and routes over the ranks and layers it

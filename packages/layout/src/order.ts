@@ -530,9 +530,28 @@ function buildIndex(input: RankedState): OrderIndex {
   const gapAll = new Int32Array(capacity);
   let kept = 0;
   let allDown = true;
+  // Most segment endpoints are dummies, and looking up each of the 174,222 on
+  // the 10k corpus in a map that size was most of this pass. The default rank
+  // stage declares them edge by edge along each chain, the order this walk
+  // meets them, so the number after the last dummy is the usual answer: `ids`
+  // confirms it, and a miss falls back to the lookup. A segment's source is
+  // the previous segment's target along a chain, so its number is carried.
+  const firstVirtual = input.graph.nodeCount;
+  let guess = firstVirtual;
+  let lastId: NodeId | undefined;
+  let lastNumber: number | undefined;
   forEachSegment(input.graph, input.virtualChains, (fromId, toId) => {
-    const source = numberOf.get(fromId);
-    const target = numberOf.get(toId);
+    const source = fromId === lastId ? lastNumber : numberOf.get(fromId);
+    let target: number | undefined;
+    if (ids[guess] === toId) {
+      target = guess;
+      guess += 1;
+    } else {
+      target = numberOf.get(toId);
+      if (target !== undefined && target >= firstVirtual) guess = target + 1;
+    }
+    lastId = toId;
+    lastNumber = target;
     if (source === undefined || target === undefined) return;
     const sourceLayer = at(layerOf, source);
     const targetLayer = at(layerOf, target);
