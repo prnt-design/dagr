@@ -532,11 +532,11 @@ function buildIndex(input: RankedState): OrderIndex {
   let allDown = true;
   // Most segment endpoints are dummies, and looking each one up in a map the
   // size of the 10k corpus's dummy set was a large part of this pass. The
-  // default rank stage declares them edge by edge along each chain, the order
-  // this walk meets them, so the number after the last dummy is the usual
-  // answer: `ids` confirms it, and a miss falls back to the lookup. A
-  // segment's source is the previous segment's target along a chain, so its
-  // number is carried.
+  // runner sorts the roster by id, and a chain's ids differ only in their
+  // index, so its next member is usually the number after the last one: `ids`
+  // confirms it, and a miss (a chain's first member, or an index the sort
+  // puts elsewhere, `:10` before `:2`) falls back to the lookup. A segment's
+  // source is the previous segment's target along a chain, so it is carried.
   const firstVirtual = input.graph.nodeCount;
   let guess = firstVirtual;
   let lastId: NodeId | undefined;
