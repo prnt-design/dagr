@@ -1209,15 +1209,28 @@
        * zoom while the canvas and the band stay at `zoom`, so it fails only
        * if the colour checks can see that both follow the zoom. `layer` is the
        * WebGL2 side's layer, `parity`'s layer control when `'below-nodes'`.
+       *
+       * `dpr` draws at that device pixel ratio, where the circle and the route
+       * scale into device pixels by `zoom * dpr` while the outline, the
+       * ribbon's width and the band stay in device pixels. `expectedDpr`
+       * places the expected circle and ribbon at that ratio the way
+       * `expectedZoom` does at its zoom.
        */
       const CIRCLE = NODES.filter((node) => node.id === 'circle');
-      window.aboveParity = async (zoom, edgeShift = 0, expectedZoom = zoom, layer = 'above-nodes') => {
+      window.aboveParity = async (
+        zoom,
+        edgeShift = 0,
+        expectedZoom = zoom,
+        layer = 'above-nodes',
+        dpr = 1,
+        expectedDpr = dpr,
+      ) => {
         const shifted = ABOVE.map((edge) => ({
           ...edge,
           points: edge.points.map((p) => ({ x: p.x + edgeShift, y: p.y + edgeShift })),
         }));
         const scene = (backend, edges, drawnLayer) =>
-          draw(backend, CIRCLE, [], [], [FLOWS[0]], [], [], 'smooth', edges, drawnLayer, false, zoom);
+          draw(backend, CIRCLE, [], [], [FLOWS[0]], [], [], 'smooth', edges, drawnLayer, false, zoom, dpr);
         let gpu;
         let gl;
         try {
@@ -1228,8 +1241,10 @@
         }
         const inDevice = (scale) =>
           ABOVE.map((edge) => ({ ...edge, points: edge.points.map((p) => ({ x: p.x * scale, y: p.y * scale })) }));
-        const drawn = inDevice(zoom);
-        const expected = inDevice(expectedZoom);
+        const scale = zoom * dpr;
+        const expectedScale = expectedZoom * expectedDpr;
+        const drawn = inDevice(scale);
+        const expected = inDevice(expectedScale);
         const [circle] = CIRCLE;
         const hw = EDGE_STYLE.halfWidthPixels;
         const [gpuData] = gpu.frames;
@@ -1246,7 +1261,7 @@
             const x = col + 0.5 - gpu.width / 2;
             const y = gpu.height / 2 - (row + 0.5);
             const i = (row * gpu.width + col) * 4;
-            const d = signedDistance(circle, x / zoom, y / zoom) * zoom;
+            const d = signedDistance(circle, x / scale, y / scale) * scale;
             let nearest = Math.min(Math.abs(d), Math.abs(d + OUTLINE_DEVICE_PX));
             for (const edge of drawn) {
               const { centreline, point } = ribbonDistances(edge, x, y);
@@ -1261,7 +1276,7 @@
               toRibbon = Math.min(toRibbon, centreline);
             }
             const inFill =
-              signedDistance(circle, x / expectedZoom, y / expectedZoom) * expectedZoom <
+              signedDistance(circle, x / expectedScale, y / expectedScale) * expectedScale <
               -(OUTLINE_DEVICE_PX + EDGE_BAND_DEVICE_PX);
             if (onRibbon) {
               ribbon.pixels += 1;
@@ -1304,6 +1319,9 @@
           edgeShift,
           expectedZoom,
           layer,
+          dpr,
+          expectedDpr,
+          size: { width: gpu.width, height: gpu.height },
           band,
           interior,
           ribbon,
