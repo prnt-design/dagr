@@ -1341,8 +1341,8 @@ and ribbon; the layer control is unchanged.
 The ratio is byte-identical: no pixel differs in the 2,232 band pixels or
 the 612,168 interior ones. All 344 pixels inside the ribbon hold the edge
 colour, 220 of them over the fill, and all 9,560 fill pixels clear of it the
-fill colour, the same counts as at zoom 2, which draws the same device
-pixels into a smaller frame. The edge control fails with 332 interior pixels
+fill colour, the same counts as at zoom 2, which draws the circle and
+ribbon at the same size in device pixels into a frame a quarter as large. The edge control fails with 332 interior pixels
 differing by up to 158, the layer control with 276 by up to 56, and the
 ratio control with none of 164 expected ribbon pixels in the edge colour and
 702 of 1,984 fill pixels in the fill colour.
