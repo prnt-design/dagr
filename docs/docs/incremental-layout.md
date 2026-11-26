@@ -205,10 +205,11 @@ looking up most dummies while it walks the segments. The default rank stage
 declares its dummies edge by edge along each chain, the order the walk meets
 them, so the index takes the number after the last dummy it numbered and
 checks it against the roster, looking the id up only when the check fails.
-Carrying each chain member's number to its next segment alone, which halves
-the lookups without removing any, left the instrumented segment pass where it
-was, since the cost is reaching each of the 174,222 entries once rather than
-how often. Instrumented over every index build in one exclusive window at load
+Carrying each chain member's number to its next segment alone, which drops
+the repeat lookup of each dummy but still reaches every one of the 174,222
+entries once, left the instrumented segment pass where it was (19.5ms and
+21.4ms before, 19.6ms and 19.1ms after), so the cost was reaching each entry
+rather than how often. Instrumented over every index build in one exclusive window at load
 averages 1.73 to 2.73, the pass took a median of 19.6ms and 19.5ms before and
 15.0ms and 15.0ms after. Two alternating pairs of the same `MEASURE_COST=1`
 command, in that window at load averages 1.31 to 1.66, put the added leaf's
