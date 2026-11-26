@@ -200,6 +200,28 @@ cold run, which builds the numbering the fast paths reuse, measured 803ms and
 806ms before and 816ms and 813ms after. These timings include run-to-run
 variation and do not replace the Apple M4 table above.
 
+On 2026-11-26 UTC, on the same Ryzen 9 9900X and Node, the index stopped
+looking up most dummies while it walks the segments. The runner sorts the
+dummies by id, and a chain's ids differ only in their index, so the index
+takes the number after the last dummy it numbered and checks it against the
+roster, looking the id up only when the check fails. On the 10k corpus the
+check holds for 153,163 of the 174,222 dummies, missing at each chain's first
+member and wherever the sort puts an index out of chain order (`:10` before
+`:2`).
+Carrying each chain member's number to its next segment alone, which drops
+the repeat lookup of each dummy but still reaches every one of the 174,222
+entries once, left the instrumented segment pass where it was (19.5ms and
+21.4ms before, 19.6ms and 19.1ms after), so the cost was reaching each entry
+rather than how often. Instrumented over every index build in one exclusive
+window at load averages 1.73 to 2.73, the pass took a median of 19.6ms and 19.5ms before and
+15.0ms and 15.0ms after. Two alternating pairs of the same `MEASURE_COST=1`
+command, in that window at load averages 1.31 to 1.66, put the added leaf's
+order stage at 92.8ms and 92.1ms before and 86.9ms and 87.1ms after, and its
+whole relayout at 258.0ms and 248.1ms before and 249.1ms and 251.4ms after. A
+cold run measured 805ms and 808ms before and 801ms and 812ms after. These
+timings include run-to-run variation and do not replace the Apple M4 table
+above.
+
 **A resize runs only position and route.** Neither the rank stage nor the order
 stage reads a size, and run again over an unchanged graph both would land where
 they are, so the engine positions and routes over the ranks and layers it
@@ -237,12 +259,12 @@ than by a comparison sort, then took that step from about 20ms to about 4ms and
 the stage to 86.8ms at a load average of 1.61. Building its index with each
 segment written into a typed array sized up front, rather than pushed onto
 growing arrays, then took the stage to 75.0ms at a load average of 2.95, and
-the index changes of 2026-11-24 and 2026-11-25 UTC above followed. The table measured it at 76.6ms on 2026-11-20
+the index changes of 2026-11-24, 2026-11-25 and 2026-11-26 UTC above followed. The table measured it at 76.6ms on 2026-11-20
 UTC and 67.9ms on 2026-11-24 UTC, and loaded runs on the Apple M4 that second
 day put it at 73ms to 97ms, so that gap is the spread between runs rather than
 a change. What is
 left of it is mostly building that index, which numbers every graph node by
-id and reads every roster member's rank, and its warm-start cohorts and sweeping the leaf's layer, not
+id, reads every roster member's rank and walks its segments, and its warm-start cohorts and sweeping the leaf's layer, not
 sweeping the held layers.
 In the table, a cold run of the same graph, measured in the same session, takes
 649ms, and an added leaf takes 11 frames at 60 Hz, against M3.9b's budget of one; a removed
