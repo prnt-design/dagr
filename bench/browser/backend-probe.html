@@ -1065,9 +1065,10 @@
       };
 
       /**
-       * One dashed group alone at a zoom other than 1, the three dashed
-       * ribbons or with `smooth` the smooth dashed one, on the first frame's
-       * flow, compared the way `parity` compares them at zoom 1.
+       * One dashed group alone at a zoom or device pixel ratio other than 1,
+       * the three dashed ribbons or with `smooth` the smooth dashed one, on
+       * the first frame's flow, compared the way `parity` compares them at
+       * zoom 1 and ratio 1.
        *
        * The dash period and flow are device pixels while the arc is world
        * units, so the pattern keeps its size at every zoom while the routes
@@ -1083,14 +1084,29 @@
        * With `smooth` the group's triangles are tessellated with
        * `curve: 'smooth'`, as the renderer is given them. `curve` is the
        * WebGL2 side's curve, `parity`'s curve control when `'polyline'`.
+       *
+       * `dpr` draws at that device pixel ratio, where the routes and the arc
+       * scale into device pixels by `zoom * dpr` while the period, the flow,
+       * the width and the band stay in device pixels. `expectedArcDpr` scales
+       * the expected arc by that ratio instead, the way `expectedArcZoom`
+       * does by its zoom; at 1 it expects a period that doubles with the
+       * ratio.
        */
-      window.dashParity = async (zoom, dashShift = 0, expectedArcZoom = zoom, smooth = false, curve = 'smooth') => {
+      window.dashParity = async (
+        zoom,
+        dashShift = 0,
+        expectedArcZoom = zoom,
+        smooth = false,
+        curve = 'smooth',
+        dpr = 1,
+        expectedArcDpr = dpr,
+      ) => {
         const routes = smooth ? SMOOTH_DASHED : DASHED;
         const options = smooth ? { curve: 'smooth' } : undefined;
         const dashes = (backend, flow, drawnCurve) =>
           smooth
-            ? draw(backend, [], [], [], [flow], [], routes, drawnCurve, [], 'above-nodes', false, zoom)
-            : draw(backend, [], [], routes, [flow], [], [], 'smooth', [], 'above-nodes', false, zoom);
+            ? draw(backend, [], [], [], [flow], [], routes, drawnCurve, [], 'above-nodes', false, zoom, dpr)
+            : draw(backend, [], [], routes, [flow], [], [], 'smooth', [], 'above-nodes', false, zoom, dpr);
         let gpu;
         let gl;
         try {
@@ -1099,8 +1115,17 @@
         } catch (error) {
           return { pass: false, error: String(error), code: error && error.code };
         }
-        const drawnAt = dashedClasses(routes, options, FLOWS[0], gpu.width, gpu.height, zoom);
-        const expectedAt = dashedClasses(routes, options, FLOWS[0], gpu.width, gpu.height, zoom, expectedArcZoom);
+        const scale = zoom * dpr;
+        const drawnAt = dashedClasses(routes, options, FLOWS[0], gpu.width, gpu.height, scale);
+        const expectedAt = dashedClasses(
+          routes,
+          options,
+          FLOWS[0],
+          gpu.width,
+          gpu.height,
+          scale,
+          expectedArcZoom * expectedArcDpr,
+        );
         const hw = DASHED_STYLE.halfWidthPixels;
         const [gpuData] = gpu.frames;
         const [glData] = gl.frames;
@@ -1118,7 +1143,7 @@
             let capped = false;
             for (const edge of routes) {
               for (const p of [edge.points[0], edge.points[edge.points.length - 1]]) {
-                if (Math.hypot(x - p.x * zoom, y - p.y * zoom) < hw + 2) capped = true;
+                if (Math.hypot(x - p.x * scale, y - p.y * scale) < hw + 2) capped = true;
               }
             }
             const at = row * gpu.width + col;
@@ -1156,6 +1181,9 @@
           expectedArcZoom,
           smooth,
           curve,
+          dpr,
+          expectedArcDpr,
+          size: { width: gpu.width, height: gpu.height },
           band,
           interior,
           dash,
