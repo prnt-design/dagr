@@ -121,9 +121,12 @@ pixels differing, and the solid smooth ribbon alone passes at the same
 zooms with 15 and 27. The smooth dashed one alone passes at the same
 zooms on 2026-11-25 with 31 and 25, and the above-nodes ribbon with the
 circle is byte-identical at zoom 0.5 and 2 that day, as are the shapes
-alone and the solid straight ribbons alone at DPR 2. The original probe also passed on AMD RDNA 2 in Chrome 156, with
+alone and the solid straight ribbons alone at DPR 2. The three dashed
+ones alone pass at DPR 2 on 2026-11-26 with 31 edge-band pixels
+differing. The original probe also passed on AMD RDNA 2 in Chrome 156, with
 four edge-band pixels differing by one. Other GPUs, and DPR 2 beyond the
-shapes alone and the solid straight ribbons alone, remain uncovered. A performance profile is published, and GPU node picking ships
+shapes alone, the solid straight ribbons alone and the three dashed ones
+alone, remain uncovered. A performance profile is published, and GPU node picking ships
 behind an opt-in `hitTesting="gpu"` on `DagrCanvas`, with edge hits on the CPU. The large-graph
 target, 10,000 nodes animating at 60 fps, is still open: it held with a tenth
 of the nodes moving on two devices, and with every node moving along smooth
