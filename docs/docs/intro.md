@@ -123,8 +123,8 @@ zooms on 2026-11-25 with 31 and 25, and the above-nodes ribbon with the
 circle is byte-identical at zoom 0.5 and 2 that day, as are the shapes
 alone and the solid straight ribbons alone at DPR 2. The three dashed
 ones alone pass at DPR 2 on 2026-11-26 with 31 edge-band pixels
-differing, the solid smooth one alone that day with 48, and the smooth
-dashed one alone that day with 50. The original probe also passed on AMD RDNA 2 in Chrome 156, with
+differing, and the solid smooth one and the smooth dashed one alone that
+day with 48 and 50. The original probe also passed on AMD RDNA 2 in Chrome 156, with
 four edge-band pixels differing by one. Other GPUs, and DPR 2 beyond the
 shapes alone, the solid straight ribbons alone, the three dashed ones
 alone, the solid smooth one alone and the smooth dashed one alone, remain
