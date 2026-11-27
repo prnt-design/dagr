@@ -481,6 +481,37 @@ function numberRoster(input: RankedState): { ids: readonly NodeId[]; numberOf: N
   return { ids, numberOf };
 }
 
+/**
+ * Writes each number's layer into `layerOf` and returns the layer count, for
+ * integer ranks whose span is no wider than the roster: a slot per rank in the
+ * span, so no rank is hashed. The default stages' ranks on the 10k corpus do.
+ */
+function layersBySpan(rankOf: Float64Array, low: number, high: number, layerOf: Int32Array): number {
+  const layerAt = new Int32Array(high - low + 1);
+  for (const rank of rankOf) layerAt[rank - low] = 1;
+  let layerCount = 0;
+  for (let slot = 0; slot < layerAt.length; slot += 1) {
+    if (at(layerAt, slot) === 0) continue;
+    layerAt[slot] = layerCount;
+    layerCount += 1;
+  }
+  for (let number = 0; number < rankOf.length; number += 1) {
+    layerOf[number] = at(layerAt, at(rankOf, number) - low);
+  }
+  return layerCount;
+}
+
+/** {@link layersBySpan}'s answer for any ranks, through a sorted set of them. */
+function layersBySort(rankOf: Float64Array, layerOf: Int32Array): number {
+  const sorted = [...new Set(rankOf)].sort((left, right) => left - right);
+  const layerIndexOf = new Map<number, number>();
+  for (const [index, rank] of sorted.entries()) layerIndexOf.set(rank, index);
+  for (let number = 0; number < rankOf.length; number += 1) {
+    layerOf[number] = layerIndexOf.get(at(rankOf, number)) ?? 0;
+  }
+  return sorted.length;
+}
+
 function buildIndex(input: RankedState): OrderIndex {
   const { ids, numberOf } = numberRoster(input);
   const count = ids.length;
@@ -491,19 +522,19 @@ function buildIndex(input: RankedState): OrderIndex {
   // ranks with nothing between them are one gap apart however far apart the
   // numbers are.
   const rankOf = new Float64Array(count);
-  const distinct = new Set<number>();
+  let low = Infinity;
+  let high = -Infinity;
+  let integral = true;
   for (const [number, id] of ids.entries()) {
     const rank = requireRank(input.ranks, id);
     rankOf[number] = rank;
-    distinct.add(rank);
+    if (rank < low) low = rank;
+    if (rank > high) high = rank;
+    if (!Number.isInteger(rank)) integral = false;
   }
-  const sorted = [...distinct].sort((left, right) => left - right);
-  const layerIndexOf = new Map<number, number>();
-  for (const [index, rank] of sorted.entries()) layerIndexOf.set(rank, index);
   const layerOf = new Int32Array(count);
-  for (let number = 0; number < count; number += 1) {
-    layerOf[number] = layerIndexOf.get(at(rankOf, number)) ?? 0;
-  }
+  const bySpan = count > 0 && integral && high - low < count;
+  const layerCount = bySpan ? layersBySpan(rankOf, low, high, layerOf) : layersBySort(rankOf, layerOf);
 
   // One pass over the drawing's SEGMENTS, keeping only the ones that join
   // adjacent layers. A self loop puts both endpoints on one layer and is
@@ -581,7 +612,6 @@ function buildIndex(input: RankedState): OrderIndex {
   const up = allDown ? incoming : compress(segLower, segUpper, count);
   const down = allDown ? out : compress(segUpper, segLower, count);
 
-  const layerCount = sorted.length;
   const gapStart = new Int32Array(Math.max(layerCount, 1));
   for (const gap of segGap) gapStart[gap + 1] = at(gapStart, gap + 1) + 1;
   for (let gap = 1; gap < gapStart.length; gap += 1) {

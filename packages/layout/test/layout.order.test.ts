@@ -265,6 +265,34 @@ describe('barycenterOrder, the seed permutation', () => {
       expect(ordered(chained(declared), { maxSweeps: 0 })).toEqual(walked);
     }
   });
+
+  it('draws the same layers however the ranks are numbered', () => {
+    const graph = build(
+      ['a', 'b', 'c', 'd', 'e', 'f'],
+      [
+        ['a', 'd'],
+        ['b', 'c'],
+        ['c', 'f'],
+        ['d', 'e'],
+        ['a', 'c'],
+      ],
+    );
+    const layers = [['a', 'b'], ['c', 'd'], ['e', 'f']];
+    const renumbered = (rankOf: (layer: number) => number): RankedState => {
+      const state = stateOf(graph, layers);
+      const ranks = new Map([...state.ranks].map(([id, layer]) => [id, rankOf(layer)]));
+      return { ...state, ranks };
+    };
+    const expected = ordered(stateOf(graph, layers));
+    for (const rankOf of [
+      (layer: number) => 2 * layer - 3,
+      (layer: number) => (layer === 0 ? -0 : layer),
+      (layer: number) => layer * 1e9,
+      (layer: number) => layer + 0.5,
+    ]) {
+      expect(ordered(renumbered(rankOf))).toEqual(expected);
+    }
+  });
 });
 
 describe('barycenterOrder, the initialOrder hint', () => {

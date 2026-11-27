@@ -222,6 +222,24 @@ cold run measured 805ms and 808ms before and 801ms and 812ms after. These
 timings include run-to-run variation and do not replace the Apple M4 table
 above.
 
+On 2026-11-27 UTC, on the same Ryzen 9 9900X and Node, the index stopped
+hashing ranks to find each one's layer. It used to put every rank into a set,
+sort the distinct ranks and look each roster member's rank up in a map of
+them. When every rank is an integer and their span is no wider than the
+roster, as the default stages' ranks on the 10k corpus are, it now marks each rank's slot in
+a typed array over that span and numbers the marked slots in order, keeping the
+set and the sort for any other ranks. Instrumented from the first rank read to
+the last layer written, an added leaf's index took 14.8ms, 15.1ms and 15.6ms
+before and 11.4ms, 11.4ms and 11.8ms after, alternating in one exclusive window
+at load averages 1.00 to 1.15. Reading the ranks through the held map, about
+10ms of that, is unchanged. Two alternating pairs of the same `MEASURE_COST=1`
+command, in one exclusive window at load averages 0.97 to 1.12, put the added
+leaf's order stage at 95.9ms and 90.0ms before and 84.7ms and 84.2ms after, and
+its whole relayout at 289.7ms and 258.0ms before and 257.3ms and 244.9ms after,
+within run-to-run variation. A cold run measured 822ms and 811ms before and
+799ms and 787ms after. These timings include run-to-run variation and do not
+replace the Apple M4 table above.
+
 **A resize runs only position and route.** Neither the rank stage nor the order
 stage reads a size, and run again over an unchanged graph both would land where
 they are, so the engine positions and routes over the ranks and layers it
@@ -259,7 +277,7 @@ than by a comparison sort, then took that step from about 20ms to about 4ms and
 the stage to 86.8ms at a load average of 1.61. Building its index with each
 segment written into a typed array sized up front, rather than pushed onto
 growing arrays, then took the stage to 75.0ms at a load average of 2.95, and
-the index changes of 2026-11-24, 2026-11-25 and 2026-11-26 UTC above followed. The table measured it at 76.6ms on 2026-11-20
+the index changes of 2026-11-24, 2026-11-25, 2026-11-26 and 2026-11-27 UTC above followed. The table measured it at 76.6ms on 2026-11-20
 UTC and 67.9ms on 2026-11-24 UTC, and loaded runs on the Apple M4 that second
 day put it at 73ms to 97ms, so that gap is the spread between runs rather than
 a change. What is
