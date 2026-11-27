@@ -106,6 +106,8 @@ const EDGE_CONTROL_SHIFT_PX = 2;
 // A quarter of the dash period: wider than the band, so dash ends leave it.
 const DASH_CONTROL_SHIFT_PX = 3;
 // Less than the 2 px ring, so only the check named in each control can see it.
+// At device pixel ratio 2 the controls move by this many CSS pixels instead,
+// since the ring widens with the stroke and 1.5 device pixels stays inside it.
 const GROUP_CONTROL_SHIFT_PX = 1.5;
 // More than the 1 px a tier's box edge may sit from where the page expects it.
 const RICH_CONTROL_SHIFT_PX = 1.5;
@@ -473,7 +475,8 @@ async function composedParity(check, shots, args) {
 /**
  * Why an outline control did not fail on the check it is aimed at, or
  * undefined when it did. `paddingShift` must fail only on the difference the
- * layer adds between the backends, `expectedShift` and `expectedZoom` only on
+ * layer adds between the backends, `expectedShift`, `expectedZoom` and
+ * `expectedDpr` only on
  * placement.
  */
 function groupControlFailure(control, aimedAt) {
@@ -560,12 +563,10 @@ const page = await openPage(1);
 // layer at another device pixel ratio needs a page of its own.
 const pages = new Map([[1, page]]);
 async function pageAt(dpr) {
-  if (!pages.has(dpr)) {
-    const opened = await openPage(dpr);
-    await opened.bringToFront();
-    pages.set(dpr, opened);
-  }
-  return pages.get(dpr);
+  if (!pages.has(dpr)) pages.set(dpr, await openPage(dpr));
+  const at = pages.get(dpr);
+  await at.bringToFront();
+  return at;
 }
 
 const advertised = await page.evaluate(() => window.webgpuAdvertised());
@@ -755,7 +756,7 @@ if (cliArgs.includes('--parity')) {
   }
   for (const dpr of GROUP_DPRS) {
     const dprShots = await composedShots('groupFrame', 0, 1, dpr);
-    const shift = GROUP_CONTROL_SHIFT_PX / dpr;
+    const shift = GROUP_CONTROL_SHIFT_PX;
     parity.groupZooms.push({
       zoom: 1,
       dpr,
@@ -768,8 +769,6 @@ if (cliArgs.includes('--parity')) {
       }),
     });
   }
-  // Back to the first page, whose frames the checks below wait on.
-  await page.bringToFront();
   const richShots = await composedShots('richFrame', 0);
   parity.rich = await composedParity('richParity', richShots, {});
   parity.richPlacementControl = await composedParity('richParity', richShots, { expectedShift: RICH_CONTROL_SHIFT_PX });
@@ -965,13 +964,14 @@ if (cliArgs.includes('--parity')) {
   }
   for (const { zoom, dpr, check, ...controls } of parity.groupZooms) {
     const at = dpr === undefined ? `zoom ${zoom}` : `zoom ${zoom} and device pixel ratio ${dpr}`;
+    const shiftPx = GROUP_CONTROL_SHIFT_PX * (dpr ?? 1);
     if (!check.pass) {
       console.error(`the group outline check at ${at} failed: ${groupFailure(check)}`);
       process.exitCode = 1;
     }
     for (const [key, aimedAt, what] of [
-      ['outlineControl', 'added', `one side's padding ${GROUP_CONTROL_SHIFT_PX} px wider`],
-      ['placementControl', 'placed', `the expected outline ${GROUP_CONTROL_SHIFT_PX} px wider on both sides`],
+      ['outlineControl', 'added', `one side's padding ${shiftPx} px wider`],
+      ['placementControl', 'placed', `the expected outline ${shiftPx} px wider on both sides`],
       ['zoomControl', 'placed', dpr === undefined ? "zoom 1's outline expected" : "device pixel ratio 1's outline expected"],
     ]) {
       const failure = groupControlFailure(controls[key], aimedAt);

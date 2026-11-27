@@ -1062,18 +1062,20 @@ the canvas is drawn at the same ratio, and each hidden screenshot still
 matches its canvas read back pixel for pixel. The layer is laid out in CSS
 pixels, so the expected rectangle, its corners and the title's box scale by
 the ratio, and the ring the changed pixels must lie in widens from 2 device
-pixels to 3 with the 1.5 pixel stroke. The outline and placement controls
-are still 1.5 device pixels (0.75 world units), and a ratio control expects
-ratio 1's outline and must fail on placement alone.
+pixels to 3 with the 1.5 pixel stroke. With it, an outline up to about 1.5
+device pixels off would still pass, and a placement control of 1.5 device
+pixels failed on 42 antialiased pixels alone, so the outline and placement
+controls move by 1.5 CSS pixels here (3 device pixels, 1.5 world units). A
+ratio control expects ratio 1's outline and must fail on placement alone.
 
 The check passes: on both backends the layer changes 2,307 pixels on the
 outline, spanning its 276 by 244 device pixel rectangle to within 1.5 pixels,
 and 582 in the title headless (623 headed), with none elsewhere, and the
 composed frames differ in the same 129 pixels (by up to 77) as the bare
-ones. The outline control fails with the layer adding 3,944 differing pixels
-by up to 204 (4,012 headed), the placement control with 42 changed pixels
-off the expected outline headless and headed, and the ratio control with
-every changed pixel off it. Every earlier check and control in the run still
+ones. The outline control fails with the layer adding 5,034 differing pixels
+by up to 204 (5,126 headed), the placement control with 1,213 changed pixels
+off the expected outline (1,216 headed), and the ratio control with every
+changed pixel off it. Every earlier check and control in the run still
 passes or fails as before.
 
 The shapes alone were compared at zoom 0.5 and 2 on 2026-11-23 UTC, on the
@@ -1387,7 +1389,8 @@ layer since that day, and a group outline and rich-node tiers composed over
 the first frame since 2026-11-23, DPR 1 (the shapes alone and the solid
 straight ribbons alone also at DPR 2 and zoom 1 since 2026-11-25, and the
 three dashed ones alone, the solid smooth one alone, the smooth dashed
-one alone and the above-nodes one with the circle since 2026-11-26).
+one alone and the above-nodes one with the circle since 2026-11-26, and
+the group outline since 2026-11-27).
 The canvas comparison is at zoom
 1, the shapes alone also at zoom 0.5 and 2, the solid straight ribbons
 alone at zoom 0.5 and 1.5 and the three dashed ones and the solid smooth
