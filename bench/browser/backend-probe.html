@@ -1601,8 +1601,8 @@
        * box, and every pixel further inside a box than that holds the colour
        * of the tier `RICH_EXPECTED` names for its node.
        *
-       * Three controls at zoom 1. `boundsShift` moves every node's box on the WebGL2
-       * side by that much in x and y, and that side's expected boxes with it,
+       * Three controls at zoom 1 and ratio 1. `boundsShift` moves every
+       * node's box on the WebGL2 side by that much in x and y, and that side's expected boxes with it,
        * so it fails only on the difference the tiers add. `expectedShift`
        * widens the expected boxes on both sides, so it fails on
        * placement, and may fail on the colour with it, since a wider box takes
@@ -1623,9 +1623,12 @@
        * At device pixel ratio 2 the runner screenshots a page whose device
        * scale factor is 2, as for the outline. The overlay is laid out in CSS
        * pixels, so the expected boxes scale by the zoom times the ratio while
-       * the gates, read in CSS pixels, pick zoom 1's tiers. `swapTiers` keeps
-       * its meaning there. `expectedDpr` expects ratio 1's boxes, so it fails
-       * only if the placement check can see that the tiers follow the ratio.
+       * the gates, read in CSS pixels, pick zoom 1's tiers. The bounds and
+       * placement controls run there too, still moving an edge 1.5 device
+       * pixels, with `boundsShift` passed as 1.5 / ratio world units, and
+       * `swapTiers` keeps its meaning. `expectedDpr` expects ratio 1's boxes,
+       * so it fails only if the placement check can see that the tiers follow
+       * the ratio.
        */
       const RICH_TIERS = [
         { name: 'label', color: 0xe63946, minScreenWidth: 24, maxScreenWidth: 75 },
@@ -1644,8 +1647,9 @@
         1: { rect: 'card', circle: 'label' },
         2: { rect: 'card', circle: 'card' },
       };
-      // Every box edge lands on, or within half a pixel of, a whole CSS
-      // pixel, so one pixel covers where a compositor rounds a shifted box.
+      // Every box edge lands on, or within half a device pixel of, a whole
+      // device pixel, so one device pixel covers where a compositor rounds a
+      // shifted box.
       const RICH_EDGE_DEVICE_PX = 1;
 
       const richBounds = (node, shift) => ({

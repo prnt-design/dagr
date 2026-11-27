@@ -649,7 +649,8 @@ checks:
   and a label half its own size away from its shape. A screenshot is what
   checks it, and for box entries one does since 2026-11-23: the backend parity
   check's rich-node tiers at zoom 0.5 and 2 land on their nodes' boxes to the
-  pixel on an Apple M4 in Chrome 157.
+  pixel on an Apple M4 in Chrome 157, and at device pixel ratio 2 and zoom 1
+  since 2026-11-27, in Chrome 158.
 - That the reason the overlay rebases its layer origin is quantitatively right.
   Compositor transforms being single precision, and 1e7 CSS pixels being where
   that starts to show, is a reading of how browsers work rather than something
