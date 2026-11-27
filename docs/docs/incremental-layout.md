@@ -223,22 +223,22 @@ timings include run-to-run variation and do not replace the Apple M4 table
 above.
 
 On 2026-11-27 UTC, on the same Ryzen 9 9900X and Node, the index stopped
-hashing ranks to find each one's layer. It used to put every rank into a set,
-sort the distinct ranks and look each roster member's rank up in a map of
-them. When every rank is an integer and their span is no wider than the
-roster, as the default stages' ranks on the 10k corpus are, it now marks each rank's slot in
-a typed array over that span and numbers the marked slots in order, keeping the
-set and the sort for any other ranks. Instrumented from the first rank read to
-the last layer written, an added leaf's index took 14.8ms, 15.1ms and 15.6ms
-before and 11.4ms, 11.4ms and 11.8ms after, alternating in one exclusive window
-at load averages 1.00 to 1.15. Reading the ranks through the held map, about
-10ms of that, is unchanged. Two alternating pairs of the same `MEASURE_COST=1`
-command, in one exclusive window at load averages 0.97 to 1.12, put the added
-leaf's order stage at 95.9ms and 90.0ms before and 84.7ms and 84.2ms after, and
-its whole relayout at 289.7ms and 258.0ms before and 257.3ms and 244.9ms after,
-within run-to-run variation. A cold run measured 822ms and 811ms before and
-799ms and 787ms after. These timings include run-to-run variation and do not
-replace the Apple M4 table above.
+hashing integer ranks to find each one's layer. It used to put every rank into
+a set, sort the distinct ranks and look each roster member's rank up in a map
+of them. When every rank is an integer and their span is no wider than the
+roster, as the default stages' ranks on the 10k corpus are, it now marks each
+rank's slot in a typed array over that span and numbers the marked slots in
+order, keeping the set and the sort for any other ranks. Instrumented from the
+first rank read to the last layer written, that span of an added leaf's index
+took 14.8ms, 15.1ms and 15.6ms before and 11.4ms, 11.4ms and 11.8ms after,
+alternating in one exclusive window at load averages 1.00 to 1.15. Reading the
+ranks through the held map, about 10ms of that, is unchanged. Two alternating
+pairs of the same `MEASURE_COST=1` command, in one exclusive window at load
+averages 0.97 to 1.12, put the added leaf's order stage at 95.9ms and 90.0ms
+before and 84.7ms and 84.2ms after. Its whole relayout, 289.7ms and 258.0ms
+before and 257.3ms and 244.9ms after, moved within run-to-run variation. A cold
+run measured 822ms and 811ms before and 799ms and 787ms after. These timings
+include run-to-run variation and do not replace the Apple M4 table above.
 
 **A resize runs only position and route.** Neither the rank stage nor the order
 stage reads a size, and run again over an unchanged graph both would land where
