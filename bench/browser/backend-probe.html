@@ -623,6 +623,98 @@
         return { frames, reported, width: canvas.width, height: canvas.height };
       };
 
+      /**
+       * The parity scene's records in device pixels at `scale` device pixels
+       * per world unit, so every distance below is measured where the band,
+       * the outline and the ribbons' widths are stated.
+       */
+      const sceneAt = (scale) => {
+        const routes = (edges) =>
+          edges.map((edge) => ({ ...edge, points: edge.points.map((p) => ({ x: p.x * scale, y: p.y * scale })) }));
+        return {
+          nodes: NODES.map((node) => ({
+            ...node,
+            center: { x: node.center.x * scale, y: node.center.y * scale },
+            size: { width: node.size.width * scale, height: node.size.height * scale },
+            cornerRadius: node.cornerRadius * scale,
+            glowWorld: node.glowWorld * scale,
+          })),
+          edges: routes(EDGES),
+          dashed: routes([...DASHED, ...SMOOTH_DASHED]),
+          smooth: routes(SMOOTH_DRAWN),
+          above: routes(ABOVE),
+        };
+      };
+
+      /**
+       * What the scene `sceneAt` placed puts at the device pixel centre
+       * (x, y), given the dashed groups' classes there: how far the pixel is
+       * from the nearest antialiased edge, and which colour check, if any, it
+       * belongs to.
+       */
+      const sceneClasses = (scene, dashed, curvedDashed, x, y) => {
+        const hw = EDGE_STYLE.halfWidthPixels;
+        const dashedHw = DASHED_STYLE.halfWidthPixels;
+        let nearest = Infinity;
+        let glowed = false;
+        for (const node of scene.nodes) {
+          const d = signedDistance(node, x, y);
+          nearest = Math.min(nearest, Math.abs(d), Math.abs(d + OUTLINE_DEVICE_PX));
+          if (d < node.glowWorld + EDGE_BAND_DEVICE_PX) glowed = true;
+        }
+        let onRibbon = false;
+        let onAbove = false;
+        for (const edge of scene.above) {
+          const { centreline, point } = ribbonDistances(edge, x, y);
+          if (point < hw + 2) nearest = 0;
+          nearest = Math.min(nearest, Math.abs(centreline - hw));
+          if (centreline < hw - EDGE_BAND_DEVICE_PX && point >= hw + 2) onAbove = true;
+        }
+        if (onAbove) onRibbon = true;
+        const circle = scene.nodes.find((node) => node.id === 'circle');
+        const overFill = onAbove && signedDistance(circle, x, y) < -(OUTLINE_DEVICE_PX + EDGE_BAND_DEVICE_PX);
+        for (const edge of scene.edges) {
+          const { centreline, point } = ribbonDistances(edge, x, y);
+          if (point < hw + 2) nearest = 0;
+          nearest = Math.min(nearest, Math.abs(centreline - hw));
+          if (centreline < hw - EDGE_BAND_DEVICE_PX && point >= hw + 2) onRibbon = true;
+        }
+        let inGap = false;
+        let capped = false;
+        for (const edge of scene.dashed) {
+          const first = edge.points[0];
+          const last = edge.points[edge.points.length - 1];
+          const cap = Math.min(Math.hypot(x - first.x, y - first.y), Math.hypot(x - last.x, y - last.y));
+          if (cap < dashedHw + 2) capped = true;
+        }
+        if (capped || dashed === BAND) nearest = 0;
+        else if (dashed === SOLID) onRibbon = true;
+        else if (dashed === GAP) inGap = true;
+        if (curvedDashed === BAND) nearest = 0;
+        let onCurve = false;
+        for (const edge of scene.smooth) {
+          const { centreline } = ribbonDistances(edge, x, y);
+          const first = edge.points[0];
+          const last = edge.points[edge.points.length - 1];
+          const cap = Math.min(Math.hypot(x - first.x, y - first.y), Math.hypot(x - last.x, y - last.y));
+          if (cap < hw + 2) nearest = 0;
+          nearest = Math.min(nearest, Math.abs(centreline - hw));
+          if (centreline < hw - EDGE_BAND_DEVICE_PX && cap >= hw + 2) onCurve = true;
+        }
+        return { nearest, glowed, onRibbon, overFill, inGap, capped, curvedDashed, onCurve };
+      };
+
+      /**
+       * `dpr` draws the scene at that device pixel ratio and zoom 1, where a
+       * world unit is `dpr` device pixels and the frame is `dpr` times as many
+       * device pixels across. The outline, the ribbons' widths, the dash
+       * period and flow, and the band stay in device pixels. The controls'
+       * shifts are in world units, so a caller moving something a set number
+       * of device pixels divides by the ratio. `expectedDpr` places the
+       * scene the colour checks expect at that ratio while the canvas and the
+       * band stay at `dpr`, so it fails only if those checks can see that the
+       * scene follows the ratio.
+       */
       window.parity = async (
         shiftX = 0,
         edgeShift = 0,
@@ -630,6 +722,8 @@
         curveControl = false,
         holdFlow = false,
         layerControl = false,
+        dpr = 1,
+        expectedDpr = dpr,
       ) => {
         const shifted = NODES.map((node, i) =>
           i === 0 ? { ...node, center: { x: node.center.x + shiftX, y: node.center.y } } : node,
@@ -642,7 +736,21 @@
         let gpu;
         let gl;
         try {
-          gpu = await draw('webgpu', NODES, EDGES, DASHED, FLOWS, SMOOTH, SMOOTH_DASHED, 'smooth', ABOVE, 'above-nodes');
+          gpu = await draw(
+            'webgpu',
+            NODES,
+            EDGES,
+            DASHED,
+            FLOWS,
+            SMOOTH,
+            SMOOTH_DASHED,
+            'smooth',
+            ABOVE,
+            'above-nodes',
+            false,
+            1,
+            dpr,
+          );
           gl = await draw(
             'webgl2',
             shifted,
@@ -654,10 +762,15 @@
             curveControl ? 'polyline' : 'smooth',
             shiftEdges(ABOVE),
             layerControl ? 'below-nodes' : 'above-nodes',
+            false,
+            1,
+            dpr,
           );
         } catch (error) {
           return { pass: false, error: String(error), code: error && error.code };
         }
+        const drawnScene = sceneAt(dpr);
+        const expectedScene = sceneAt(expectedDpr);
         // Every count below is summed over the frames, and `frames` keeps
         // each frame's comparison.
         const band = { pixels: 0, differing: 0, maxDelta: 0 };
@@ -673,73 +786,33 @@
         const curve = { pixels: 0, edgeColored: 0 };
         const curvedDash = { pixels: 0, edgeColored: 0, gapPixels: 0, clear: 0 };
         const over = { pixels: 0, edgeColored: 0 };
-        const hw = EDGE_STYLE.halfWidthPixels;
-        const dashedHw = DASHED_STYLE.halfWidthPixels;
         const near = (data, i, color) =>
           [16, 8, 0].every((shift, c) => Math.abs(data[i + c] - ((color >> shift) & 0xff)) <= ROUNDING);
         const frames = [];
+        const classesAt = (scale, flow) => ({
+          dashed: dashedClasses(DASHED, undefined, flow, gpu.width, gpu.height, scale),
+          curved: dashedClasses(SMOOTH_DASHED, { curve: 'smooth' }, flow, gpu.width, gpu.height, scale),
+        });
         for (let f = 0; f < FLOWS.length; f += 1) {
           const gpuData = gpu.frames[f];
           const glData = gl.frames[f];
           const frameBand = { differing: 0, maxDelta: 0 };
           const frameInterior = { differing: 0, maxDelta: 0 };
-          const dashedAt = dashedClasses(DASHED, undefined, FLOWS[f], gpu.width, gpu.height);
-          const curvedDashAt = dashedClasses(SMOOTH_DASHED, { curve: 'smooth' }, FLOWS[f], gpu.width, gpu.height);
+          const drawnClasses = classesAt(dpr, FLOWS[f]);
+          const expectedClasses = expectedDpr === dpr ? drawnClasses : classesAt(expectedDpr, FLOWS[f]);
           for (let row = 0; row < gpu.height; row += 1) {
             for (let col = 0; col < gpu.width; col += 1) {
-              // Device pixel centres in world units, y up: zoom 1, DPR 1, the
-              // origin at the canvas centre.
+              // Device pixel centres, y up, the origin at the canvas centre.
               const x = col + 0.5 - gpu.width / 2;
               const y = gpu.height / 2 - (row + 0.5);
-              let nearest = Infinity;
-              let glowed = false;
-              for (const node of NODES) {
-                const d = signedDistance(node, x, y);
-                nearest = Math.min(nearest, Math.abs(d), Math.abs(d + OUTLINE_DEVICE_PX));
-                if (d < node.glowWorld + EDGE_BAND_DEVICE_PX) glowed = true;
-              }
-              let onRibbon = false;
-              let onAbove = false;
-              for (const edge of ABOVE) {
-                const { centreline, point } = ribbonDistances(edge, x, y);
-                if (point < hw + 2) nearest = 0;
-                nearest = Math.min(nearest, Math.abs(centreline - hw));
-                if (centreline < hw - EDGE_BAND_DEVICE_PX && point >= hw + 2) onAbove = true;
-              }
-              if (onAbove) onRibbon = true;
-              const circle = NODES.find((node) => node.id === 'circle');
-              const overFill = onAbove && signedDistance(circle, x, y) < -(OUTLINE_DEVICE_PX + EDGE_BAND_DEVICE_PX);
-              for (const edge of EDGES) {
-                const { centreline, point } = ribbonDistances(edge, x, y);
-                if (point < hw + 2) nearest = 0;
-                nearest = Math.min(nearest, Math.abs(centreline - hw));
-                if (centreline < hw - EDGE_BAND_DEVICE_PX && point >= hw + 2) onRibbon = true;
-              }
-              let inGap = false;
-              let capped = false;
-              for (const edge of [...DASHED, ...SMOOTH_DASHED]) {
-                const first = edge.points[0];
-                const last = edge.points[edge.points.length - 1];
-                const cap = Math.min(Math.hypot(x - first.x, y - first.y), Math.hypot(x - last.x, y - last.y));
-                if (cap < dashedHw + 2) capped = true;
-              }
-              const dashed = dashedAt[row * gpu.width + col];
-              if (capped || dashed === BAND) nearest = 0;
-              else if (dashed === SOLID) onRibbon = true;
-              else if (dashed === GAP) inGap = true;
-              const curvedDashed = curvedDashAt[row * gpu.width + col];
-              if (curvedDashed === BAND) nearest = 0;
-              let onCurve = false;
-              for (const edge of SMOOTH_DRAWN) {
-                const { centreline } = ribbonDistances(edge, x, y);
-                const first = edge.points[0];
-                const last = edge.points[edge.points.length - 1];
-                const cap = Math.min(Math.hypot(x - first.x, y - first.y), Math.hypot(x - last.x, y - last.y));
-                if (cap < hw + 2) nearest = 0;
-                nearest = Math.min(nearest, Math.abs(centreline - hw));
-                if (centreline < hw - EDGE_BAND_DEVICE_PX && cap >= hw + 2) onCurve = true;
-              }
-              const i = (row * gpu.width + col) * 4;
+              const at = row * gpu.width + col;
+              const drawn = sceneClasses(drawnScene, drawnClasses.dashed[at], drawnClasses.curved[at], x, y);
+              const { glowed, onRibbon, overFill, inGap, capped, curvedDashed, onCurve } =
+                expectedDpr === dpr
+                  ? drawn
+                  : sceneClasses(expectedScene, expectedClasses.dashed[at], expectedClasses.curved[at], x, y);
+              const { nearest } = drawn;
+              const i = at * 4;
               if (onCurve && !glowed) {
                 curve.pixels += 1;
                 if (near(gpuData, i, EDGE_COLOR)) curve.edgeColored += 1;
@@ -815,6 +888,9 @@
           curveControl,
           holdFlow,
           layerControl,
+          dpr,
+          expectedDpr,
+          size: { width: gpu.width, height: gpu.height },
           frames,
           band,
           interior,
