@@ -30,7 +30,7 @@
  * Chrome instead of launching one. The output
  * records the browser, mode and flags, because a backend result without them
  * cannot be reproduced. `--parity` adds M4.9b's backend comparison and exits
- * non-zero unless it passes and all sixty-eight of its controls fail on
+ * non-zero unless it passes and all seventy-one of its controls fail on
  * what they change. It also exits non-zero when the adapter reports `isFallbackAdapter`: a software
  * adapter such as
  * SwiftShader still comes up on `webgpu`, so its side of the comparison would
@@ -77,7 +77,10 @@
  * The tiers are checked again at zoom 0.5 and 2, each with a bounds control,
  * a placement control, and a control that expects zoom 1's tiers, and the
  * outline at zoom 0.5 and 1.5, each with a padding control, a
- * placement control, and a control that expects zoom 1's outline.
+ * placement control, and a control that expects zoom 1's outline, and at
+ * device pixel ratio 2 on a page of that device scale factor, with a padding
+ * control, a placement control, and a control that expects ratio 1's
+ * outline.
  * `--pick` adds M4.8b's check of `pickNode` on both backends at device pixel
  * ratios 1 and 2, at zoom 1 and at zoom 0.5 and 1.2 with a panned camera,
  * and exits non-zero on the same adapter terms or on any pick
@@ -103,6 +106,9 @@ const EDGE_CONTROL_SHIFT_PX = 2;
 // A quarter of the dash period: wider than the band, so dash ends leave it.
 const DASH_CONTROL_SHIFT_PX = 3;
 // Less than the 2 px ring, so only the check named in each control can see it.
+// At device pixel ratio 2 the ring is 3 px and a 1.5 device pixel shift fails
+// placement on antialiasing alone, so the controls move by this many CSS
+// pixels (3 device pixels) instead.
 const GROUP_CONTROL_SHIFT_PX = 1.5;
 // More than the 1 px a tier's box edge may sit from where the page expects it.
 const RICH_CONTROL_SHIFT_PX = 1.5;
@@ -111,6 +117,9 @@ const RICH_ZOOMS = [0.5, 2];
 // Either side of zoom 1, with the outline's corners scaled at 0.5; at 2 its
 // left side leaves the frame.
 const GROUP_ZOOMS = [0.5, 1.5];
+// At zoom 1, on a page whose device scale factor matches, so each screenshot
+// is the drawing buffer's size.
+const GROUP_DPRS = [2];
 // Either side of zoom 1, with both shapes and their glow inside the frame.
 const SHAPE_ZOOMS = [0.5, 2];
 // At zoom 1, where a device pixel is half a world unit and the frame is twice
@@ -430,40 +439,45 @@ function richFailure(check) {
 /**
  * A composed layer's frames on both backends, each screenshotted with the
  * layer shown and hidden, or an error. `frame` names the page function that
- * mounts the layer, given the WebGL2 side's control `shift` and the `zoom`.
+ * mounts the layer, given the WebGL2 side's control `shift`, the `zoom` and
+ * the `dpr`, on the page whose device scale factor is `dpr`.
  */
-async function composedShots(frame, shift, zoom = 1) {
+async function composedShots(frame, shift, zoom = 1, dpr = 1) {
+  const on = await pageAt(dpr);
   const shots = {};
   for (const backend of ['webgpu', 'webgl2']) {
-    const mounted = await page.evaluate(([name, value, by, at]) => window[name](value, by, at), [
+    const mounted = await on.evaluate(([name, value, by, at, ratio]) => window[name](value, by, at, ratio), [
       frame,
       backend,
       backend === 'webgl2' ? shift : 0,
       zoom,
+      dpr,
     ]);
     if (mounted.error !== undefined) return { error: `${backend}: ${mounted.error}` };
     try {
-      const shown = (await page.locator('#frame').screenshot()).toString('base64');
-      await page.evaluate(() => window.composedHide());
-      const hidden = (await page.locator('#frame').screenshot()).toString('base64');
+      const shown = (await on.locator('#frame').screenshot()).toString('base64');
+      await on.evaluate(() => window.composedHide());
+      const hidden = (await on.locator('#frame').screenshot()).toString('base64');
       shots[backend === 'webgpu' ? 'gpu' : 'gl'] = { reported: mounted.reported, shown, hidden };
     } finally {
-      await page.evaluate(() => window.composedRelease());
+      await on.evaluate(() => window.composedRelease());
     }
   }
   return shots;
 }
 
+/** The check runs on the page the shots were taken on, which holds their canvas read back. */
 async function composedParity(check, shots, args) {
   if (shots.error !== undefined) return { pass: false, error: shots.error };
-  return page.evaluate(([name, value]) => window[name](value), [check, { ...shots, ...args }]);
+  const on = await pageAt(args.dpr ?? 1);
+  return on.evaluate(([name, value]) => window[name](value), [check, { ...shots, ...args }]);
 }
 
 /**
  * Why an outline control did not fail on the check it is aimed at, or
  * undefined when it did. `paddingShift` must fail only on the difference the
- * layer adds between the backends, `expectedShift` and `expectedZoom` only on
- * placement.
+ * layer adds between the backends, `expectedShift`, `expectedZoom` and
+ * `expectedDpr` only on placement.
  */
 function groupControlFailure(control, aimedAt) {
   if (control.pass) return 'passed, so the check cannot see a misplaced outline';
@@ -524,26 +538,36 @@ const browser =
         ...(EXECUTABLE === undefined ? {} : { executablePath: EXECUTABLE }),
       })
     : await chromium.connectOverCDP(CDP);
-const page = await browser.newPage({
-  viewport: { width: 640, height: 420 },
-  deviceScaleFactor: 1,
-});
-
 const warnings = [];
-page.on('console', (message) => {
-  if (message.type() === 'warning' || message.type() === 'error') warnings.push(message.text());
-});
-page.on('pageerror', (error) => warnings.push(`pageerror: ${String(error)}`));
 
-// `setContent` rather than a static file, because the import map has to be
-// filled in first. The base URL still has to be the server's, or the page's own
-// absolute import of `/packages/render/dist/index.js` has nothing to resolve
-// against, so the route is intercepted rather than the file rewritten on disk.
-await page.route(`${ORIGIN}/bench/browser/backend-probe.html`, (route) =>
-  route.fulfill({ contentType: 'text/html', body: pageHtml() }),
-);
-await page.goto(`${ORIGIN}/bench/browser/backend-probe.html`, { waitUntil: 'load' });
-await page.waitForFunction(() => window.ready === true, null, { timeout: 30_000 });
+async function openPage(deviceScaleFactor) {
+  const opened = await browser.newPage({ viewport: { width: 640, height: 420 }, deviceScaleFactor });
+  opened.on('console', (message) => {
+    if (message.type() === 'warning' || message.type() === 'error') warnings.push(message.text());
+  });
+  opened.on('pageerror', (error) => warnings.push(`pageerror: ${String(error)}`));
+  // `setContent` rather than a static file, because the import map has to be
+  // filled in first. The base URL still has to be the server's, or the page's own
+  // absolute import of `/packages/render/dist/index.js` has nothing to resolve
+  // against, so the route is intercepted rather than the file rewritten on disk.
+  await opened.route(`${ORIGIN}/bench/browser/backend-probe.html`, (route) =>
+    route.fulfill({ contentType: 'text/html', body: pageHtml() }),
+  );
+  await opened.goto(`${ORIGIN}/bench/browser/backend-probe.html`, { waitUntil: 'load' });
+  await opened.waitForFunction(() => window.ready === true, null, { timeout: 30_000 });
+  return opened;
+}
+
+const page = await openPage(1);
+// A screenshot is taken at the page's device scale factor, so a composed
+// layer at another device pixel ratio needs a page of its own.
+const pages = new Map([[1, page]]);
+async function pageAt(dpr) {
+  if (!pages.has(dpr)) pages.set(dpr, await openPage(dpr));
+  const at = pages.get(dpr);
+  await at.bringToFront();
+  return at;
+}
 
 const advertised = await page.evaluate(() => window.webgpuAdvertised());
 const results = [];
@@ -726,6 +750,21 @@ if (cliArgs.includes('--parity')) {
       zoomControl: await composedParity('groupParity', zoomShots, { zoom, expectedZoom: 1 }),
       outlineControl: await composedParity('groupParity', await composedShots('groupFrame', shift, zoom), {
         zoom,
+        paddingShift: shift,
+      }),
+    });
+  }
+  for (const dpr of GROUP_DPRS) {
+    const dprShots = await composedShots('groupFrame', 0, 1, dpr);
+    const shift = GROUP_CONTROL_SHIFT_PX;
+    parity.groupZooms.push({
+      zoom: 1,
+      dpr,
+      check: await composedParity('groupParity', dprShots, { dpr }),
+      placementControl: await composedParity('groupParity', dprShots, { dpr, expectedShift: shift }),
+      zoomControl: await composedParity('groupParity', dprShots, { dpr, expectedDpr: 1 }),
+      outlineControl: await composedParity('groupParity', await composedShots('groupFrame', shift, 1, dpr), {
+        dpr,
         paddingShift: shift,
       }),
     });
@@ -923,19 +962,21 @@ if (cliArgs.includes('--parity')) {
     );
     process.exitCode = 1;
   }
-  for (const { zoom, check, ...controls } of parity.groupZooms) {
+  for (const { zoom, dpr, check, ...controls } of parity.groupZooms) {
+    const at = dpr === undefined ? `zoom ${zoom}` : `zoom ${zoom} and device pixel ratio ${dpr}`;
+    const shiftPx = GROUP_CONTROL_SHIFT_PX * (dpr ?? 1);
     if (!check.pass) {
-      console.error(`the group outline check at zoom ${zoom} failed: ${groupFailure(check)}`);
+      console.error(`the group outline check at ${at} failed: ${groupFailure(check)}`);
       process.exitCode = 1;
     }
     for (const [key, aimedAt, what] of [
-      ['outlineControl', 'added', `one side's padding ${GROUP_CONTROL_SHIFT_PX} px wider`],
-      ['placementControl', 'placed', `the expected outline ${GROUP_CONTROL_SHIFT_PX} px wider on both sides`],
-      ['zoomControl', 'placed', "zoom 1's outline expected"],
+      ['outlineControl', 'added', `one side's padding ${shiftPx} device px wider`],
+      ['placementControl', 'placed', `the expected outline ${shiftPx} device px wider on both sides`],
+      ['zoomControl', 'placed', dpr === undefined ? "zoom 1's outline expected" : "device pixel ratio 1's outline expected"],
     ]) {
       const failure = groupControlFailure(controls[key], aimedAt);
       if (failure !== undefined) {
-        console.error(`the group ${key} at zoom ${zoom}, with ${what}, ${failure}`);
+        console.error(`the group ${key} at ${at}, with ${what}, ${failure}`);
         process.exitCode = 1;
       }
     }

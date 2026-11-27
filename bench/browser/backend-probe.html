@@ -1348,7 +1348,7 @@
        * on the diagonal one. Each hidden screenshot must match the canvas
        * read back from the same renderer, or the bare frames could differ
        * everywhere and excuse any difference the layer adds. On each backend,
-       * every pixel the layer changes must lie within `GROUP_RING_DEVICE_PX` of
+       * every pixel the layer changes must lie within `groupRingDevicePx` of
        * the outline's rounded rectangle or inside the title's box, and the
        * changed pixels on the outline must span that rectangle. Between the
        * backends, the layer may not add a difference: a pixel that differs
@@ -1370,11 +1370,21 @@
        * that the outline follows the zoom. Both shifts are in world units,
        * and the runner passes 1.5 / zoom so each moves the outline 1.5
        * device pixels at every zoom.
+       *
+       * At device pixel ratio 2 the runner screenshots a page whose device
+       * scale factor is 2, so each frame is 960 by 640 and the canvas, drawn
+       * at the same ratio, still fills it pixel for pixel. The layer is laid
+       * out in CSS pixels, so the expected rectangle, its corners and the
+       * title's box scale by the zoom times the ratio, and the ring widens
+       * with the stroke. There the runner passes 1.5, which moves the
+       * outline 3 device pixels. `expectedDpr` expects ratio 1's outline, so
+       * it fails only if the placement check can see that the outline follows
+       * the ratio.
        */
       const GROUP = { id: 'group', nodeIds: ['rect'], label: 'group', padding: 24 };
-      // Half the 1.5 px stroke plus one device pixel of antialiasing, rounded
-      // up.
-      const GROUP_RING_DEVICE_PX = 2;
+      // Half the 1.5 CSS px stroke in device pixels plus one device pixel of
+      // antialiasing, rounded up.
+      const groupRingDevicePx = (dpr) => Math.ceil(0.75 * dpr + 1);
       const GROUP_CORNER_RADIUS = 10;
       // Shared by the group outline and the rich-node tiers below: the held
       // renderer and layer, and the latest draw's canvas read back.
@@ -1389,15 +1399,16 @@
       };
 
       /**
-       * Draws the first frame on `backend` at `zoom`, keeps the renderer, and
-       * mounts a DOM layer over `#frame` through `mount(camera, hold)`.
+       * Draws the first frame on `backend` at `zoom` and `dpr`, keeps the
+       * renderer, and mounts a DOM layer over `#frame` through
+       * `mount(camera, hold)`.
        * `mount` passes the layer to `hold` as soon as it exists, so a release
        * disposes it even when filling it throws.
        */
-      const composedFrame = async (backend, mount, zoom = 1) => {
+      const composedFrame = async (backend, mount, zoom = 1, dpr = 1) => {
         window.composedRelease();
         try {
-          const scene = await draw(backend, NODES, EDGES, DASHED, [FLOWS[0]], SMOOTH, SMOOTH_DASHED, 'smooth', ABOVE, 'above-nodes', true, zoom);
+          const scene = await draw(backend, NODES, EDGES, DASHED, [FLOWS[0]], SMOOTH, SMOOTH_DASHED, 'smooth', ABOVE, 'above-nodes', true, zoom, dpr);
           held = { renderer: scene.renderer };
           composedCanvas[backend] = scene.frames[0];
           mount(scene.renderer.camera, (layer) => (held.layer = layer));
@@ -1413,7 +1424,7 @@
         held.layer = undefined;
       };
 
-      window.groupFrame = (backend, paddingShift = 0, zoom = 1) =>
+      window.groupFrame = (backend, paddingShift = 0, zoom = 1, dpr = 1) =>
         composedFrame(
           backend,
           (camera, hold) => {
@@ -1423,6 +1434,7 @@
             layer.sync();
           },
           zoom,
+          dpr,
         );
 
       const decodePng = async (base64) => {
@@ -1440,30 +1452,32 @@
         Math.max(Math.abs(a[i] - b[i]), Math.abs(a[i + 1] - b[i + 1]), Math.abs(a[i + 2] - b[i + 2]), Math.abs(a[i + 3] - b[i + 3]));
 
       // Where one backend's layer changed its own frame, against where the
-      // outline and title should be for `padding` at `zoom`.
-      const outlineOf = (shown, hidden, padding, zoom) => {
+      // outline and title should be for `padding` at `zoom` and `dpr`, with
+      // changed pixels within `ringPx` device pixels of the outline counted on it.
+      const outlineOf = (shown, hidden, padding, zoom, dpr, ringPx) => {
         const { width, height } = shown;
         const bounds = nodeGroupBounds(NODES, { ...GROUP, padding });
+        const scale = zoom * dpr;
         const box = {
-          left: bounds.minX * zoom + width / 2,
-          right: bounds.maxX * zoom + width / 2,
-          top: height / 2 - bounds.maxY * zoom,
-          bottom: height / 2 - bounds.minY * zoom,
+          left: bounds.minX * scale + width / 2,
+          right: bounds.maxX * scale + width / 2,
+          top: height / 2 - bounds.maxY * scale,
+          bottom: height / 2 - bounds.minY * scale,
         };
-        // The layer's own title placement (12 px in, baseline 18 px down, 12 px
-        // monospace) and its own allowance of 8 px per character, widened by
-        // two pixels for the glyphs' antialiasing.
+        // The layer's own title placement (12 CSS px in, baseline 18 down, 12
+        // px monospace) and its own allowance of 8 per character, widened by
+        // two device pixels for the glyphs' antialiasing.
         const title = {
-          left: box.left + 12 - 2,
-          right: box.left + 12 + GROUP.label.length * 8 + 2,
-          top: box.top + 18 - 12 - 2,
-          bottom: box.top + 18 + 4,
+          left: box.left + 12 * dpr - 2,
+          right: box.left + (12 + GROUP.label.length * 8) * dpr + 2,
+          top: box.top + (18 - 12) * dpr - 2,
+          bottom: box.top + (18 + 4) * dpr,
         };
         const outlineNode = {
           shape: 'roundedRect',
           center: { x: (box.left + box.right) / 2, y: (box.top + box.bottom) / 2 },
           size: { width: box.right - box.left, height: box.bottom - box.top },
-          cornerRadius: Math.min(GROUP_CORNER_RADIUS, GROUP_CORNER_RADIUS * zoom),
+          cornerRadius: Math.min(GROUP_CORNER_RADIUS, GROUP_CORNER_RADIUS * zoom) * dpr,
         };
         const span = { left: Infinity, right: -Infinity, top: Infinity, bottom: -Infinity };
         let ring = 0;
@@ -1474,7 +1488,7 @@
             if (pixelDelta(shown.data, hidden.data, (row * width + col) * 4) === 0) continue;
             const x = col + 0.5;
             const y = row + 0.5;
-            if (Math.abs(signedDistance(outlineNode, x, y)) <= GROUP_RING_DEVICE_PX) {
+            if (Math.abs(signedDistance(outlineNode, x, y)) <= ringPx) {
               ring += 1;
               span.left = Math.min(span.left, x);
               span.right = Math.max(span.right, x);
@@ -1488,7 +1502,7 @@
           }
         }
         const spans = ['left', 'right', 'top', 'bottom'].every(
-          (side) => Math.abs(span[side] - box[side]) <= GROUP_RING_DEVICE_PX,
+          (side) => Math.abs(span[side] - box[side]) <= ringPx,
         );
         return { ring, title: titled, stray, box, span, placed: ring > 0 && titled > 0 && stray === 0 && spans };
       };
@@ -1533,23 +1547,35 @@
         return { sameSize, backends, canvasMatched, sound, composed, bare, added, gpuShown, gpuHidden, glShown, glHidden };
       };
 
-      window.groupParity = async ({ gpu, gl, zoom = 1, paddingShift = 0, expectedShift = 0, expectedZoom = zoom }) => {
+      window.groupParity = async ({
+        gpu,
+        gl,
+        zoom = 1,
+        dpr = 1,
+        paddingShift = 0,
+        expectedShift = 0,
+        expectedZoom = zoom,
+        expectedDpr = dpr,
+      }) => {
         const compared = await composedCompare(gpu, gl);
         if (!compared.sameSize) return { pass: false, ...compared };
         const { gpuShown, gpuHidden, glShown, glHidden, ...common } = compared;
         const padding = GROUP.padding + expectedShift;
+        const ringPx = groupRingDevicePx(dpr);
         const outline = {
-          webgpu: outlineOf(gpuShown, gpuHidden, padding, expectedZoom),
-          webgl2: outlineOf(glShown, glHidden, padding + paddingShift, expectedZoom),
+          webgpu: outlineOf(gpuShown, gpuHidden, padding, expectedZoom, expectedDpr, ringPx),
+          webgl2: outlineOf(glShown, glHidden, padding + paddingShift, expectedZoom, expectedDpr, ringPx),
         };
         const placed = outline.webgpu.placed && outline.webgl2.placed;
         return {
           pass: common.sound && placed && common.added.pixels === 0,
           ...common,
           zoom,
+          dpr,
           paddingShift,
           expectedShift,
           expectedZoom,
+          expectedDpr,
           placed,
           outline,
         };
