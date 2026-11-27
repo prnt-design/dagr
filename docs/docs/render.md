@@ -635,8 +635,9 @@ checks:
   over three frames and a ribbon on the above-nodes layer since that day.
   A group outline and rich-node tiers, drawn by the browser rather than by
   either backend, are composed over the first frame since 2026-11-23 and add
-  no difference. Other GPUs, other device pixel ratios, and DPR 2 at any
-  zoom but 1, are unchecked.
+  no difference. On 2026-11-27 the whole run passed on an NVIDIA RTX 4090 in
+  Chrome 158 too, with no interior pixel differing. Other GPUs, other device
+  pixel ratios, and DPR 2 at any zoom but 1, are unchecked.
   See
   [What is verified, and on which backend](#what-is-verified-and-on-which-backend).
 - That a browser composes the overlay's two transforms the way the algebra says,
@@ -2150,8 +2151,8 @@ complete, and `<DagrCanvas animate>` drives them from a graph a user is editing
   on those dates (`frame-profile.mjs --pick`). WebGL2's pick cost is not measured.
   `DagrCanvas` picks through
   `pickNode` only behind its opt-in `hitTesting="gpu"`. See [Picking](#picking).
-- Backend parity beyond the probe scene and the one machine M4.9b compared on:
-  other GPUs, other device pixel ratios, and DPR 2 at any zoom but 1.
+- Backend parity beyond the probe scene and the two GPUs it has run on (an
+  Apple M4, and an NVIDIA RTX 4090 since 2026-11-27): other GPUs, other device pixel ratios, and DPR 2 at any zoom but 1.
   Beyond zoom 1, the shapes alone, the above-nodes ribbon with the circle
   and the rich-node tiers are compared at 0.5 and 2, the solid straight
   ribbons and the group outline at 0.5 and 1.5, and the three dashed
