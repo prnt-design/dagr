@@ -617,7 +617,8 @@ checks:
   Deleting it leaves the suite green, which was measured rather than assumed.
   The abort check before `init()` is tested.
 - That the two backends agree beyond what the parity check has compared:
-  one machine (an Apple M4 in Chrome 155), the two-shape probe scene, zoom 1
+  an Apple M4 in Chrome 155 (and since 2026-11-27 the whole run on an NVIDIA
+  RTX 4090 too), the two-shape probe scene, zoom 1
   (the rich-node tiers below also at 0.5 and 2, and in Chrome 158 the group
   outline at 0.5 and 1.5, the shapes alone at 0.5 and 2 and, since
   2026-11-24, the solid straight ribbons named next alone at 0.5 and 1.5
@@ -635,7 +636,8 @@ checks:
   over three frames and a ribbon on the above-nodes layer since that day.
   A group outline and rich-node tiers, drawn by the browser rather than by
   either backend, are composed over the first frame since 2026-11-23 and add
-  no difference. Other GPUs, other device pixel ratios, and DPR 2 at any
+  no difference. On the RTX 4090, in Chrome 158, no interior pixel differs
+  in any check. Other GPUs, other device pixel ratios, and DPR 2 at any
   zoom but 1, are unchecked.
   See
   [What is verified, and on which backend](#what-is-verified-and-on-which-backend).
@@ -2150,8 +2152,10 @@ complete, and `<DagrCanvas animate>` drives them from a graph a user is editing
   on those dates (`frame-profile.mjs --pick`). WebGL2's pick cost is not measured.
   `DagrCanvas` picks through
   `pickNode` only behind its opt-in `hitTesting="gpu"`. See [Picking](#picking).
-- Backend parity beyond the probe scene and the one machine M4.9b compared on:
-  other GPUs, other device pixel ratios, and DPR 2 at any zoom but 1.
+- Backend parity beyond the probe scene and the GPUs it has run on (an Apple
+  M4 throughout, AMD RDNA 2 for the original probe, and an NVIDIA RTX 4090
+  for the whole current run since 2026-11-27): other GPUs, other device
+  pixel ratios, and DPR 2 at any zoom but 1.
   Beyond zoom 1, the shapes alone, the above-nodes ribbon with the circle
   and the rich-node tiers are compared at 0.5 and 2, the solid straight
   ribbons and the group outline at 0.5 and 1.5, and the three dashed

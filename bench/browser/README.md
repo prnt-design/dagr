@@ -1437,12 +1437,49 @@ differing by up to 158, the layer control with 276 by up to 56, and the
 ratio control with none of 164 expected ribbon pixels in the edge colour and
 702 of 1,984 fill pixels in the fill colour.
 
+**The whole run on the NVIDIA RTX 4090, 2026-11-27 UTC**, on main
+`9949b1c`: the WSL2 machine's RTX 4090 (`nvidia` `lovelace`, not a fallback
+adapter) in Google Chrome 158.0.8127.38 on the Windows side, attached through
+`windows-chrome.mjs` from WSL2 with `WSL_INTEROP=/run/WSL/1_interop` so that
+Chrome started in the signed-in session rather than session 0 (see
+[the NVIDIA rows below 10,000](#sizes-below-10000-on-the-nvidia-rtx-4090-2026-11-17)).
+`'auto'` and `'webgpu'` came up on `'webgpu'` and `'webgl2'` on `'webgl2'`,
+each lighting 10,780 pixels.
+Headless and headed gave the same output apart from the user agent. All 28
+checks pass and all 82 controls fail, no interior pixel differs in any
+check that counts them, and the outline and tiers add none. Every check added after 2026-11-17 had run only on the Apple M4
+before this; the band counts here are against the Apple M4 runs above
+(differing pixels, largest difference in brackets):
+
+| Piece | Zoom, DPR | Apple M4 | RTX 4090 |
+| --- | --- | --- | --- |
+| Whole scene, three frames | 1, 1 | 245 (81, 87, 77) | 168 (53, 61, 54; up to 77, 34, 34) |
+| Whole scene, three frames | 1, 2 | 372 (129, 123, 120; up to 77, 46, 44) | 210 (73, 68, 69; up to 77, 34, 34) |
+| Shapes alone | 0.5 and 2 at DPR 1, 1 at DPR 2 | none | none |
+| Solid straight ribbons alone | 0.5, 1.5 | none | none |
+| Solid straight ribbons alone | 1, 2 | none | 12 (1) |
+| Three dashed ribbons alone | 0.5, 1.2 | 7 (41), 15 (22) | 2 (21), 8 (14) |
+| Three dashed ribbons alone | 1, 2 | 31 (42) | 7 (21) |
+| Solid smooth ribbon alone | 0.5, 1.2 | 15 (34), 27 (35) | 12 (34), 19 (34) |
+| Solid smooth ribbon alone | 1, 2 | 48 (35) | 21 (34) |
+| Smooth dashed ribbon alone | 0.5, 1.2 | 31 (43), 25 (13) | 19 (34), 14 (7) |
+| Smooth dashed ribbon alone | 1, 2 | 50 (77) | 34 (77) |
+| Above-nodes ribbon with the circle | 0.5 and 2 at DPR 1, 1 at DPR 2 | none | none |
+
+The group outline at zoom 0.5, 1 and 1.5 and at DPR 2, and the rich-node
+tiers at zoom 0.5, 1 and 2 and at DPR 2, land where the page expects them on
+both backends and add no differing pixel, as on the Apple M4. The one place
+this GPU differs where the Apple M4 did not is the solid straight ribbons at
+DPR 2: 12 band pixels, each by 1, with every pixel inside the ribbons in the
+edge colour and the strip beside them clear.
+
 **Not a gate.** `bench/README.md`'s argument against a browser measurement in
 `bench:ci` is about timings, and a parity check is not a timing, so that
 argument does not carry. What does is the runner: the check needs a full Chrome
 with a WebGPU adapter, and CI runs on a GitHub `ubuntu-latest` runner with no
 GPU and no browser step. It is run by hand like the probe, and its scope is what it compared:
-one machine, the probe's two shapes with two solid straight ribbons since
+an Apple M4 (the original probe also on AMD RDNA 2 on 2026-10-26, and
+the whole run on an NVIDIA RTX 4090 on 2026-11-27), the probe's two shapes with two solid straight ribbons since
 2026-11-17, two dashed straight ones, a dashed one through two joins and a
 smooth one since 2026-11-21, the dashes flowed by 4.5 pixels since
 2026-11-22 (so the dashes at rest are no longer compared), a smooth dashed
