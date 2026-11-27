@@ -1601,8 +1601,8 @@
        * box, and every pixel further inside a box than that holds the colour
        * of the tier `RICH_EXPECTED` names for its node.
        *
-       * Three controls. `boundsShift` moves every node's box on the WebGL2
-       * side by that much in x and y, and that side's expected boxes with it,
+       * Three controls at zoom 1 and ratio 1. `boundsShift` moves every
+       * node's box on the WebGL2 side by that much in x and y, and that side's expected boxes with it,
        * so it fails only on the difference the tiers add. `expectedShift`
        * widens the expected boxes on both sides, so it fails on
        * placement, and may fail on the colour with it, since a wider box takes
@@ -1619,6 +1619,16 @@
        * zoom. Each control moves an edge 1.5 device pixels at every zoom:
        * `expectedShift` is in device pixels, and the runner passes
        * `boundsShift` as 1.5 / zoom world units.
+       *
+       * At device pixel ratio 2 the runner screenshots a page whose device
+       * scale factor is 2, as for the outline. The overlay is laid out in CSS
+       * pixels, so the expected boxes scale by the zoom times the ratio while
+       * the gates, read in CSS pixels, pick zoom 1's tiers. The bounds and
+       * placement controls run there too, still moving an edge 1.5 device
+       * pixels, with `boundsShift` passed as 1.5 / ratio world units, and
+       * `swapTiers` keeps its meaning. `expectedDpr` expects ratio 1's boxes,
+       * so it fails only if the placement check can see that the tiers follow
+       * the ratio.
        */
       const RICH_TIERS = [
         { name: 'label', color: 0xe63946, minScreenWidth: 24, maxScreenWidth: 75 },
@@ -1637,8 +1647,9 @@
         1: { rect: 'card', circle: 'label' },
         2: { rect: 'card', circle: 'card' },
       };
-      // Every box edge lands on, or within half a pixel of, a whole CSS
-      // pixel, so one pixel covers where a compositor rounds a shifted box.
+      // Every box edge lands on, or within half a device pixel of, a whole
+      // device pixel, so one device pixel covers where a compositor rounds a
+      // shifted box.
       const RICH_EDGE_DEVICE_PX = 1;
 
       const richBounds = (node, shift) => ({
@@ -1648,7 +1659,7 @@
         maxY: node.center.y + node.size.height / 2 + shift,
       });
 
-      window.richFrame = (backend, boundsShift = 0, zoom = 1) =>
+      window.richFrame = (backend, boundsShift = 0, zoom = 1, dpr = 1) =>
         composedFrame(
           backend,
           (camera, hold) => {
@@ -1658,12 +1669,13 @@
             overlay.sync();
           },
           zoom,
+          dpr,
         );
 
       // Where one backend's tiers changed its own frame, and in which colour,
       // against the boxes and tiers expected. `shift` is in world units and
-      // `grow` in device pixels.
-      const tiersOf = (shown, hidden, shift, grow, expected, zoom) => {
+      // `grow` in device pixels; `scale` is device pixels per world unit.
+      const tiersOf = (shown, hidden, shift, grow, expected, scale) => {
         const { width, height } = shown;
         const margin = RICH_EDGE_DEVICE_PX;
         const nodes = NODES.map((node) => {
@@ -1674,10 +1686,10 @@
             tier: tier.name,
             color: tier.color,
             box: {
-              left: bounds.minX * zoom + width / 2 - grow,
-              right: bounds.maxX * zoom + width / 2 + grow,
-              top: height / 2 - bounds.maxY * zoom - grow,
-              bottom: height / 2 - bounds.minY * zoom + grow,
+              left: bounds.minX * scale + width / 2 - grow,
+              right: bounds.maxX * scale + width / 2 + grow,
+              top: height / 2 - bounds.maxY * scale - grow,
+              bottom: height / 2 - bounds.minY * scale + grow,
             },
             span: { left: Infinity, right: -Infinity, top: Infinity, bottom: -Infinity },
             changed: 0,
@@ -1726,10 +1738,12 @@
         gpu,
         gl,
         zoom = 1,
+        dpr = 1,
         boundsShift = 0,
         expectedShift = 0,
         swapTiers = false,
         expectedZoom = zoom,
+        expectedDpr = dpr,
       }) => {
         const compared = await composedCompare(gpu, gl);
         if (!compared.sameSize) return { pass: false, ...compared };
@@ -1737,8 +1751,8 @@
         const atZoom = RICH_EXPECTED[expectedZoom];
         const expected = swapTiers ? { rect: atZoom.circle, circle: atZoom.rect } : atZoom;
         const tiers = {
-          webgpu: tiersOf(gpuShown, gpuHidden, 0, expectedShift, expected, zoom),
-          webgl2: tiersOf(glShown, glHidden, boundsShift, expectedShift, expected, zoom),
+          webgpu: tiersOf(gpuShown, gpuHidden, 0, expectedShift, expected, zoom * expectedDpr),
+          webgl2: tiersOf(glShown, glHidden, boundsShift, expectedShift, expected, zoom * expectedDpr),
         };
         const placed = tiers.webgpu.placed && tiers.webgl2.placed;
         const tiered = tiers.webgpu.tiered && tiers.webgl2.tiered;
@@ -1746,10 +1760,12 @@
           pass: common.sound && placed && tiered && common.added.pixels === 0,
           ...common,
           zoom,
+          dpr,
           boundsShift,
           expectedShift,
           swapTiers,
           expectedZoom,
+          expectedDpr,
           placed,
           tiered,
           tiers,
