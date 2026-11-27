@@ -1376,9 +1376,10 @@
        * at the same ratio, still fills it pixel for pixel. The layer is laid
        * out in CSS pixels, so the expected rectangle, its corners and the
        * title's box scale by the zoom times the ratio, and the ring widens
-       * with the stroke. `expectedDpr` expects ratio 1's outline, so it fails
-       * only if the placement check can see that the outline follows the
-       * ratio.
+       * with the stroke. There the runner passes 1.5, which moves the
+       * outline 3 device pixels. `expectedDpr` expects ratio 1's outline, so
+       * it fails only if the placement check can see that the outline follows
+       * the ratio.
        */
       const GROUP = { id: 'group', nodeIds: ['rect'], label: 'group', padding: 24 };
       // Half the 1.5 CSS px stroke in device pixels plus one device pixel of
@@ -1398,8 +1399,9 @@
       };
 
       /**
-       * Draws the first frame on `backend` at `zoom` and `dpr`, keeps the renderer, and
-       * mounts a DOM layer over `#frame` through `mount(camera, hold)`.
+       * Draws the first frame on `backend` at `zoom` and `dpr`, keeps the
+       * renderer, and mounts a DOM layer over `#frame` through
+       * `mount(camera, hold)`.
        * `mount` passes the layer to `hold` as soon as it exists, so a release
        * disposes it even when filling it throws.
        */

@@ -106,8 +106,9 @@ const EDGE_CONTROL_SHIFT_PX = 2;
 // A quarter of the dash period: wider than the band, so dash ends leave it.
 const DASH_CONTROL_SHIFT_PX = 3;
 // Less than the 2 px ring, so only the check named in each control can see it.
-// At device pixel ratio 2 the controls move by this many CSS pixels instead,
-// since the ring widens with the stroke and 1.5 device pixels stays inside it.
+// At device pixel ratio 2 the ring is 3 px and a 1.5 device pixel shift fails
+// placement on antialiasing alone, so the controls move by this many CSS
+// pixels (3 device pixels) instead.
 const GROUP_CONTROL_SHIFT_PX = 1.5;
 // More than the 1 px a tier's box edge may sit from where the page expects it.
 const RICH_CONTROL_SHIFT_PX = 1.5;
@@ -476,8 +477,7 @@ async function composedParity(check, shots, args) {
  * Why an outline control did not fail on the check it is aimed at, or
  * undefined when it did. `paddingShift` must fail only on the difference the
  * layer adds between the backends, `expectedShift`, `expectedZoom` and
- * `expectedDpr` only on
- * placement.
+ * `expectedDpr` only on placement.
  */
 function groupControlFailure(control, aimedAt) {
   if (control.pass) return 'passed, so the check cannot see a misplaced outline';
@@ -970,8 +970,8 @@ if (cliArgs.includes('--parity')) {
       process.exitCode = 1;
     }
     for (const [key, aimedAt, what] of [
-      ['outlineControl', 'added', `one side's padding ${shiftPx} px wider`],
-      ['placementControl', 'placed', `the expected outline ${shiftPx} px wider on both sides`],
+      ['outlineControl', 'added', `one side's padding ${shiftPx} device px wider`],
+      ['placementControl', 'placed', `the expected outline ${shiftPx} device px wider on both sides`],
       ['zoomControl', 'placed', dpr === undefined ? "zoom 1's outline expected" : "device pixel ratio 1's outline expected"],
     ]) {
       const failure = groupControlFailure(controls[key], aimedAt);
