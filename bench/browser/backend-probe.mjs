@@ -393,15 +393,28 @@ function controlFailure(control, moved) {
   return failedOnShift ? undefined : `failed, but not on what it changes: ${parityFailure(control)}`;
 }
 
-/** The same for the scene's ratio control, which must fail only on the colour checks. */
+/**
+ * The same for the scene's ratio control, which must fail only on the colour
+ * checks, with pixels it expected in one colour holding another rather than
+ * with a check left empty.
+ */
 function sceneRatioControlFailure(control) {
   if (control.pass) return 'passed, so the check cannot see that the scene follows the ratio';
-  const onAim =
+  const miscoloured =
     control.error === undefined &&
+    [
+      [control.ribbon.edgeColored, control.ribbon.pixels],
+      [control.gap.clear, control.gap.pixels],
+      [control.curve.edgeColored, control.curve.pixels],
+      [control.curvedDash.edgeColored, control.curvedDash.pixels],
+      [control.curvedDash.clear, control.curvedDash.gapPixels],
+      [control.over.edgeColored, control.over.pixels],
+    ].some(([held, of]) => of > 0 && held < of);
+  const onAim =
+    miscoloured &&
     control.backends.webgpu === 'webgpu' &&
     control.backends.webgl2 === 'webgl2' &&
     control.sameSize &&
-    !control.ribbonDrawn &&
     control.interior.maxDelta <= control.tolerance.interiorMaxDelta;
   return onAim ? undefined : `failed, but not on what it changes: ${parityFailure(control)}`;
 }

@@ -1124,7 +1124,8 @@ scene and must fail on the colour checks alone.
 
 The check passes: 372 band pixels differ over the three frames (129, 123
 and 120, up to 77, 46 and 44) and none of 1,787,290 interior ones; all
-7,570 pixels inside the solid ribbons and dashes hold the edge colour, all
+7,570 pixels inside the solid straight ribbons, the above-nodes one and the
+straight dashes, clear of the shapes' glow, hold the edge colour, all
 3,002 inside the straight dashes' gaps the clear colour, all 2,679 inside
 the smooth ribbon and all 734 inside the smooth dashes the edge colour, all
 736 inside its gaps the clear colour, and all 660 inside the above-nodes

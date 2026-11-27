@@ -708,9 +708,11 @@
        * `dpr` draws the scene at that device pixel ratio and zoom 1, where a
        * world unit is `dpr` device pixels and the frame is `dpr` times as many
        * device pixels across. The outline, the ribbons' widths, the dash
-       * period and flow, and the band stay in device pixels. The controls'
-       * shifts are in world units, so a caller moving something a set number
-       * of device pixels divides by the ratio. `expectedDpr` places the
+       * period and flow, and the band stay in device pixels. `shiftX` and
+       * `edgeShift` are in world units, so a caller moving something a set
+       * number of device pixels divides them by the ratio; `dashShift` is
+       * added to the flow and stays in device pixels. The other parameters
+       * are described above `EDGE_BAND_DEVICE_PX`. `expectedDpr` places the
        * scene the colour checks expect at that ratio while the canvas and the
        * band stay at `dpr`, so it fails only if those checks can see that the
        * scene follows the ratio.
