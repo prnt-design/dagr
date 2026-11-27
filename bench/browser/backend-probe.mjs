@@ -30,7 +30,7 @@
  * Chrome instead of launching one. The output
  * records the browser, mode and flags, because a backend result without them
  * cannot be reproduced. `--parity` adds M4.9b's backend comparison and exits
- * non-zero unless it passes and all seventy-five of its controls fail on
+ * non-zero unless it passes and all eighty-two of its controls fail on
  * what they change. It also exits non-zero when the adapter reports `isFallbackAdapter`: a software
  * adapter such as
  * SwiftShader still comes up on `webgpu`, so its side of the comparison would
@@ -82,7 +82,8 @@
  * control, a placement control, and a control that expects ratio 1's
  * outline. The tiers are checked at that ratio too, with a bounds control, a
  * placement control, a tier control, and a control that expects ratio 1's
- * boxes.
+ * boxes. The whole scene is compared at that ratio too, with the six
+ * controls of ratio 1 and one that expects ratio 1's scene.
  * `--pick` adds M4.8b's check of `pickNode` on both backends at device pixel
  * ratios 1 and 2, at zoom 1 and at zoom 0.5 and 1.2 with a panned camera,
  * and exits non-zero on the same adapter terms or on any pick
@@ -157,6 +158,8 @@ const SMOOTH_DASH_DPRS = [2];
 const ABOVE_ZOOMS = [0.5, 2];
 // At zoom 1, where the frame covers the same world as at ratio 1.
 const ABOVE_DPRS = [2];
+// The whole scene at zoom 1, where the frame covers the same world as at ratio 1.
+const SCENE_DPRS = [2];
 
 /**
  * The page's import map, filled in from this process's own module resolution.
@@ -391,6 +394,32 @@ function controlFailure(control, moved) {
 }
 
 /**
+ * The same for the scene's ratio control, which must fail only on the colour
+ * checks, with pixels it expected in one colour holding another rather than
+ * with a check left empty.
+ */
+function sceneRatioControlFailure(control) {
+  if (control.pass) return 'passed, so the check cannot see that the scene follows the ratio';
+  const miscoloured =
+    control.error === undefined &&
+    [
+      [control.ribbon.edgeColored, control.ribbon.pixels],
+      [control.gap.clear, control.gap.pixels],
+      [control.curve.edgeColored, control.curve.pixels],
+      [control.curvedDash.edgeColored, control.curvedDash.pixels],
+      [control.curvedDash.clear, control.curvedDash.gapPixels],
+      [control.over.edgeColored, control.over.pixels],
+    ].some(([held, of]) => of > 0 && held < of);
+  const onAim =
+    miscoloured &&
+    control.backends.webgpu === 'webgpu' &&
+    control.backends.webgl2 === 'webgl2' &&
+    control.sameSize &&
+    control.interior.maxDelta <= control.tolerance.interiorMaxDelta;
+  return onAim ? undefined : `failed, but not on what it changes: ${parityFailure(control)}`;
+}
+
+/**
  * The reasons every composed layer shares: `{ done }` when the check stopped
  * before comparing, otherwise `{ reasons }` to add to.
  */
@@ -599,6 +628,22 @@ if (cliArgs.includes('--parity')) {
     flowControl: await page.evaluate(() => window.parity(0, 0, 0, false, true)),
     layerControl: await page.evaluate(() => window.parity(0, 0, 0, false, false, true)),
   };
+  parity.sceneDprs = [];
+  for (const dpr of SCENE_DPRS) {
+    const at = (args) => page.evaluate((values) => window.parity(...values), args);
+    parity.sceneDprs.push({
+      zoom: 1,
+      dpr,
+      check: await at([0, 0, 0, false, false, false, dpr]),
+      control: await at([CONTROL_SHIFT_PX / dpr, 0, 0, false, false, false, dpr]),
+      edgeControl: await at([0, EDGE_CONTROL_SHIFT_PX / dpr, 0, false, false, false, dpr]),
+      dashControl: await at([0, 0, DASH_CONTROL_SHIFT_PX, false, false, false, dpr]),
+      curveControl: await at([0, 0, 0, true, false, false, dpr]),
+      flowControl: await at([0, 0, 0, false, true, false, dpr]),
+      layerControl: await at([0, 0, 0, false, false, true, dpr]),
+      ratioControl: await at([0, 0, 0, false, false, false, dpr, 1]),
+    });
+  }
   parity.shapeZooms = [];
   for (const zoom of SHAPE_ZOOMS) {
     parity.shapeZooms.push({
@@ -849,6 +894,32 @@ if (cliArgs.includes('--parity')) {
   if (layerControl !== undefined) {
     console.error(`the layer control, with one side's above-nodes ribbon drawn below the nodes, ${layerControl}`);
     process.exitCode = 1;
+  }
+  for (const { zoom, dpr, check, ratioControl, ...controls } of parity.sceneDprs) {
+    const at = `zoom ${zoom} and device pixel ratio ${dpr}`;
+    if (!check.pass) {
+      console.error(`the parity check at ${at} failed: ${parityFailure(check)}`);
+      process.exitCode = 1;
+    }
+    for (const [key, moved, what] of [
+      ['control', 'shape', `one shape shifted by ${Number(CONTROL_SHIFT_PX.toPrecision(3))} device px`],
+      ['edgeControl', 'ribbon', `the ribbons shifted by ${EDGE_CONTROL_SHIFT_PX} device px`],
+      ['dashControl', 'dash', `the dashes flowed ${DASH_CONTROL_SHIFT_PX} px further`],
+      ['curveControl', 'curve', 'the smooth ribbons drawn as polylines'],
+      ['flowControl', 'dash flow', "one side's flow held at its first frame's"],
+      ['layerControl', 'layer', "one side's above-nodes ribbon drawn below the nodes"],
+    ]) {
+      const failure = controlFailure(controls[key], moved);
+      if (failure !== undefined) {
+        console.error(`the ${key} at ${at}, with ${what}, ${failure}`);
+        process.exitCode = 1;
+      }
+    }
+    const ratio = sceneRatioControlFailure(ratioControl);
+    if (ratio !== undefined) {
+      console.error(`the ratioControl at ${at}, with device pixel ratio 1's scene expected, ${ratio}`);
+      process.exitCode = 1;
+    }
   }
   for (const { zoom, dpr, check, control, zoomControl } of parity.shapeZooms) {
     const at = dpr === undefined ? `zoom ${zoom}` : `zoom ${zoom} and device pixel ratio ${dpr}`;

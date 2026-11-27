@@ -574,7 +574,9 @@ inside the ribbon and the fill colour inside the circle's fill clear of it,
 the group outline at device pixel ratio 2 lands where the page expects it
 and adds no difference between the backends, the rich-node tiers at device
 pixel ratio 2 land where the page expects them, show zoom 1's tiers and add
-no difference between the backends, and all seventy-five controls (one moves a shape, one every ribbon, the curves included,
+no difference between the backends, the whole scene at device pixel ratio 2
+compares within tolerance on every frame with the same colour checks as at
+ratio 1, and all eighty-two controls (one moves a shape, one every ribbon, the curves included,
 one the dash pattern, one draws the curves as polylines, one holds the flow,
 one draws the above-nodes ribbon below the nodes, one widens one side's
 outline, one the outline the page expects, one moves one side's tier boxes,
@@ -602,8 +604,11 @@ dashed ribbon as a polyline, one moves the above-nodes ribbon, one expects
 ratio 1's circle and ribbon, one draws one side's below the nodes, one
 widens one side's outline, one widens the outline the page expects, one
 expects ratio 1's outline, one moves one side's tier boxes, one widens the
-boxes the page expects, one swaps the tiers the page expects and one expects
-ratio 1's boxes) fail on what they change, and says on stderr which of these did not hold. It also exits non-zero, saying why on
+boxes the page expects, one swaps the tiers the page expects, one expects
+ratio 1's boxes, and over the whole scene one moves a shape, one every
+ribbon, one the dash pattern, one draws the curves as polylines, one holds
+the flow, one draws the above-nodes ribbon below the nodes and one expects
+ratio 1's scene) fail on what they change, and says on stderr which of these did not hold. It also exits non-zero, saying why on
 stderr before it compares, when the adapter reports `isFallbackAdapter`,
 because a software adapter such as SwiftShader comes up on `'webgpu'` too and
 its frame is not a GPU's.
@@ -1105,6 +1110,36 @@ the pixels inside either box in the swapped tier's colour, and the ratio
 control with 26,526 changed pixels off the expected boxes. Every earlier
 check and control in the run still passes or fails as before.
 
+The whole scene was compared at device pixel ratio 2 and zoom 1 on
+2026-11-27 UTC, on the same Apple M4 in Chrome 158.0.8127.37 (`apple`
+`metal-3`, not a fallback adapter), headless and headed with the same
+counts: the shapes, every ribbon and the above-nodes layer drawn together
+over the three frames of advancing flow, as `parity` compares them at ratio
+1, over a 960 by 640 drawing buffer. The page places every record in device
+pixels at the ratio, so the band, the outline, the ribbons' widths and the
+dash period stay in device pixels while the routes and shapes double. The
+six controls of ratio 1 run there too, the shape and ribbon shifts given as
+the same device pixels as at ratio 1, and a ratio control expects ratio 1's
+scene and must fail on the colour checks alone.
+
+The check passes: 372 band pixels differ over the three frames (129, 123
+and 120, up to 77, 46 and 44) and none of 1,787,290 interior ones; all
+7,570 pixels inside the solid straight ribbons, the above-nodes one and the
+straight dashes, clear of the shapes' glow, hold the edge colour, all
+3,002 inside the straight dashes' gaps the clear colour, all 2,679 inside
+the smooth ribbon and all 734 inside the smooth dashes the edge colour, all
+736 inside its gaps the clear colour, and all 660 inside the above-nodes
+ribbon over the circle's fill the edge colour. The shape control fails with
+12,702 interior pixels differing (up to 7), the edge control with 18,233,
+the dash control with 4,510, the curve control with 9,561, the flow control
+with none on its first frame and 4,002 over the other two, and the layer
+control with 828 (up to 56), each with every colour check holding; the
+ratio control fails with 16 of 3,583 expected ribbon pixels in the edge
+colour and no interior pixel differing. The scene at ratio 1 still passes
+with the same counts as before (245 band pixels over the frames, none
+inside), and every earlier check and control in the run still passes or
+fails as before.
+
 The shapes alone were compared at zoom 0.5 and 2 on 2026-11-23 UTC, on the
 same Apple M4 in Chrome 158.0.8127.37 (`apple` `metal-3`, not a fallback
 adapter), headless and headed with the same counts. `shapeParity` draws the
@@ -1417,7 +1452,8 @@ the first frame since 2026-11-23, DPR 1 (the shapes alone and the solid
 straight ribbons alone also at DPR 2 and zoom 1 since 2026-11-25, and the
 three dashed ones alone, the solid smooth one alone, the smooth dashed
 one alone and the above-nodes one with the circle since 2026-11-26, and
-the group outline and the rich-node tiers since 2026-11-27).
+the group outline, the rich-node tiers and the whole scene since
+2026-11-27).
 The canvas comparison is at zoom
 1, the shapes alone also at zoom 0.5 and 2, the solid straight ribbons
 alone at zoom 0.5 and 1.5 and the three dashed ones and the solid smooth
@@ -1427,8 +1463,8 @@ that day, the outline at zoom 0.5, 1 and 1.5, and the tiers at zoom 0.5, 1
 and 2. At DPR 2 only the shapes alone, the solid straight ribbons alone,
 the three dashed ones alone, the solid smooth one alone, the smooth
 dashed one alone, the above-nodes one with the circle and, since
-2026-11-27, the group outline and the rich-node tiers, at zoom 1, are
-compared.
+2026-11-27, the group outline, the rich-node tiers and the whole scene, at
+zoom 1, are compared.
 
 ## Node picking (M4.8b)
 
