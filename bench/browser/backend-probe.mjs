@@ -497,10 +497,10 @@ function groupControlFailure(control, aimedAt) {
 
 /**
  * The same for a tier control: `boundsShift` must fail only on the difference
- * the tiers add, `expectedShift` only on placement, `swapTiers` and
- * `expectedZoom` only on which tier a node shows. A wider expected box also
- * takes pixels the tiers do not cover into the colour test, so
- * `expectedShift` may fail on the colour too.
+ * the tiers add, `expectedShift` and `expectedDpr` only on placement,
+ * `swapTiers` and `expectedZoom` only on which tier a node shows. A wider or
+ * moved expected box also takes pixels the tiers do not cover into the colour
+ * test, so `expectedShift` and `expectedDpr` may fail on the colour too.
  */
 function richControlFailure(control, aimedAt) {
   if (control.pass) return 'passed, so the check cannot see a misplaced or wrong tier';
@@ -1026,12 +1026,13 @@ if (cliArgs.includes('--parity')) {
     for (const [key, aimedAt, what] of [
       ['boundsControl', 'added', `one side's tier boxes moved ${RICH_CONTROL_SHIFT_PX} device px`],
       ['placementControl', 'placed', `the expected tier boxes ${RICH_CONTROL_SHIFT_PX} device px wider on both sides`],
-      ['tierControl', 'tiered', "each node expecting the other node's tier"],
-      dpr === undefined
-        ? ['zoomControl', 'tiered', "zoom 1's tiers expected"]
-        : ['zoomControl', 'placed', "device pixel ratio 1's boxes expected"],
+      ...(dpr === undefined
+        ? [['zoomControl', 'tiered', "zoom 1's tiers expected"]]
+        : [
+            ['tierControl', 'tiered', "each node expecting the other node's tier"],
+            ['zoomControl', 'placed', "device pixel ratio 1's boxes expected"],
+          ]),
     ]) {
-      if (controls[key] === undefined) continue;
       const failure = richControlFailure(controls[key], aimedAt);
       if (failure !== undefined) {
         console.error(`the rich ${key} at ${at}, with ${what}, ${failure}`);
