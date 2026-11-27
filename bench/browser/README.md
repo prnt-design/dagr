@@ -571,7 +571,8 @@ ratio 2 compares within tolerance with the edge colour inside its dashes and
 the clear colour inside its gaps, the above-nodes ribbon with the circle
 alone at device pixel ratio 2 compares within tolerance with the edge colour
 inside the ribbon and the fill colour inside the circle's fill clear of it,
-and all sixty-eight controls (one moves a shape, one every ribbon, the curves included,
+the group outline at device pixel ratio 2 lands where the page expects it
+and adds no difference between the backends, and all seventy-one controls (one moves a shape, one every ribbon, the curves included,
 one the dash pattern, one draws the curves as polylines, one holds the flow,
 one draws the above-nodes ribbon below the nodes, one widens one side's
 outline, one the outline the page expects, one moves one side's tier boxes,
@@ -596,7 +597,9 @@ one moves the smooth ribbon, one expects ratio 1's curve, one draws one
 side's as a polyline, one flows one side's smooth dashes further, one
 expects a period that doubles with the ratio, one draws one side's smooth
 dashed ribbon as a polyline, one moves the above-nodes ribbon, one expects
-ratio 1's circle and ribbon and one draws one side's below the nodes) fail on what they change, and says on stderr which of these did not hold. It also exits non-zero, saying why on
+ratio 1's circle and ribbon, one draws one side's below the nodes, one
+widens one side's outline, one widens the outline the page expects and one
+expects ratio 1's outline) fail on what they change, and says on stderr which of these did not hold. It also exits non-zero, saying why on
 stderr before it compares, when the adapter reports `isFallbackAdapter`,
 because a software adapter such as SwiftShader comes up on `'webgpu'` too and
 its frame is not a GPU's.
@@ -1050,6 +1053,29 @@ outline (433 headed), and the zoom control with every changed pixel off it.
 Every earlier check and control in the run still passes or fails as before on
 Chrome 158.
 
+The group outline was checked at device pixel ratio 2 and zoom 1 on
+2026-11-27 UTC, on the same Apple M4 in Chrome 158.0.8127.37 (`apple`
+`metal-3`, not a fallback adapter), headless and headed. A screenshot is
+taken at its page's device scale factor, so the runner opens a second page
+whose factor is 2 and composes the outline there: each frame is 960 by 640,
+the canvas is drawn at the same ratio, and each hidden screenshot still
+matches its canvas read back pixel for pixel. The layer is laid out in CSS
+pixels, so the expected rectangle, its corners and the title's box scale by
+the ratio, and the ring the changed pixels must lie in widens from 2 device
+pixels to 3 with the 1.5 pixel stroke. The outline and placement controls
+are still 1.5 device pixels (0.75 world units), and a ratio control expects
+ratio 1's outline and must fail on placement alone.
+
+The check passes: on both backends the layer changes 2,307 pixels on the
+outline, spanning its 276 by 244 device pixel rectangle to within 1.5 pixels,
+and 582 in the title headless (623 headed), with none elsewhere, and the
+composed frames differ in the same 129 pixels (by up to 77) as the bare
+ones. The outline control fails with the layer adding 3,944 differing pixels
+by up to 204 (4,012 headed), the placement control with 42 changed pixels
+off the expected outline headless and headed, and the ratio control with
+every changed pixel off it. Every earlier check and control in the run still
+passes or fails as before.
+
 The shapes alone were compared at zoom 0.5 and 2 on 2026-11-23 UTC, on the
 same Apple M4 in Chrome 158.0.8127.37 (`apple` `metal-3`, not a fallback
 adapter), headless and headed with the same counts. `shapeParity` draws the
@@ -1370,8 +1396,8 @@ since 2026-11-25, the above-nodes one with the circle at 0.5 and 2 since
 that day, the outline at zoom 0.5, 1 and 1.5, and the tiers at zoom 0.5, 1
 and 2. At DPR 2 only the shapes alone, the solid straight ribbons alone,
 the three dashed ones alone, the solid smooth one alone, the smooth
-dashed one alone and the above-nodes one with the circle, at zoom 1, are
-compared.
+dashed one alone, the above-nodes one with the circle and, since
+2026-11-27, the group outline, at zoom 1, are compared.
 
 ## Node picking (M4.8b)
 
