@@ -30,7 +30,7 @@
  * Chrome instead of launching one. The output
  * records the browser, mode and flags, because a backend result without them
  * cannot be reproduced. `--parity` adds M4.9b's backend comparison and exits
- * non-zero unless it passes and all seventy-one of its controls fail on
+ * non-zero unless it passes and all seventy-five of its controls fail on
  * what they change. It also exits non-zero when the adapter reports `isFallbackAdapter`: a software
  * adapter such as
  * SwiftShader still comes up on `webgpu`, so its side of the comparison would
@@ -80,7 +80,9 @@
  * placement control, and a control that expects zoom 1's outline, and at
  * device pixel ratio 2 on a page of that device scale factor, with a padding
  * control, a placement control, and a control that expects ratio 1's
- * outline.
+ * outline. The tiers are checked at that ratio too, with a bounds control, a
+ * placement control, a tier control, and a control that expects ratio 1's
+ * boxes.
  * `--pick` adds M4.8b's check of `pickNode` on both backends at device pixel
  * ratios 1 and 2, at zoom 1 and at zoom 0.5 and 1.2 with a panned camera,
  * and exits non-zero on the same adapter terms or on any pick
@@ -114,6 +116,9 @@ const GROUP_CONTROL_SHIFT_PX = 1.5;
 const RICH_CONTROL_SHIFT_PX = 1.5;
 // Either side of zoom 1, where the tiers both nodes show differ from zoom 1's.
 const RICH_ZOOMS = [0.5, 2];
+// At zoom 1, on a page whose device scale factor matches, where the gates,
+// read in CSS pixels, pick zoom 1's tiers.
+const RICH_DPRS = [2];
 // Either side of zoom 1, with the outline's corners scaled at 0.5; at 2 its
 // left side leaves the frame.
 const GROUP_ZOOMS = [0.5, 1.5];
@@ -793,6 +798,22 @@ if (cliArgs.includes('--parity')) {
       }),
     });
   }
+  for (const dpr of RICH_DPRS) {
+    const dprShots = await composedShots('richFrame', 0, 1, dpr);
+    const boundsShift = RICH_CONTROL_SHIFT_PX / dpr;
+    parity.richZooms.push({
+      zoom: 1,
+      dpr,
+      check: await composedParity('richParity', dprShots, { dpr }),
+      placementControl: await composedParity('richParity', dprShots, { dpr, expectedShift: RICH_CONTROL_SHIFT_PX }),
+      tierControl: await composedParity('richParity', dprShots, { dpr, swapTiers: true }),
+      zoomControl: await composedParity('richParity', dprShots, { dpr, expectedDpr: 1 }),
+      boundsControl: await composedParity('richParity', await composedShots('richFrame', boundsShift, 1, dpr), {
+        dpr,
+        boundsShift,
+      }),
+    });
+  }
   if (!parity.check.pass) {
     console.error(`the parity check failed: ${parityFailure(parity.check)}`);
     process.exitCode = 1;
@@ -996,19 +1017,24 @@ if (cliArgs.includes('--parity')) {
       process.exitCode = 1;
     }
   }
-  for (const { zoom, check, ...controls } of parity.richZooms) {
+  for (const { zoom, dpr, check, ...controls } of parity.richZooms) {
+    const at = dpr === undefined ? `zoom ${zoom}` : `zoom ${zoom} and device pixel ratio ${dpr}`;
     if (!check.pass) {
-      console.error(`the rich-node tier check at zoom ${zoom} failed: ${richFailure(check)}`);
+      console.error(`the rich-node tier check at ${at} failed: ${richFailure(check)}`);
       process.exitCode = 1;
     }
     for (const [key, aimedAt, what] of [
-      ['boundsControl', 'added', `one side's tier boxes moved ${RICH_CONTROL_SHIFT_PX} px`],
-      ['placementControl', 'placed', `the expected tier boxes ${RICH_CONTROL_SHIFT_PX} px wider on both sides`],
-      ['zoomControl', 'tiered', "zoom 1's tiers expected"],
+      ['boundsControl', 'added', `one side's tier boxes moved ${RICH_CONTROL_SHIFT_PX} device px`],
+      ['placementControl', 'placed', `the expected tier boxes ${RICH_CONTROL_SHIFT_PX} device px wider on both sides`],
+      ['tierControl', 'tiered', "each node expecting the other node's tier"],
+      dpr === undefined
+        ? ['zoomControl', 'tiered', "zoom 1's tiers expected"]
+        : ['zoomControl', 'placed', "device pixel ratio 1's boxes expected"],
     ]) {
+      if (controls[key] === undefined) continue;
       const failure = richControlFailure(controls[key], aimedAt);
       if (failure !== undefined) {
-        console.error(`the rich ${key} at zoom ${zoom}, with ${what}, ${failure}`);
+        console.error(`the rich ${key} at ${at}, with ${what}, ${failure}`);
         process.exitCode = 1;
       }
     }
