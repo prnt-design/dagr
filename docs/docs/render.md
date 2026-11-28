@@ -626,7 +626,8 @@ checks:
   alone at 0.5 and 1.2, and since 2026-11-25 the smooth dashed one alone at
   0.5 and 1.2 and the above-nodes one with the circle at 0.5 and 2),
   device pixel ratio 1 (the shapes alone and the solid straight ribbons
-  alone also at 2 and zoom 1 since 2026-11-25, and the three dashed ones
+  alone also at 2 and zoom 1 since 2026-11-25, the shapes alone at 2 and
+  zoom 0.5 and 2 since 2026-11-27 on the Apple M4 alone, and the three dashed ones
   alone, the solid smooth one alone, the smooth dashed one alone and the
   above-nodes one with the circle since 2026-11-26, and the group outline,
   the rich-node tiers and the whole scene since 2026-11-27), with two solid straight edge ribbons added to that scene on
@@ -638,7 +639,7 @@ checks:
   either backend, are composed over the first frame since 2026-11-23 and add
   no difference. On the RTX 4090, in Chrome 158, no interior pixel differs
   in any check. Other GPUs, other device pixel ratios, and DPR 2 at any
-  zoom but 1, are unchecked.
+  zoom but 1 for everything but the shapes alone, are unchecked.
   See
   [What is verified, and on which backend](#what-is-verified-and-on-which-backend).
 - That a browser composes the overlay's two transforms the way the algebra says,
@@ -2155,8 +2156,8 @@ complete, and `<DagrCanvas animate>` drives them from a graph a user is editing
 - Backend parity beyond the probe scene and the GPUs it has run on (an Apple
   M4 throughout, AMD RDNA 2 for the original probe, and an NVIDIA RTX 4090
   for the whole current run since 2026-11-27): other GPUs, other device
-  pixel ratios, and DPR 2 at any zoom but 1.
-  Beyond zoom 1, the shapes alone, the above-nodes ribbon with the circle
+  pixel ratios, and DPR 2 at any zoom but 1 for everything but the shapes
+  alone. Beyond zoom 1, the shapes alone (at DPR 2 too), the above-nodes ribbon with the circle
   and the rich-node tiers are compared at 0.5 and 2, the solid straight
   ribbons and the group outline at 0.5 and 1.5, and the three dashed
   ribbons, the solid smooth one and the smooth dashed one at 0.5 and 1.2.

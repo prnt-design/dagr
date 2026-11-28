@@ -559,8 +559,8 @@ within tolerance with the edge colour inside its dashes and the clear colour
 inside its gaps, the above-nodes ribbon with the circle alone at zoom 0.5 and
 2 compares within tolerance with the edge colour inside the ribbon and the
 fill colour inside the circle's fill clear of it, the shapes alone at device
-pixel ratio 2 compare within tolerance with every fill pixel in its fill
-colour, the solid straight ribbons alone at device pixel ratio 2 compare
+pixel ratio 2, at zoom 1 and at zoom 0.5 and 2, compare within tolerance with
+every fill pixel in its fill colour, the solid straight ribbons alone at device pixel ratio 2 compare
 within tolerance with the edge colour inside them and the clear colour just
 outside, the three dashed ribbons alone at device pixel ratio 2 compare
 within tolerance with the edge colour inside their dashes and the clear
@@ -576,7 +576,7 @@ and adds no difference between the backends, the rich-node tiers at device
 pixel ratio 2 land where the page expects them, show zoom 1's tiers and add
 no difference between the backends, the whole scene at device pixel ratio 2
 compares within tolerance on every frame with the same colour checks as at
-ratio 1, and all eighty-two controls (one moves a shape, one every ribbon, the curves included,
+ratio 1, and all eighty-eight controls (one moves a shape, one every ribbon, the curves included,
 one the dash pattern, one draws the curves as polylines, one holds the flow,
 one draws the above-nodes ribbon below the nodes, one widens one side's
 outline, one the outline the page expects, one moves one side's tier boxes,
@@ -595,7 +595,8 @@ further, one expects a period in world units and one draws one side's as a
 polyline, and at zoom 0.5 and at zoom 2 one moves the above-nodes ribbon, one
 expects zoom 1's circle and ribbon and one draws one side's below the nodes,
 and at device pixel ratio 2 one moves a shape, one expects ratio 1's
-shapes, one moves the ribbons, one expects ratio 1's ribbons, one flows one
+shapes, at zoom 0.5 and at zoom 2 one moves a shape, one expects ratio 1's
+shapes and one expects zoom 1's shapes, one moves the ribbons, one expects ratio 1's ribbons, one flows one
 side's dashes further, one expects a period that doubles with the ratio,
 one moves the smooth ribbon, one expects ratio 1's curve, one draws one
 side's as a polyline, one flows one side's smooth dashes further, one
@@ -1182,6 +1183,31 @@ and control counts are zoom 2's at ratio 1, as they should be: a device pixel
 is half a world unit in both, and only the frame around the shapes is larger.
 The browser's own device scale factor stays 1, so the renderer's default of
 reading `window.devicePixelRatio` is not what this exercises.
+
+The shapes alone were compared at device pixel ratio 2 and zoom 0.5 and 2 on
+2026-11-27 UTC, on the same Apple M4 in Chrome 158.0.8127.37 (`apple`
+`metal-3`, not a fallback adapter), headless twice and headed once with the
+same counts. The drawing buffer is 960 by 640 as at zoom 1, and the frame
+covers the same world as at ratio 1 and the same zoom. Each zoom runs three
+controls: the shape control, one shape shifted 1/3 of a device pixel, which
+must fail on the interior, a ratio control that expects ratio 1's shapes at
+that zoom, and a zoom control that expects zoom 1's shapes at ratio 2, each
+of which must fail on the fills alone. At zoom 2 the ratio and zoom controls
+expect the same scale, 2 device pixels per world unit, so they fail with the
+same counts.
+
+At zoom 0.5 the check passes byte-identical: none of 1,760 band pixels or
+612,640 interior pixels differ, and all 5,948 fill pixels hold the fill
+colour. The shape control fails with 1,036 interior pixels differing by up to
+13, the ratio control with 724 of 1,132 expected fill pixels holding it, and
+the zoom control with 4,092 of 26,328.
+
+At zoom 2, 4 device pixels per world unit and the largest scale the check has
+drawn, it passes within tolerance rather than byte-identical: 8 of 7,168 band
+pixels and 120 of 607,232 interior pixels differ, each by 1, the rounding
+tolerance, and all 110,524 fill pixels hold the fill colour. The shape control
+fails with 15,801 interior pixels differing by up to 4, and the ratio and zoom
+controls with 17,820 of 26,328 expected fill pixels holding it.
 
 The two solid straight ribbons alone were compared at zoom 0.5 and 1.5 on
 2026-11-24 UTC, on the same Apple M4 in Chrome 158.0.8127.37 (`apple`
