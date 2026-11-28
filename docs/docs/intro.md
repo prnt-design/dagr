@@ -130,13 +130,15 @@ byte-identical. The group outline and the rich-node tiers pass at DPR 2 on
 day with 372 edge-band pixels differing over its three frames and none
 inside. The shapes alone pass at DPR 2 and zoom 0.5 and 2 that day,
 byte-identical at 0.5 and with 8 edge-band and 120 interior pixels
-differing by one, the rounding tolerance, at 2. The original probe also
+differing by one, the rounding tolerance, at 2, and the solid straight
+ribbons alone are byte-identical at DPR 2 and zoom 0.5 and 1.5 on
+2026-11-28. The original probe also
 passed on AMD RDNA 2 in Chrome 156, with four edge-band pixels differing by
 one, and every check before the shapes alone at DPR 2 and zoom 0.5 and 2
 passed on an NVIDIA RTX 4090 in Chrome 158 on 2026-11-27 with no interior
 pixel differing. Other GPUs, other device pixel ratios, and DPR 2 at zooms
-other than 1, apart from the shapes alone at 0.5 and 2 on the Apple M4,
-remain uncovered. A performance profile is published, and GPU node picking ships
+other than 1, apart from the shapes alone at 0.5 and 2 and the solid
+straight ribbons alone at 0.5 and 1.5 on the Apple M4, remain uncovered. A performance profile is published, and GPU node picking ships
 behind an opt-in `hitTesting="gpu"` on `DagrCanvas`, with edge hits on the CPU. The large-graph
 target, 10,000 nodes animating at 60 fps, is still open: it held with a tenth
 of the nodes moving on two devices, and with every node moving along smooth
