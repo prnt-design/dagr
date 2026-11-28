@@ -630,7 +630,9 @@ checks:
   alone, the solid smooth one alone, the smooth dashed one alone and the
   above-nodes one with the circle since 2026-11-26, and the group outline,
   the rich-node tiers and the whole scene since 2026-11-27, and the shapes
-  alone at 2 and zoom 0.5 and 2 since that day on the Apple M4 alone), with two solid straight edge ribbons added to that scene on
+  alone at 2 and zoom 0.5 and 2 since that day and the solid straight
+  ribbons alone at 2 and zoom 0.5 and 1.5 since 2026-11-28, on the Apple M4
+  alone), with two solid straight edge ribbons added to that scene on
   2026-11-17, and two dashed straight ones, a dashed one through two
   joins and a smooth one on 2026-11-21 (Chrome 157), the dashes flowed by
   4.5 pixels since 2026-11-22, and a smooth dashed one, the flow advancing
@@ -641,7 +643,8 @@ checks:
   in any check it ran. On the Apple M4 the shapes alone at DPR 2 and zoom 2
   have 120 interior pixels differing by 1, within the rounding tolerance.
   Other GPUs, other device pixel ratios, and DPR 2 at zooms other than 1,
-  apart from the shapes alone at 0.5 and 2 on the Apple M4, are unchecked.
+  apart from the shapes alone at 0.5 and 2 and the solid straight ribbons
+  alone at 0.5 and 1.5 on the Apple M4, are unchecked.
   See
   [What is verified, and on which backend](#what-is-verified-and-on-which-backend).
 - That a browser composes the overlay's two transforms the way the algebra says,
@@ -2159,9 +2162,11 @@ complete, and `<DagrCanvas animate>` drives them from a graph a user is editing
   M4 throughout, AMD RDNA 2 for the original probe, and an NVIDIA RTX 4090
   for the whole run as it stood on 2026-11-27): other GPUs, other device
   pixel ratios, and DPR 2 at zooms other than 1, apart from the shapes alone
-  at 0.5 and 2 on the Apple M4. Beyond zoom 1, the shapes alone (at DPR 2
-  too), the above-nodes ribbon with the circle and the rich-node tiers are compared at 0.5 and 2, the solid straight
-  ribbons and the group outline at 0.5 and 1.5, and the three dashed
+  at 0.5 and 2 and the solid straight ribbons alone at 0.5 and 1.5 on the
+  Apple M4. Beyond zoom 1, the shapes alone (at DPR 2 too), the above-nodes
+  ribbon with the circle and the rich-node tiers are compared at 0.5 and 2,
+  the solid straight ribbons (at DPR 2 too) and the group outline at 0.5 and
+  1.5, and the three dashed
   ribbons, the solid smooth one and the smooth dashed one at 0.5 and 1.2.
 - Ten thousand nodes at sixty frames a second, measured rather than hoped for
   (M4.10).

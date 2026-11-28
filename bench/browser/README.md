@@ -561,7 +561,7 @@ inside its gaps, the above-nodes ribbon with the circle alone at zoom 0.5 and
 fill colour inside the circle's fill clear of it, the shapes alone at device
 pixel ratio 2, at zoom 1 and at zoom 0.5 and 2, compare within tolerance
 with every fill pixel in its fill colour, the solid straight ribbons alone
-at device pixel ratio 2 compare within tolerance with the edge colour inside them and the clear colour just
+at device pixel ratio 2, at zoom 1 and at zoom 0.5 and 1.5, compare within tolerance with the edge colour inside them and the clear colour just
 outside, the three dashed ribbons alone at device pixel ratio 2 compare
 within tolerance with the edge colour inside their dashes and the clear
 colour inside their gaps, the solid smooth ribbon alone at device pixel
@@ -576,7 +576,7 @@ and adds no difference between the backends, the rich-node tiers at device
 pixel ratio 2 land where the page expects them, show zoom 1's tiers and add
 no difference between the backends, the whole scene at device pixel ratio 2
 compares within tolerance on every frame with the same colour checks as at
-ratio 1, and all eighty-eight controls (one moves a shape, one every ribbon, the curves included,
+ratio 1, and all ninety-four controls (one moves a shape, one every ribbon, the curves included,
 one the dash pattern, one draws the curves as polylines, one holds the flow,
 one draws the above-nodes ribbon below the nodes, one widens one side's
 outline, one the outline the page expects, one moves one side's tier boxes,
@@ -596,8 +596,11 @@ polyline, and at zoom 0.5 and at zoom 2 one moves the above-nodes ribbon, one
 expects zoom 1's circle and ribbon and one draws one side's below the nodes,
 and at device pixel ratio 2 and zoom 1 one moves a shape and one expects
 ratio 1's shapes, at that ratio and at zoom 0.5 and at zoom 2 one moves a
-shape, one expects ratio 1's shapes and one expects zoom 1's shapes, and at
-that ratio and zoom 1 one moves the ribbons, one expects ratio 1's ribbons, one flows one
+shape, one expects ratio 1's shapes and one expects zoom 1's shapes, at
+that ratio and zoom 1 one moves the ribbons and one expects ratio 1's
+ribbons, at that ratio and at zoom 0.5 and at zoom 1.5 one moves the
+ribbons, one expects ratio 1's ribbons and one expects zoom 1's ribbons, and
+at that ratio and zoom 1 one flows one
 side's dashes further, one expects a period that doubles with the ratio,
 one moves the smooth ribbon, one expects ratio 1's curve, one draws one
 side's as a polyline, one flows one side's smooth dashes further, one
@@ -1259,6 +1262,29 @@ colour and all 3,152 beside them the clear colour. The edge control fails
 with 2,353 interior pixels differing by up to 158, and the ratio control with
 none of 758 expected ribbon pixels in the edge colour.
 
+The same two ribbons alone were compared at device pixel ratio 2 and zoom 0.5
+and 1.5 on 2026-11-28 UTC, on the same Apple M4 in Chrome 158.0.8127.37
+(`apple` `metal-3`, not a fallback adapter), headless twice and headed once
+with the same counts. The drawing buffer is 960 by 640 as at zoom 1, the frame
+covers the same world as at ratio 1 and the same zoom, and the routes scale
+into device pixels by the zoom times the ratio, 1 at zoom 0.5 and 3 at 1.5.
+Each zoom runs three controls. The edge control shifts both ribbons 2 device
+pixels along each axis (2 world units at zoom 0.5, 2/3 at 1.5) and must fail
+on the interior. The ratio control expects ratio 1's ribbons at that zoom, and
+the zoom control expects zoom 1's ribbons at ratio 2; both must fail on the
+edge colour alone.
+
+At zoom 0.5 the check passes byte-identical: none of 1,848 band pixels or
+612,552 interior pixels differ, all 758 pixels inside the ribbons hold the
+edge colour and all 1,502 beside them the clear colour. The edge control fails
+with 1,148 interior pixels differing by up to 158, the ratio control with none
+of 348 expected ribbon pixels in the edge colour, and the zoom control with
+none of 1,578. At zoom 1.5 it passes byte-identical over 4,337 band and
+610,063 interior pixels, with all 2,024 inside and all 4,049 beside in their
+colours; the edge control fails with 2,750 interior pixels differing by up to
+158, the ratio control with none of 1,168 and the zoom control with none of
+1,578.
+
 The three dashed ribbons alone, the joined one included, were compared at zoom 0.5 and 1.2
 on 2026-11-24 UTC, on the same Apple M4 in Chrome 158.0.8127.37 (`apple`
 `metal-3`, not a fallback adapter), headless and headed with the same
@@ -1507,7 +1533,8 @@ with a WebGPU adapter, and CI runs on a GitHub `ubuntu-latest` runner with no
 GPU and no browser step. It is run by hand like the probe, and its scope is what it compared:
 an Apple M4 (the original probe also on AMD RDNA 2 on 2026-10-26, and
 the whole run as it stood on an NVIDIA RTX 4090 on 2026-11-27, before the
-shapes alone at DPR 2 and zoom 0.5 and 2 joined it), the probe's two shapes with two solid straight ribbons since
+shapes alone at DPR 2 and zoom 0.5 and 2 and the solid straight ribbons
+alone at DPR 2 and zoom 0.5 and 1.5 joined it), the probe's two shapes with two solid straight ribbons since
 2026-11-17, two dashed straight ones, a dashed one through two joins and a
 smooth one since 2026-11-21, the dashes flowed by 4.5 pixels since
 2026-11-22 (so the dashes at rest are no longer compared), a smooth dashed
@@ -1519,7 +1546,8 @@ three dashed ones alone, the solid smooth one alone, the smooth dashed
 one alone and the above-nodes one with the circle since 2026-11-26, and
 the group outline, the rich-node tiers and the whole scene since
 2026-11-27, and the shapes alone at DPR 2 and zoom 0.5 and 2 since that
-day, on the Apple M4 alone).
+day, and the solid straight ribbons alone at DPR 2 and zoom 0.5 and 1.5
+since 2026-11-28, on the Apple M4 alone).
 The canvas comparison is at zoom
 1, the shapes alone also at zoom 0.5 and 2, the solid straight ribbons
 alone at zoom 0.5 and 1.5 and the three dashed ones and the solid smooth
@@ -1530,8 +1558,9 @@ and 2. At DPR 2 only the shapes alone, the solid straight ribbons alone,
 the three dashed ones alone, the solid smooth one alone, the smooth
 dashed one alone, the above-nodes one with the circle and, since
 2026-11-27, the group outline, the rich-node tiers and the whole scene, at
-zoom 1, are compared, and the shapes alone also at zoom 0.5 and 2 since
-that day.
+zoom 1, are compared, the shapes alone also at zoom 0.5 and 2 since
+that day, and the solid straight ribbons alone also at zoom 0.5 and 1.5 since
+2026-11-28.
 
 ## Node picking (M4.8b)
 
