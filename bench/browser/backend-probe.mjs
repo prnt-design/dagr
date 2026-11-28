@@ -63,8 +63,8 @@
  * and ribbon and one that draws one side's below the nodes. The shapes alone
  * are compared at device pixel ratio 2 too, with a control that shifts one
  * shape and one that expects ratio 1's shapes, at zoom 1 and at zoom 0.5 and
- * 2, where a third expects zoom 1's shapes. At that ratio and zoom 1 alone
- * are the solid straight ribbons alone, with a control that shifts them and one that expects ratio
+ * 2, where a third expects zoom 1's shapes. At that ratio, and at zoom 1
+ * only, so are the solid straight ribbons alone, with a control that shifts them and one that expects ratio
  * 1's ribbons, the three dashed ribbons alone, with a control that flows
  * one side's dashes further and one that expects a period that doubles with
  * the ratio, the solid smooth ribbon alone, with a control that shifts it,
@@ -936,8 +936,8 @@ if (cliArgs.includes('--parity')) {
     }
     for (const [run, aimedAt, what] of [
       [control, 'interior', `one shape shifted by ${Number(CONTROL_SHIFT_PX.toPrecision(3))} px`],
-      ...(zoomControl === undefined ? [] : [[zoomControl, 'fill', "zoom 1's shapes expected"]]),
-      ...(ratioControl === undefined ? [] : [[ratioControl, 'fill', "device pixel ratio 1's shapes expected"]]),
+      ...(dpr === undefined || zoom !== 1 ? [[zoomControl, 'fill', "zoom 1's shapes expected"]] : []),
+      ...(dpr === undefined ? [] : [[ratioControl, 'fill', "device pixel ratio 1's shapes expected"]]),
     ]) {
       const failure = shapeControlFailure(run, aimedAt);
       if (failure !== undefined) {
