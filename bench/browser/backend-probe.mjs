@@ -30,7 +30,7 @@
  * Chrome instead of launching one. The output
  * records the browser, mode and flags, because a backend result without them
  * cannot be reproduced. `--parity` adds M4.9b's backend comparison and exits
- * non-zero unless it passes and all eighty-two of its controls fail on
+ * non-zero unless it passes and all eighty-eight of its controls fail on
  * what they change. It also exits non-zero when the adapter reports `isFallbackAdapter`: a software
  * adapter such as
  * SwiftShader still comes up on `webgpu`, so its side of the comparison would
@@ -62,8 +62,9 @@
  * and 2, each with a control that shifts it, one that expects zoom 1's circle
  * and ribbon and one that draws one side's below the nodes. The shapes alone
  * are compared at device pixel ratio 2 too, with a control that shifts one
- * shape and one that expects ratio 1's shapes, and so are the solid straight
- * ribbons alone, with a control that shifts them and one that expects ratio
+ * shape and one that expects ratio 1's shapes, at zoom 1 and at zoom 0.5 and
+ * 2, where a third expects zoom 1's shapes. At that ratio, and at zoom 1
+ * only, so are the solid straight ribbons alone, with a control that shifts them and one that expects ratio
  * 1's ribbons, the three dashed ribbons alone, with a control that flows
  * one side's dashes further and one that expects a period that doubles with
  * the ratio, the solid smooth ribbon alone, with a control that shifts it,
@@ -129,7 +130,8 @@ const GROUP_DPRS = [2];
 // Either side of zoom 1, with both shapes and their glow inside the frame.
 const SHAPE_ZOOMS = [0.5, 2];
 // At zoom 1, where a device pixel is half a world unit and the frame is twice
-// as many device pixels across.
+// as many device pixels across, and at each of SHAPE_ZOOMS, where the frame
+// covers the same world as at ratio 1.
 const SHAPE_DPRS = [2];
 // Either side of zoom 1, with both of the elbow's joins inside the frame; at 2
 // its middle run leaves it. At 1.5 the diagonal's first cap is outside it.
@@ -654,13 +656,18 @@ if (cliArgs.includes('--parity')) {
     });
   }
   for (const dpr of SHAPE_DPRS) {
-    parity.shapeZooms.push({
-      zoom: 1,
-      dpr,
-      check: await page.evaluate((ratio) => window.shapeParity(1, 0, 1, ratio), dpr),
-      control: await page.evaluate(([ratio, shift]) => window.shapeParity(1, shift, 1, ratio), [dpr, CONTROL_SHIFT_PX / dpr]),
-      zoomControl: await page.evaluate((ratio) => window.shapeParity(1, 0, 1, ratio, 1), dpr),
-    });
+    for (const zoom of [1, ...SHAPE_ZOOMS]) {
+      const at = (shift, expectedZoom, expectedDpr) =>
+        page.evaluate((args) => window.shapeParity(...args), [zoom, shift, expectedZoom, dpr, expectedDpr]);
+      parity.shapeZooms.push({
+        zoom,
+        dpr,
+        check: await at(0, zoom, dpr),
+        control: await at(CONTROL_SHIFT_PX / (zoom * dpr), zoom, dpr),
+        ratioControl: await at(0, zoom, 1),
+        ...(zoom === 1 ? {} : { zoomControl: await at(0, 1, dpr) }),
+      });
+    }
   }
   parity.ribbonZooms = [];
   for (const zoom of RIBBON_ZOOMS) {
@@ -921,7 +928,7 @@ if (cliArgs.includes('--parity')) {
       process.exitCode = 1;
     }
   }
-  for (const { zoom, dpr, check, control, zoomControl } of parity.shapeZooms) {
+  for (const { zoom, dpr, check, control, zoomControl, ratioControl } of parity.shapeZooms) {
     const at = dpr === undefined ? `zoom ${zoom}` : `zoom ${zoom} and device pixel ratio ${dpr}`;
     if (!check.pass) {
       console.error(`the shape check at ${at} failed: ${shapeFailure(check)}`);
@@ -929,7 +936,8 @@ if (cliArgs.includes('--parity')) {
     }
     for (const [run, aimedAt, what] of [
       [control, 'interior', `one shape shifted by ${Number(CONTROL_SHIFT_PX.toPrecision(3))} px`],
-      [zoomControl, 'fill', dpr === undefined ? "zoom 1's shapes expected" : "device pixel ratio 1's shapes expected"],
+      ...(dpr === undefined || zoom !== 1 ? [[zoomControl, 'fill', "zoom 1's shapes expected"]] : []),
+      ...(dpr === undefined ? [] : [[ratioControl, 'fill', "device pixel ratio 1's shapes expected"]]),
     ]) {
       const failure = shapeControlFailure(run, aimedAt);
       if (failure !== undefined) {

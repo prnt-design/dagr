@@ -617,8 +617,8 @@ checks:
   Deleting it leaves the suite green, which was measured rather than assumed.
   The abort check before `init()` is tested.
 - That the two backends agree beyond what the parity check has compared:
-  an Apple M4 in Chrome 155 (and since 2026-11-27 the whole run on an NVIDIA
-  RTX 4090 too), the two-shape probe scene, zoom 1
+  an Apple M4 in Chrome 155 (and on 2026-11-27 the whole run as it then
+  stood on an NVIDIA RTX 4090 too), the two-shape probe scene, zoom 1
   (the rich-node tiers below also at 0.5 and 2, and in Chrome 158 the group
   outline at 0.5 and 1.5, the shapes alone at 0.5 and 2 and, since
   2026-11-24, the solid straight ribbons named next alone at 0.5 and 1.5
@@ -629,7 +629,8 @@ checks:
   alone also at 2 and zoom 1 since 2026-11-25, and the three dashed ones
   alone, the solid smooth one alone, the smooth dashed one alone and the
   above-nodes one with the circle since 2026-11-26, and the group outline,
-  the rich-node tiers and the whole scene since 2026-11-27), with two solid straight edge ribbons added to that scene on
+  the rich-node tiers and the whole scene since 2026-11-27, and the shapes
+  alone at 2 and zoom 0.5 and 2 since that day on the Apple M4 alone), with two solid straight edge ribbons added to that scene on
   2026-11-17, and two dashed straight ones, a dashed one through two
   joins and a smooth one on 2026-11-21 (Chrome 157), the dashes flowed by
   4.5 pixels since 2026-11-22, and a smooth dashed one, the flow advancing
@@ -637,8 +638,10 @@ checks:
   A group outline and rich-node tiers, drawn by the browser rather than by
   either backend, are composed over the first frame since 2026-11-23 and add
   no difference. On the RTX 4090, in Chrome 158, no interior pixel differs
-  in any check. Other GPUs, other device pixel ratios, and DPR 2 at any
-  zoom but 1, are unchecked.
+  in any check it ran. On the Apple M4 the shapes alone at DPR 2 and zoom 2
+  have 120 interior pixels differing by 1, within the rounding tolerance.
+  Other GPUs, other device pixel ratios, and DPR 2 at zooms other than 1,
+  apart from the shapes alone at 0.5 and 2 on the Apple M4, are unchecked.
   See
   [What is verified, and on which backend](#what-is-verified-and-on-which-backend).
 - That a browser composes the overlay's two transforms the way the algebra says,
@@ -2154,10 +2157,10 @@ complete, and `<DagrCanvas animate>` drives them from a graph a user is editing
   `pickNode` only behind its opt-in `hitTesting="gpu"`. See [Picking](#picking).
 - Backend parity beyond the probe scene and the GPUs it has run on (an Apple
   M4 throughout, AMD RDNA 2 for the original probe, and an NVIDIA RTX 4090
-  for the whole current run since 2026-11-27): other GPUs, other device
-  pixel ratios, and DPR 2 at any zoom but 1.
-  Beyond zoom 1, the shapes alone, the above-nodes ribbon with the circle
-  and the rich-node tiers are compared at 0.5 and 2, the solid straight
+  for the whole run as it stood on 2026-11-27): other GPUs, other device
+  pixel ratios, and DPR 2 at zooms other than 1, apart from the shapes alone
+  at 0.5 and 2 on the Apple M4. Beyond zoom 1, the shapes alone (at DPR 2
+  too), the above-nodes ribbon with the circle and the rich-node tiers are compared at 0.5 and 2, the solid straight
   ribbons and the group outline at 0.5 and 1.5, and the three dashed
   ribbons, the solid smooth one and the smooth dashed one at 0.5 and 1.2.
 - Ten thousand nodes at sixty frames a second, measured rather than hoped for
