@@ -561,8 +561,8 @@ inside its gaps, the above-nodes ribbon with the circle alone at zoom 0.5 and
 fill colour inside the circle's fill clear of it, the shapes alone at device
 pixel ratio 2, at zoom 1 and at zoom 0.5 and 2, compare within tolerance
 with every fill pixel in its fill colour, the solid straight ribbons alone
-at device pixel ratio 2, at zoom 1 and at zoom 0.5 and 1.5, compare within tolerance with the edge colour inside them and the clear colour just
-outside, the three dashed ribbons alone at device pixel ratio 2 compare
+at device pixel ratio 2, at zoom 1 and at zoom 0.5 and 1.5, compare within
+tolerance with the edge colour inside them and the clear colour just outside, the three dashed ribbons alone at device pixel ratio 2 compare
 within tolerance with the edge colour inside their dashes and the clear
 colour inside their gaps, the solid smooth ribbon alone at device pixel
 ratio 2 compares within tolerance with the edge colour inside it and the
@@ -600,8 +600,7 @@ shape, one expects ratio 1's shapes and one expects zoom 1's shapes, at
 that ratio and zoom 1 one moves the ribbons and one expects ratio 1's
 ribbons, at that ratio and at zoom 0.5 and at zoom 1.5 one moves the
 ribbons, one expects ratio 1's ribbons and one expects zoom 1's ribbons, and
-at that ratio and zoom 1 one flows one
-side's dashes further, one expects a period that doubles with the ratio,
+at that ratio and zoom 1 alone one flows one side's dashes further, one expects a period that doubles with the ratio,
 one moves the smooth ribbon, one expects ratio 1's curve, one draws one
 side's as a polyline, one flows one side's smooth dashes further, one
 expects a period that doubles with the ratio, one draws one side's smooth
@@ -1268,6 +1267,8 @@ and 1.5 on 2026-11-28 UTC, on the same Apple M4 in Chrome 158.0.8127.37
 with the same counts. The drawing buffer is 960 by 640 as at zoom 1, the frame
 covers the same world as at ratio 1 and the same zoom, and the routes scale
 into device pixels by the zoom times the ratio, 1 at zoom 0.5 and 3 at 1.5.
+So at 1.5 the diagonal's first cap is outside the frame, as at ratio 1, and
+both of the elbow's joins are inside it.
 Each zoom runs three controls. The edge control shifts both ribbons 2 device
 pixels along each axis (2 world units at zoom 0.5, 2/3 at 1.5) and must fail
 on the interior. The ratio control expects ratio 1's ribbons at that zoom, and

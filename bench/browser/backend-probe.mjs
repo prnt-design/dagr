@@ -67,9 +67,8 @@
  * ribbons alone, with a control that shifts them and one that expects ratio
  * 1's ribbons, at zoom 1 and at zoom 0.5 and 1.5, where a third expects zoom
  * 1's ribbons. At that ratio, and at zoom 1 only, so are the three dashed
- * ribbons alone, with a control that flows
- * one side's dashes further and one that expects a period that doubles with
- * the ratio, the solid smooth ribbon alone, with a control that shifts it,
+ * ribbons alone, with a control that flows one side's dashes further and
+ * one that expects a period that doubles with the ratio, the solid smooth ribbon alone, with a control that shifts it,
  * one that expects ratio 1's curve and one that draws one side's as a
  * polyline, the smooth dashed ribbon alone, with a control that flows one
  * side's dashes further, one that expects a period that doubles with the
